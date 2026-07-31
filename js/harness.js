@@ -64,8 +64,56 @@
     log("   sites:   [" + Array.from({ length: 3 }, () => sitesRng.int(1, 100)).join(", ") + "]");
   }
 
+  // ── P0.3 — inspect a single generated runner ──────────────────
+  function fmtSkills(skills) {
+    return Object.entries(skills)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `${k}:${v}`)
+      .join("  ");
+  }
+
+  function dumpRunner(r) {
+    const c = r.classification;
+    log(`${r.identity.handle}  (${r.identity.metatypeLabel})`);
+    log(`  "${r.identity.personalityLine}"`);
+    log(`  "${r.identity.aimsLine}"`);
+    log(`  focus: ${c.focusLabel} (${c.family})   origin: ${c.origin}`);
+    if (c.deckerAffinity) log(`  decker affinity: ${c.deckerAffinity}`);
+    log(`  Discipline (visible): ${MJ.describeDiscipline(r)}`);
+    log(`  true archetype (hidden): ${c.trueArchetype}  ${c.trueArchetype === c.disciplineLabel ? "[match]" : "[MISMATCH]"}`);
+    log(`  attrs: body ${r.attributes.body}  agi ${r.attributes.agility}  will ${r.attributes.willpower}  int ${r.attributes.intelligence}  cha ${r.attributes.charisma}  magic ${r.attributes.magic}`);
+    log(`  essence: ${r.essence.current}/${r.essence.max}`);
+    log(`  skills:  ${fmtSkills(r.skills)}`);
+    log(`  PRICE: ¥${MJ.computePrice(r).toLocaleString()}`);
+    log("");
+  }
+
+  function testRunner() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed);
+    log("");
+    dumpRunner(MJ.generateRunner(rng));
+  }
+
+  // ── P0.3 — a small market, to eyeball shape/label/price variety ─
+  function testMarket() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed + "   (10 runners, unfiltered)");
+    log("");
+    for (let i = 0; i < 10; i++) {
+      dumpRunner(MJ.generateRunner(rng));
+    }
+  }
+
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-rng").addEventListener("click", testRNG);
+    document.getElementById("btn-runner").addEventListener("click", testRunner);
+    document.getElementById("btn-market").addEventListener("click", testMarket);
     log("Mr. Johnson — Phase 0 inspector ready.");
     log('Enter a seed and hit a button. Same seed always reproduces.');
   });

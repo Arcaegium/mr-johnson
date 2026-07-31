@@ -17,6 +17,8 @@
       <label for="seed">seed</label>
       <input type="text" id="seed" value="mr-johnson" />
       <button id="btn-rng">Test RNG</button>
+      <button id="btn-runner">Generate Runner</button>
+      <button id="btn-market">Generate Market (10)</button>
     </div>
 
     <pre id="out"></pre>
@@ -24,6 +26,7 @@
 
   <!-- Phase 0 modules, loaded in dependency order (no build step) -->
   <script src="js/core/rng.js"></script>
+  <script src="js/models/runner.js"></script>
   <script src="js/harness.js"></script>
 </body>
 </html>
