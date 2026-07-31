@@ -210,41 +210,58 @@
     return label; // "specialist" | "generalist" — the CLAIM, not the truth
   }
 
-  // ── Pricing: the Discipline lens applied to the true skills ───
-  // Tunable constants — shape over final balance (§11 flags exact
-  // numbers as open playtesting work), but these two were picked
-  // deliberately, not guessed: a naive first pass (800/150) made
-  // the "bargain" mismatch (generalist label hiding a true
-  // specialist) reliably underpriced 100% of the time, but the
-  // "hype" mismatch (specialist label hiding a true generalist)
-  // only overpriced ~58% of the time — barely better than a coin
-  // flip, because a moderate generalist peak priced at the
-  // specialist rate didn't reliably beat the noisy sum-of-many-
-  // skills generalist "fair" value. A constant sweep (simulated
-  // against a 15k-runner population before any UI existed) found
-  // 1000/130 is the minimum premium where BOTH mismatch directions
-  // hit 100% reliability — pushing the premium further only
-  // inflates specialist prices with no added reliability benefit.
-  // At these values, a true matched Specialist prices roughly 2.3x
-  // a true matched Generalist on average: a real, sensible gap,
-  // not an extreme one.
-  const PPSP_SPECIALIST = 1000; // nuyen per point of peak skill, specialist lens
-  const PPSP_GENERALIST = 130;  // nuyen per point of each known skill, summed
+  // ── Pricing: a real karma-cost TrueValue, distorted only by mismatch ─
+  // First pass used flat linear "points" (1 rank = 1 unit of value)
+  // with artificially different per-point rates for the Specialist
+  // ("peak only") vs Generalist ("sum of all") lens — a hack tuned
+  // purely to make the mismatch mechanic produce reliable over/under-
+  // pricing. That's wrong on its own terms: Shadowrun skill ranks
+  // are NOT linear. The real cumulative Karma cost to reach Active
+  // Skill rank N is N*(N+1) (rank x2 Karma per step, verified against
+  // the SR5 Karma Advancement Table — rank 3 = 12, rank 8 = 72, rank
+  // 9 = 90). Once cost-per-rank is realistically steep, a lone high
+  // peak and a broad spread of medium skills land much closer in
+  // total invested value than flat point-counting implied — verified
+  // by simulation: with the real curve and NO artificial premium, a
+  // matched Specialist (one skill at rank 7-9, little else) actually
+  // priced *below* a matched Generalist (several skills at rank 3-6)
+  // on average, because summing real Karma cost across many moderate
+  // skills outweighs one expensive peak. The old peak-vs-sum lens
+  // swap doesn't survive a non-linear curve at all — it was
+  // implicitly leaning on flat-point math to keep mismatch reliable
+  // (mismatch reliability dropped to 0% under the real curve).
+  //
+  // Fix: stop swapping WHICH skills count based on the label. Compute
+  // one honest TrueValue — real Karma cost, summed over every known
+  // skill, identical formula regardless of archetype — then apply a
+  // flat market-perception MULTIPLIER only when the visible Discipline
+  // label doesn't match the hidden true archetype. This is reliable
+  // by construction (the multiplier is >1 or <1 by definition, not by
+  // hoping specific stats land a certain way), and the TrueValue
+  // number itself is now a real, grounded measure of invested Karma.
+  const KARMA_HYPE_MULT = 1.4;    // labeled Specialist, true Generalist — market overpays
+  const KARMA_BARGAIN_MULT = 0.65; // labeled Generalist, true Specialist — market underpays
 
+  function karmaCost(rank) {
+    return rank > 0 ? rank * (rank + 1) : 0;
+  }
+
+  function trueValue(effectiveSkills) {
+    return Object.values(effectiveSkills).reduce((sum, rank) => sum + karmaCost(rank), 0);
+  }
+
+  // NOTE — scale: this returns a karma-cost-derived value (roughly
+  // 40-250 for a fresh runner), NOT a final nuyen figure. The rest
+  // of the design (job pay, gear, hiring costs) runs in the
+  // thousands of nuyen. A NUYEN_PER_VALUE conversion multiplier
+  // belongs in Phase 1 once the wider economy exists to calibrate
+  // against — deliberately not guessed at here.
   function computePrice(runner) {
-    const skills = getEffectiveSkills(runner);
-    const values = Object.values(skills);
-    const peak = Math.max(0, ...values);
-    const known = values.filter((v) => v > 0);
-    const sumKnown = known.reduce((a, b) => a + b, 0);
-
-    let price;
-    if (runner.classification.disciplineLabel === "specialist") {
-      price = peak * PPSP_SPECIALIST;
-    } else {
-      price = sumKnown * PPSP_GENERALIST;
-    }
-    return Math.round(price);
+    const base = trueValue(getEffectiveSkills(runner));
+    const c = runner.classification;
+    if (c.disciplineLabel === c.trueArchetype) return Math.round(base);
+    const mult = c.disciplineLabel === "specialist" ? KARMA_HYPE_MULT : KARMA_BARGAIN_MULT;
+    return Math.round(base * mult);
   }
 
   // ── Effective skills: base minus wound penalty on the key skill ─
@@ -359,4 +376,6 @@
   MJ.getEffectiveSkills = getEffectiveSkills;
   MJ.computePrice = computePrice;
   MJ.describeDiscipline = describeDiscipline;
+  MJ.karmaCost = karmaCost;   // exposed for inspection/tuning — real SR5 rank cost curve
+  MJ.trueValue = trueValue;   // exposed for inspection/tuning — the undistorted honest value
 })();

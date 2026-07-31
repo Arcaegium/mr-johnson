@@ -85,7 +85,7 @@
     log(`  attrs: body ${r.attributes.body}  agi ${r.attributes.agility}  will ${r.attributes.willpower}  int ${r.attributes.intelligence}  cha ${r.attributes.charisma}  magic ${r.attributes.magic}`);
     log(`  essence: ${r.essence.current}/${r.essence.max}`);
     log(`  skills:  ${fmtSkills(r.skills)}`);
-    log(`  PRICE: ¥${MJ.computePrice(r).toLocaleString()}`);
+    log(`  true value (karma cost): ${MJ.trueValue(MJ.getEffectiveSkills(r))}   →  listed price: ${MJ.computePrice(r)}`);
     log("");
   }
 
