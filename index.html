@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mr. Johnson — Dev Inspector</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Mr. Johnson</h1>
+      <div class="tagline">Phase 0 — Foundation Inspector</div>
+    </header>
+
+    <div class="controls">
+      <label for="seed">seed</label>
+      <input type="text" id="seed" value="mr-johnson" />
+      <button id="btn-rng">Test RNG</button>
+    </div>
+
+    <pre id="out"></pre>
+  </div>
+
+  <!-- Phase 0 modules, loaded in dependency order (no build step) -->
+  <script src="js/core/rng.js"></script>
+  <script src="js/harness.js"></script>
+</body>
+</html>
