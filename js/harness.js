@@ -110,10 +110,55 @@
     }
   }
 
+  // ── P0.3 — karma growth cascade: watch a career unfold ─────────
+  // Generates one runner, then feeds it a two-phase career: rising
+  // Karma awards (phase 1), then flat/stagnant awards (phase 2) —
+  // the exact pattern used to verify the growth cascade before it
+  // was built. Watch skills climb fast while escalating, then
+  // plateau and spill into Tertiary/Overflow once escalation stops.
+  function testGrowth() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    const runner = MJ.generateRunner(rng);
+
+    log("SEED: " + seed);
+    log("");
+    log(`${runner.identity.handle}  —  ${MJ.describeDiscipline(runner)}  (true archetype: ${runner.classification.trueArchetype})`);
+    log(`focus: ${runner.classification.focusLabel}   family: ${runner.classification.family}`);
+    const t = runner.classification.skillTiers;
+    log(`primary: ${t.primary}   secondary: [${t.secondary.join(", ")}]   tertiary: [${t.tertiary.join(", ")}]`);
+    log(`overflow pool: ${t.overflow.length} skill(s) this family is eligible for`);
+    log("");
+    log(`starting skills:  ${fmtSkills(runner.skills)}`);
+    log("");
+
+    log("── Phase 1: escalating jobs (Karma award rising each job) ──");
+    for (let job = 0; job < 15; job++) {
+      const award = 20 + job * 4;
+      MJ.growRunner(runner, award, rng);
+      if (job % 3 === 0 || job === 14) {
+        log(`  job ${String(job).padStart(2)}  award=${String(award).padStart(3)}  ${fmtSkills(runner.skills)}`);
+      }
+    }
+    log("");
+    log("── Phase 2: same runner, jobs stop escalating (flat Karma award) ──");
+    for (let job = 15; job < 40; job++) {
+      const leftover = MJ.growRunner(runner, 20, rng);
+      if (job % 5 === 0 || job === 39) {
+        log(`  job ${String(job).padStart(2)}  award= 20  leftover=${leftover.toFixed(0).padStart(2)}  ${fmtSkills(runner.skills)}`);
+      }
+    }
+    log("");
+    log("final dossier:");
+    dumpRunner(runner);
+  }
+
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-rng").addEventListener("click", testRNG);
     document.getElementById("btn-runner").addEventListener("click", testRunner);
     document.getElementById("btn-market").addEventListener("click", testMarket);
+    document.getElementById("btn-growth").addEventListener("click", testGrowth);
     log("Mr. Johnson — Phase 0 inspector ready.");
     log('Enter a seed and hit a button. Same seed always reproduces.');
   });

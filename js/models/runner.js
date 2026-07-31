@@ -29,15 +29,41 @@
 (function () {
   window.MJ = window.MJ || {};
 
-  // ── The 18-skill registry (design bible §09) ──────────────────
+  // ── The 19-skill registry (design bible §09 + the gated-skill split) ─
   // Every skill maps to real verbs elsewhere in the design; this
   // list is the canonical set every runner's skill map is keyed by.
   const SKILLS = [
     "firearms", "heavyWeapons", "marksmanship", "melee", "demolitions",
     "stealth", "athletics", "medicine", "presence", "con", "larceny",
-    "computer", "electronics", "rigging",
+    "computer", "hacking", "electronics", "rigging",
     "sorcery", "conjuring", "enchanting", "assensing",
   ];
+
+  // ── Skill gates: some skills require a matching family ────────
+  // Most skills are universal — anyone can pick them up. A handful
+  // are genuinely exclusive to the family that can actually perform
+  // them: a mage can write code on a keyboard (computer stays
+  // universal) but can't jack in and hack live (hacking is decker-
+  // only); a technician can maintain a maglock or a drone chassis
+  // (electronics stays universal) but can't jump in and pilot one
+  // (rigging is rigger-only); nobody casts, assenses, summons, or
+  // enchants without being Awakened (mage-only, all four). This is
+  // a family gate, not just a Magic-attribute gate — an adept has
+  // Magic but isn't a spellcaster, so adept-origin fighters still
+  // don't qualify for the four magic skills.
+  const SKILL_GATES = {
+    sorcery: "mage",
+    conjuring: "mage",
+    enchanting: "mage",
+    assensing: "mage",
+    hacking: "decker",
+    rigging: "rigger",
+  };
+
+  function isSkillEligible(skillId, family) {
+    const gate = SKILL_GATES[skillId];
+    return !gate || gate === family;
+  }
 
   // ── Metatypes: light attribute-range flavor, not hard rules ───
   // Deltas applied on top of a base roll. Kept small on purpose —
@@ -67,14 +93,13 @@
     { id: "stealth",      label: "Stealth",       family: "fighter", keySkill: "stealth",      origins: ["cyber", "magic", "infected"] },
     { id: "melee",        label: "Melee",         family: "fighter", keySkill: "melee",        origins: ["cyber", "magic"] },
     { id: "marksman",     label: "Marksman",      family: "fighter", keySkill: "marksmanship", origins: ["cyber", "magic"] },
-    { id: "athletics",    label: "2nd-Story",     family: "fighter", keySkill: "athletics",    origins: ["cyber", "magic", "infected"] },
     { id: "tank",         label: "Tank",          family: "fighter", keySkill: "presence",     origins: ["cyber", "magic"] },
     { id: "combatMedic",  label: "Combat Medic",  family: "fighter", keySkill: "medicine",     origins: ["cyber", "mundane"] },
     { id: "streetDoc",    label: "Street Doc",    family: "fighter", keySkill: "medicine",     origins: ["mundane"] },
     // Face / Thief
     { id: "face",         label: "Face",          family: "face",    keySkill: "con",          origins: ["mundane", "magic", "infected"] },
     // Decker (one archetype, tilted by affinity — see generateRunner)
-    { id: "decker",       label: "Decker",        family: "decker",  keySkill: "computer",     origins: ["cyber", "mundane"] },
+    { id: "decker",       label: "Decker",        family: "decker",  keySkill: "hacking",      origins: ["cyber", "mundane"] },
     // Rigger (one archetype, drone class defines the verb elsewhere)
     { id: "rigger",       label: "Rigger",        family: "rigger",  keySkill: "rigging",      origins: ["cyber", "mundane"] },
     // Mages — spell categories. Most lean on Sorcery; Conjuring and
@@ -90,6 +115,64 @@
 
   function focusById(id) {
     return FOCUSES.find((f) => f.id === id);
+  }
+
+  // ── Archetype skill lists — the primary/secondary/tertiary heatmap ─
+  // Each archetype's list[0] is always its keySkill (the Primary).
+  // The rest of list[] is the archetype's natural pool: at generation,
+  // that pool is shuffled and the first N (specialistSecondary or
+  // generalistSecondary, by true archetype) become Secondary; whatever
+  // remains is Tertiary. Skills outside the list entirely are Overflow
+  // — every universal skill this runner's family is eligible for
+  // (SKILL_GATES) but that isn't part of this archetype's natural
+  // shape. Primary/Secondary get real starting ranks; Tertiary and
+  // Overflow start at 0 and are only reached through karma growth
+  // (growRunner) — that's what lets a stalled specialist visibly
+  // broaden over a career instead of every skill being pre-rolled.
+  // List sizes and secondary counts were balanced against the skill-
+  // weight rubric (verb breadth × encounter frequency × pillar
+  // centrality) so no archetype's list badly out- or under-classes
+  // another in total opportunity to matter, even though list sizes
+  // differ — that asymmetry mirrors how the pillars themselves are
+  // shaped (meatspace: many narrow skills; Matrix/Astral: few skills
+  // that each carry more weight).
+  const ARCHETYPE_SKILLS = {
+    heavyWeapons:     { list: ["heavyWeapons", "firearms", "demolitions", "marksmanship", "athletics"], specialistSecondary: 1, generalistSecondary: 3 },
+    demolitions:      { list: ["demolitions", "firearms", "electronics", "athletics", "heavyWeapons"],   specialistSecondary: 1, generalistSecondary: 3 },
+    stealth:          { list: ["stealth", "firearms", "larceny", "athletics", "melee"],                  specialistSecondary: 1, generalistSecondary: 3 },
+    melee:            { list: ["melee", "athletics", "firearms", "presence", "stealth"],                 specialistSecondary: 1, generalistSecondary: 3 },
+    marksman:         { list: ["marksmanship", "firearms", "stealth", "athletics"],                      specialistSecondary: 1, generalistSecondary: 2 },
+    tank:             { list: ["presence", "melee", "firearms", "athletics", "heavyWeapons"],             specialistSecondary: 1, generalistSecondary: 3 },
+    combatMedic:      { list: ["medicine", "firearms", "melee", "athletics", "stealth"],                  specialistSecondary: 1, generalistSecondary: 3 },
+    streetDoc:        { list: ["medicine", "electronics", "presence", "con"],                             specialistSecondary: 1, generalistSecondary: 2 },
+    face:             { list: ["con", "presence", "larceny", "athletics"],                                specialistSecondary: 1, generalistSecondary: 2 },
+    decker:           { list: ["hacking", "computer", "electronics", "stealth", "larceny"],               specialistSecondary: 1, generalistSecondary: 3 },
+    rigger:           { list: ["rigging", "electronics", "computer", "firearms", "athletics"],            specialistSecondary: 1, generalistSecondary: 3 },
+    combatMage:       { list: ["sorcery", "assensing", "athletics", "stealth", "firearms"],               specialistSecondary: 1, generalistSecondary: 3 },
+    detectionMage:    { list: ["assensing", "sorcery", "stealth", "athletics"],                           specialistSecondary: 1, generalistSecondary: 2 },
+    healthMage:       { list: ["sorcery", "assensing", "enchanting", "presence"],                         specialistSecondary: 1, generalistSecondary: 2 },
+    illusionMage:     { list: ["sorcery", "con", "stealth", "presence"],                                  specialistSecondary: 1, generalistSecondary: 2 },
+    manipulationMage: { list: ["sorcery", "con", "presence", "assensing"],                                specialistSecondary: 1, generalistSecondary: 2 },
+    conjuringMage:    { list: ["conjuring", "sorcery", "assensing", "enchanting"],                         specialistSecondary: 1, generalistSecondary: 2 },
+    enchantingMage:   { list: ["enchanting", "sorcery", "conjuring", "assensing"],                         specialistSecondary: 1, generalistSecondary: 2 },
+  };
+
+  // Rolls, for one specific runner, which of their archetype's list
+  // skills land in Secondary vs Tertiary, plus the Overflow pool
+  // (every gate-eligible skill outside the list). This is rolled once
+  // at generation and stored on the runner — it's an identity trait,
+  // not something growth re-rolls.
+  function buildSkillTiers(rng, focus, trueArchetype) {
+    const entry = ARCHETYPE_SKILLS[focus.id];
+    const primary = entry.list[0];
+    const secondaryCount = trueArchetype === "specialist" ? entry.specialistSecondary : entry.generalistSecondary;
+    const restShuffled = rng.shuffle(entry.list.slice(1));
+    const secondary = restShuffled.slice(0, secondaryCount);
+    const tertiary = restShuffled.slice(secondaryCount);
+    const overflow = SKILLS.filter(
+      (s) => !entry.list.includes(s) && isSkillEligible(s, focus.family)
+    );
+    return { primary, secondary, tertiary, overflow };
   }
 
   // ── Flavor pools ───────────────────────────────────────────────
@@ -164,41 +247,108 @@
   }
 
   // ── Skill spread: the heart of the Specialist/Generalist shape ─
-  // Specialist: one towering key skill, a couple of supporting
-  // skills at a modest level, everything else near zero.
-  // Generalist: a broad handful of skills at a solid, even level,
-  // no single skill allowed to look like a true peak.
-  function generateSkillSpread(rng, focus, trueArchetype) {
+  // Specialist: one towering key skill, one tight supporting skill,
+  // everything else — including the rest of their own archetype's
+  // list — starts at zero. Generalist: the key skill plus several
+  // secondary skills at a solid, even level. Tertiary and Overflow
+  // are deliberately left at 0 here; they're what growRunner fills
+  // in over a career, not something pre-rolled at generation.
+  function generateSkillSpread(rng, focus, trueArchetype, tiers) {
     const skills = {};
     for (const s of SKILLS) skills[s] = 0;
 
-    // Every runner gets baseline competence in Firearms — the
-    // common (not universal) formation contribution (§09) — unless
-    // their family has no combat presence at all (pure mages lean
-    // on spells instead, but a little firearms familiarity is fine).
-    skills.firearms = rng.int(1, 3);
-
     if (trueArchetype === "specialist") {
-      skills[focus.keySkill] = rng.int(7, 9);
-      // A couple of supporting skills at a modest level — enough
-      // to be a person, not enough to look like a second peak.
-      const supportPool = SKILLS.filter((s) => s !== focus.keySkill && s !== "firearms");
-      const supportCount = rng.int(2, 3);
-      for (const s of rng.shuffle(supportPool).slice(0, supportCount)) {
-        skills[s] = rng.int(2, 4);
-      }
+      skills[tiers.primary] = rng.int(7, 9);
+      for (const s of tiers.secondary) skills[s] = rng.int(2, 4);
     } else {
-      // Generalist: a broader set at solid-but-unspectacular levels.
-      // Include the focus's key skill among them — they're still
-      // recognizably in that line of work, just not a spike at it.
-      const pool = SKILLS.filter((s) => s !== "firearms" && s !== focus.keySkill);
-      const spreadCount = rng.int(4, 6);
-      skills[focus.keySkill] = rng.int(4, 6);
-      for (const s of rng.shuffle(pool).slice(0, spreadCount)) {
-        skills[s] = rng.int(3, 5);
-      }
+      skills[tiers.primary] = rng.int(4, 6);
+      for (const s of tiers.secondary) skills[s] = rng.int(3, 5);
+    }
+
+    // Baseline Firearms competence — the common (not universal)
+    // formation contribution (§09) — for anyone who didn't already
+    // land Firearms as their Primary or Secondary at a higher rank.
+    if (skills.firearms === 0) {
+      skills.firearms = rng.int(1, 3);
     }
     return skills;
+  }
+
+  // ── Growth: karma auto-allocated along the archetype's heatmap ──
+  // Priority order is Primary, then Secondary, then Tertiary — each
+  // pass tries every skill in that order and spends on the first one
+  // whose next rank is affordable (not just the top of the list, so
+  // a plateaued Primary doesn't waste Karma the rest of the priority
+  // order could still use). Only once every skill in the archetype's
+  // own list is unaffordable does growth fall through to Overflow —
+  // a random not-yet-known gate-eligible skill outside the list, at
+  // the flat rank-0->1 cost. This is what makes a Specialist visibly
+  // broaden if never given escalating jobs, and what stops a
+  // Generalist's early leader from permanently starving the rest of
+  // their spread (§ growth-cascade simulation, verified prior to
+  // building this).
+  function marginalSkillCost(rank) {
+    return 2 * (rank + 1); // matches karmaCost's cumulative curve rank*(rank+1)
+  }
+
+  function growRunner(runner, karmaAward, rng) {
+    const tiers = runner.classification.skillTiers;
+    const priorityOrder = [tiers.primary, ...tiers.secondary, ...tiers.tertiary];
+    let remaining = karmaAward;
+    let guard = 0;
+    while (remaining > 0 && guard++ < 10000) {
+      let spent = false;
+
+      // 1) the archetype's own list, in priority order — first
+      // affordable wins (not just the top of the list, so a
+      // plateaued Primary doesn't strand Karma the rest of the
+      // priority order could still spend).
+      for (const id of priorityOrder) {
+        const cost = marginalSkillCost(runner.skills[id]);
+        if (remaining >= cost) {
+          runner.skills[id] += 1;
+          remaining -= cost;
+          spent = true;
+          break;
+        }
+      }
+
+      // 2) already-started Overflow skills can keep growing too —
+      // reinforced by current rank descending, same cascade logic
+      // as the archetype list. Without this, a started Overflow
+      // skill would freeze at rank 1 forever the moment the whole
+      // archetype list plateaus, wasting every further award once
+      // Overflow ran out of brand-new skills to start.
+      if (!spent) {
+        const knownOverflow = tiers.overflow
+          .filter((s) => runner.skills[s] > 0)
+          .sort((a, b) => runner.skills[b] - runner.skills[a]);
+        for (const id of knownOverflow) {
+          const cost = marginalSkillCost(runner.skills[id]);
+          if (remaining >= cost) {
+            runner.skills[id] += 1;
+            remaining -= cost;
+            spent = true;
+            break;
+          }
+        }
+      }
+
+      // 3) nothing known (list or Overflow) is affordable — start a
+      // brand new random Overflow skill at the flat rank 0->1 cost.
+      if (!spent) {
+        const unknownOverflow = tiers.overflow.filter((s) => runner.skills[s] === 0);
+        if (remaining >= 2 && unknownOverflow.length > 0) {
+          runner.skills[rng.pick(unknownOverflow)] = 1;
+          remaining -= 2;
+          spent = true;
+        }
+      }
+
+      if (!spent) break; // nothing affordable anywhere — leftover is lost this award
+    }
+    runner.karma += karmaAward;
+    return remaining; // unspent leftover, for inspection/logging
   }
 
   // ── Discipline: the visible claim, matching truth 80% of the time ─
@@ -334,7 +484,8 @@
 
     const attrs = applyMagic(r, generateAttributes(r, metatypeId, focus.family), focus.family, origin);
     const essence = generateEssence(r, origin);
-    const skills = generateSkillSpread(r, focus, trueArchetype);
+    const skillTiers = buildSkillTiers(r, focus, trueArchetype);
+    const skills = generateSkillSpread(r, focus, trueArchetype, skillTiers);
 
     const runner = {
       identity: generateIdentity(r, metatypeId),
@@ -348,6 +499,7 @@
         spellFormulasKnown: focus.family === "mage" ? [] : null, // populated once spell content exists
         disciplineLabel: disciplineLabel,     // visible claim: "specialist" | "generalist"
         trueArchetype: trueArchetype,          // hidden truth: "specialist" | "generalist"
+        skillTiers: skillTiers,                // { primary, secondary[], tertiary[], overflow[] } — growth priority order
       },
       attributes: attrs,
       essence: essence,
@@ -378,4 +530,10 @@
   MJ.describeDiscipline = describeDiscipline;
   MJ.karmaCost = karmaCost;   // exposed for inspection/tuning — real SR5 rank cost curve
   MJ.trueValue = trueValue;   // exposed for inspection/tuning — the undistorted honest value
+  MJ.SKILL_GATES = SKILL_GATES;       // exposed — growth-cascade overflow must respect these too
+  MJ.isSkillEligible = isSkillEligible;
+  MJ.ARCHETYPE_SKILLS = ARCHETYPE_SKILLS;
+  MJ.buildSkillTiers = buildSkillTiers;
+  MJ.growRunner = growRunner;
+  MJ.marginalSkillCost = marginalSkillCost;
 })();
