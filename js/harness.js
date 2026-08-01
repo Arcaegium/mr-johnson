@@ -314,6 +314,42 @@
     }
   }
 
+  // ── P1 — roster/market state machine: watch, cycle, hire ────────
+  function testMarketCycle() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed);
+    log("");
+
+    const runner = MJ.generateRunner(rng);
+    const value = MJ.trueValue(MJ.getEffectiveSkills(runner));
+    log(`${runner.identity.handle} — ${MJ.describeDiscipline(runner)}  trueValue:${value}  KIA chance per Available window: ${(MJ.kiaChance(runner) * 100).toFixed(1)}%`);
+    log("");
+
+    MJ.watchRunner(runner, rng);
+    log(`watched. state:${runner.market.state} phase:${runner.market.phase} shelfDays:${runner.market.hiddenShelfDaysRemaining}`);
+    log("");
+
+    let day = 1;
+    let hired = false;
+    for (; day <= 120 && runner.market.phase !== "kia"; day++) {
+      const result = MJ.advanceMarketDay(runner, rng, day);
+      if (result.event !== "none" && result.event !== "protected") {
+        log(`day ${day}: ${result.event}   (phase:${runner.market.phase}  hired:${runner.market.hired ? runner.market.hired.tier : "no"})`);
+      }
+      // Once we see a real Available window, hire on a retainer to
+      // demonstrate the cycle being suppressed.
+      if (!hired && runner.market.phase === "available" && day > 5) {
+        MJ.hireRunner(runner, rng, "retainer", day);
+        hired = true;
+        log(`day ${day}: HIRED (retainer)   protectedUntilDay:${runner.market.hired.protectedUntilDay}`);
+      }
+    }
+    log("");
+    log(`stopped at day ${day - 1}. final phase:${runner.market.phase}  hired:${runner.market.hired ? runner.market.hired.tier : "no"}`);
+  }
+
   // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
   // persistent state across button clicks (not a scripted one-shot
   // demo) — this is what "roll the day" and "save and reload" are
@@ -377,6 +413,7 @@
     document.getElementById("btn-site").addEventListener("click", testSite);
     document.getElementById("btn-board").addEventListener("click", testBoard);
     document.getElementById("btn-resolve").addEventListener("click", testResolve);
+    document.getElementById("btn-market-cycle").addEventListener("click", testMarketCycle);
     document.getElementById("btn-new-game").addEventListener("click", newGame);
     document.getElementById("btn-roll-day").addEventListener("click", rollDay);
     document.getElementById("btn-reload-save").addEventListener("click", reloadSave);

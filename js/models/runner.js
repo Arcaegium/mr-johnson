@@ -533,11 +533,14 @@
       karma: 0,
       market: {
         state: "unwatched", // "unwatched" | "watched"
-        hired: null,        // null | { tier: "freelance"|"retainer"|"permanent", ... }
+        hired: null,        // null | { tier: "freelance"|"retainer"|"permanent", protectedUntilDay }
         daysOnMarket: 0,
-        // Shelf-life / Working / OutOfTown / KIA state machine (§03)
-        // is Phase 1 roster-board territory — fields reserved here
-        // so the record shape doesn't change shape later.
+        // Shelf-life / Working / OutOfTown / KIA state machine (§03,
+        // implemented in models/market.js). `phase` only means
+        // something once state === "watched"; an unwatched runner
+        // just ticks hiddenShelfDaysRemaining down to zero and is
+        // gone, no phase involved.
+        phase: null, // null | "available" | "working" | "outOfTown" | "kia"
         hiddenShelfDaysRemaining: r.int(3, 14),
       },
     };
