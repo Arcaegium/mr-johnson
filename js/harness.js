@@ -65,11 +65,14 @@
   }
 
   // ── P0.3 — inspect a single generated runner ──────────────────
+  // Sorts by the raw (possibly half-step) value so a skill sitting
+  // at X.5 correctly outranks one still at X.0, but always DISPLAYS
+  // the floored integer — the player never sees the internal .5.
   function fmtSkills(skills) {
     return Object.entries(skills)
       .filter(([, v]) => v > 0)
       .sort((a, b) => b[1] - a[1])
-      .map(([k, v]) => `${k}:${v}`)
+      .map(([k, v]) => `${k}:${Math.floor(v)}`)
       .join("  ");
   }
 
@@ -229,61 +232,77 @@
     dumpSite(MJ.generateSite(rng));
   }
 
-  // ── P0.5 — day clock + IndexedDB save/load ──────────────────────
-  async function testSaveLoad() {
-    clear();
-    const seed = document.getElementById("seed").value || "mr-johnson";
-    log("SEED: " + seed);
-    log("");
+  // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
+  // persistent state across button clicks (not a scripted one-shot
+  // demo) — this is what "roll the day" and "save and reload" are
+  // supposed to feel like once a real save exists.
+  let currentSave = null;
 
-    log("Creating a new save (defaultSave)...");
-    const state = MJ.defaultSave(seed);
-    log(`  schemaVersion: ${state.meta.schemaVersion}  currentDay: ${state.meta.currentDay}  rootSeed: ${state.meta.rootSeed}`);
-    log("");
-
-    log("Advancing 3 action periods (MJ.advanceDay)...");
-    MJ.advanceDay(state.meta, 3);
-    log(`  currentDay is now: ${state.meta.currentDay}`);
-    log("");
-
-    log("Saving to IndexedDB...");
-    try {
-      await MJ.saveGame(state);
-      log("  saved.");
-    } catch (err) {
-      log("  SAVE FAILED: " + err);
-      return;
-    }
-    log("");
-
-    log("Simulating a fresh load (reading back from IndexedDB)...");
-    let loaded;
-    try {
-      loaded = await MJ.loadGame();
-    } catch (err) {
-      log("  LOAD FAILED: " + err);
-      return;
-    }
-    log(`  loaded schemaVersion: ${loaded.meta.schemaVersion}  currentDay: ${loaded.meta.currentDay}  rootSeed: ${loaded.meta.rootSeed}`);
-    log(`  currentDay round-trip OK: ${loaded.meta.currentDay === state.meta.currentDay}`);
-    log(`  rootSeed round-trip OK: ${loaded.meta.rootSeed === state.meta.rootSeed}`);
-    log("");
-
-    log("Regenerating a runner from the loaded rootSeed (determinism check)...");
-    const rng = MJ.makeRNG(loaded.meta.rootSeed);
-    const runner = MJ.generateRunner(rng);
-    log(`  ${runner.identity.handle} — ${MJ.describeDiscipline(runner)}`);
-    log("  (matches whatever seed 'Generate Runner' produces for this same seed)");
+  function updateDayStatus() {
+    const el = document.getElementById("day-status");
+    el.textContent = currentSave
+      ? `Day ${currentSave.meta.currentDay}  —  rootSeed: ${currentSave.meta.rootSeed}  (schema v${currentSave.meta.schemaVersion})`
+      : "No save loaded.";
   }
 
-  window.addEventListener("DOMContentLoaded", () => {
+  async function newGame() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    currentSave = MJ.defaultSave(seed);
+    await MJ.saveGame(currentSave);
+    updateDayStatus();
+    log(`New game started on seed "${seed}".`);
+    log(`  schemaVersion: ${currentSave.meta.schemaVersion}  currentDay: ${currentSave.meta.currentDay}`);
+    log("  (saved to IndexedDB immediately — every day-spend is an autosave point, §09)");
+  }
+
+  async function rollDay() {
+    clear();
+    if (!currentSave) {
+      log("No save loaded — click New Game first.");
+      return;
+    }
+    const before = currentSave.meta.currentDay;
+    MJ.advanceDay(currentSave.meta, 1);
+    await MJ.saveGame(currentSave);
+    updateDayStatus();
+    log(`Rolled one action period: day ${before} → day ${currentSave.meta.currentDay}.`);
+    log("  (saved — reload the page and hit Reload Save to prove this actually persisted)");
+  }
+
+  async function reloadSave() {
+    clear();
+    const loaded = await MJ.loadGame();
+    if (!loaded) {
+      log("No save found in IndexedDB.");
+      currentSave = null;
+    } else {
+      currentSave = loaded;
+      log(`Loaded save from IndexedDB: day ${loaded.meta.currentDay}, rootSeed "${loaded.meta.rootSeed}".`);
+      const rng = MJ.makeRNG(loaded.meta.rootSeed);
+      const runner = MJ.generateRunner(rng);
+      log(`  regenerated from rootSeed: ${runner.identity.handle} — ${MJ.describeDiscipline(runner)}`);
+      log("  (matches whatever seed 'Generate Runner' produces for this same seed — nothing but seeds+deltas is ever stored)");
+    }
+    updateDayStatus();
+  }
+
+  window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("btn-rng").addEventListener("click", testRNG);
     document.getElementById("btn-runner").addEventListener("click", testRunner);
     document.getElementById("btn-market").addEventListener("click", testMarket);
     document.getElementById("btn-growth").addEventListener("click", testGrowth);
     document.getElementById("btn-site").addEventListener("click", testSite);
-    document.getElementById("btn-save").addEventListener("click", testSaveLoad);
+    document.getElementById("btn-new-game").addEventListener("click", newGame);
+    document.getElementById("btn-roll-day").addEventListener("click", rollDay);
+    document.getElementById("btn-reload-save").addEventListener("click", reloadSave);
+
+    // Pick up an existing save on load, same as a real page refresh would.
+    currentSave = await MJ.loadGame();
+    updateDayStatus();
+
     log("Mr. Johnson — Phase 0 inspector ready.");
     log('Enter a seed and hit a button. Same seed always reproduces.');
+    if (currentSave) log(`Existing save found: day ${currentSave.meta.currentDay}.`);
   });
 })();

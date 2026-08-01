@@ -277,7 +277,7 @@
   // ── Growth: karma auto-allocated along the archetype's heatmap ──
   // Priority order is Primary, then Secondary, then Tertiary — each
   // pass tries every skill in that order and spends on the first one
-  // whose next rank is affordable (not just the top of the list, so
+  // whose next step is affordable (not just the top of the list, so
   // a plateaued Primary doesn't waste Karma the rest of the priority
   // order could still use). Only once every skill in the archetype's
   // own list is unaffordable does growth fall through to Overflow —
@@ -287,8 +287,26 @@
   // Generalist's early leader from permanently starving the rest of
   // their spread (§ growth-cascade simulation, verified prior to
   // building this).
+  //
+  // Archetype-list skills (Primary/Secondary/Tertiary only, never
+  // Overflow) advance in HALF-STEPS: X.0 -> X.5 -> (X+1).0, each half
+  // costing exactly half the full marginal cost — so a leftover
+  // amount that can't complete a whole rank still goes toward that
+  // skill instead of getting diverted into a cheap, unrelated
+  // Overflow purchase (verified bug: without this, a small leftover
+  // would buy a brand-new Overflow skill at flat cost 2 rather than
+  // make any progress on an almost-affordable archetype skill, since
+  // "start something new" has no threshold to clear). The player only
+  // ever sees the floored integer (getEffectiveSkills, display) — the
+  // .5 state is internal pacing, not a visible half-rank. Overflow
+  // keeps whole-rank-only, no half-steps, on purpose — it stays the
+  // cheap, unrelated-dabbling lane, never competing for partial credit.
   function marginalSkillCost(rank) {
     return 2 * (rank + 1); // matches karmaCost's cumulative curve rank*(rank+1)
+  }
+
+  function halfStepCost(rank) {
+    return Math.floor(rank) + 1; // half of marginalSkillCost(floor(rank)) either way
   }
 
   function growRunner(runner, karmaAward, rng) {
@@ -300,13 +318,13 @@
       let spent = false;
 
       // 1) the archetype's own list, in priority order — first
-      // affordable wins (not just the top of the list, so a
-      // plateaued Primary doesn't strand Karma the rest of the
+      // affordable half-step wins (not just the top of the list, so
+      // a plateaued Primary doesn't strand Karma the rest of the
       // priority order could still spend).
       for (const id of priorityOrder) {
-        const cost = marginalSkillCost(runner.skills[id]);
+        const cost = halfStepCost(runner.skills[id]);
         if (remaining >= cost) {
-          runner.skills[id] += 1;
+          runner.skills[id] += 0.5;
           remaining -= cost;
           spent = true;
           break;
@@ -415,11 +433,18 @@
   }
 
   // ── Effective skills: base minus wound penalty on the key skill ─
-  // Implant modifiers aren't generated yet (no crafting/armory in
-  // Phase 0) — this is the read-time formula from §09, ready for
-  // implant bonuses to slot into later without changing callers.
+  // Also floors every value — archetype-tier skills can hold an
+  // internal .5 half-step (growRunner) that the player never sees;
+  // a "1.5" isn't worth 1.5 ranks of competence, so pricing, wound
+  // math, and anything else reading effective skills always sees
+  // the plain integer rank. Implant modifiers aren't generated yet
+  // (no crafting/armory in Phase 0) — this is the read-time formula
+  // from §09, ready for implant bonuses to slot in later.
   function getEffectiveSkills(runner) {
-    const out = Object.assign({}, runner.skills);
+    const out = {};
+    for (const skill of Object.keys(runner.skills)) {
+      out[skill] = Math.floor(runner.skills[skill]);
+    }
     const key = runner.classification.focusKeySkill;
     if (runner.wounds > 0 && out[key] !== undefined) {
       out[key] = Math.max(0, out[key] - runner.wounds);
@@ -536,4 +561,5 @@
   MJ.buildSkillTiers = buildSkillTiers;
   MJ.growRunner = growRunner;
   MJ.marginalSkillCost = marginalSkillCost;
+  MJ.halfStepCost = halfStepCost;
 })();
