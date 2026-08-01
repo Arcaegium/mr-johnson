@@ -154,11 +154,87 @@
     dumpRunner(runner);
   }
 
+  // ── P0.4 — inspect a generated site and its invariants ──────────
+  function fmtObstacle(obs) {
+    const afford = obs.affordances.map((a) => {
+      const tag = a.skill || "—";
+      if (a.blocked) return `~~${tag}~~(${a.reason})`;
+      return `${tag}${a.loud ? "*" : ""}`;
+    }).join("/");
+    return `[${obs.label} T${obs.tier}]  ${afford}`;
+  }
+
+  function fmtPhysicalSlot(slotLabel, slot) {
+    if (slot.physicalObstacles.length === 0) return `    ${slotLabel}   (clear)`;
+    return `    ${slotLabel}   ` + slot.physicalObstacles.map(fmtObstacle).join("   +   ");
+  }
+
+  function dumpSite(site) {
+    log(`${site.identity.district} — ${site.identity.owningFaction}`);
+    log(`  security — physical:${site.security.physical}  astral:${site.security.astral}  matrix:${site.security.matrix}`);
+    log(`  rooms: ${site.layout.rooms.map((r) => `${r.label}(${r.size})`).join(", ")}`);
+    log("  entry points:");
+    for (const entry of site.layout.entryPoints) {
+      log(fmtPhysicalSlot(`${entry.type}@room${entry.roomId}`, entry));
+    }
+    log("  edges:");
+    for (const edge of site.layout.edges) {
+      log(fmtPhysicalSlot(`room${edge.from} <-> room${edge.to}`, edge));
+    }
+    log("  room posts (physical) + room astral state:");
+    for (const room of site.layout.rooms) {
+      room.postSlots.forEach((slot, i) => {
+        log(fmtPhysicalSlot(`${room.label} post ${i + 1}/${room.postSlots.length}`, slot));
+      });
+      if (room.astralObstacles.length > 0) {
+        log(`    ${room.label} [ASTRAL]   ` + room.astralObstacles.map(fmtObstacle).join("   +   "));
+      }
+    }
+    if (site.layout.patrols.length > 0) {
+      log("  physical patrols:");
+      for (const patrol of site.layout.patrols) {
+        log(fmtPhysicalSlot(`route ${patrol.roomIds.map((id) => "room" + id).join("->")}`, patrol));
+      }
+    }
+    if (site.layout.spiritZones.length > 0) {
+      log("  astral spirit zones:");
+      for (const zone of site.layout.spiritZones) {
+        const label = `zone {${zone.roomIds.map((id) => "room" + id).join(", ")}}`;
+        if (zone.astralObstacles.length === 0) log(`    ${label}   (clear)`);
+        else log(`    ${label}   ` + zone.astralObstacles.map(fmtObstacle).join("   +   "));
+      }
+    }
+    log(`  population: ${site.population.guardSquadCount} squad(s) x ${site.population.guardsPerSquad}, ${site.population.dualNaturedGuards} dual-natured`);
+
+    const paths = MJ.findPaths(site);
+    log(`  distinct entry->objective paths: ${paths.length}  ${paths.map((p) => p.join("->")).join("  |  ")}`);
+
+    const obstacles = MJ.allObstacles(site);
+    const physCount = obstacles.filter((o) => o.projection === "physical").length;
+    const astralCount = obstacles.filter((o) => o.projection === "astral").length;
+    const bruteForceOk = obstacles.every(MJ.hasBruteForceOption);
+    const waysOk = obstacles.every((o) => MJ.usableNonLoudWays(o) >= 2);
+    const alternatePathOk = paths.length >= 2;
+    log(`  total obstacles: ${obstacles.length}  (physical: ${physCount}, budget ${site.security.physical}/10 coverage)  (astral: ${astralCount}, budget ${site.security.astral}/10 coverage)`);
+    log(`  invariants — brute force always available: ${bruteForceOk}   >=2 usable non-loud ways per obstacle: ${waysOk}   >=2 distinct paths: ${alternatePathOk}`);
+    log("");
+  }
+
+  function testSite() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed);
+    log("");
+    dumpSite(MJ.generateSite(rng));
+  }
+
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-rng").addEventListener("click", testRNG);
     document.getElementById("btn-runner").addEventListener("click", testRunner);
     document.getElementById("btn-market").addEventListener("click", testMarket);
     document.getElementById("btn-growth").addEventListener("click", testGrowth);
+    document.getElementById("btn-site").addEventListener("click", testSite);
     log("Mr. Johnson — Phase 0 inspector ready.");
     log('Enter a seed and hit a button. Same seed always reproduces.');
   });
