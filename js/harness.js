@@ -403,6 +403,97 @@
     log(`overspend guard: attempted permanent hire with only 100 nuyen  →  ${overspend.ok ? "SUCCEEDED (bug!)" : "correctly rejected"}   money unchanged: ${save.johnson.money}`);
   }
 
+  // ── P1 — live security: Min/Current/Max triples + the Alert pool
+  function fmtSecState(state) {
+    const ax = MJ.SECURITY_AXES.map((axis) => {
+      const a = state.axes[axis];
+      return `${axis[0].toUpperCase()}:${a.min}/${a.current}/${a.max}`;
+    }).join("  ");
+    return `alert:${state.alert}/${state.alertMax}  ${ax}`;
+  }
+
+  function testAlert() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed);
+    log("");
+
+    const site = MJ.generateSite(rng.fork("alert-site"));
+    const state = MJ.initSecurityState(rng.fork("alert-init"), site);
+    log(`site: ${site.identity.district} district (${site.identity.owningFaction})   value:${site.identity.value}  orientation:${site.identity.orientation}`);
+    log(`triples are Min/Current/Max per axis; Current starts at rest (=Min)`);
+    log(`  ${fmtSecState(state)}`);
+    log("");
+
+    // Phase A — sustained loud pressure: 12 days, 2 loud hits/day.
+    log("PHASE A — hammer it: 2 loud hits/day for 12 days");
+    for (let day = 1; day <= 12; day++) {
+      const events = [];
+      for (let h = 0; h < 2; h++) {
+        const r = MJ.recordHit(state, { loud: true });
+        if (r.ratcheted) events.push(r.maxGrew ? "RATCHET+MAX-GROWTH" : "RATCHET");
+      }
+      MJ.advanceSiteDay(state);
+      log(`  day ${String(day).padStart(2)}: ${fmtSecState(state)}${events.length ? "   << " + events.join(", ") : ""}`);
+    }
+    log("");
+
+    // Phase B — full quiet: Alert bleeds, Current cools to Min, Max holds.
+    log("PHASE B — go quiet: 15 days, no hits");
+    const maxesBefore = MJ.SECURITY_AXES.map((x) => state.axes[x].max).join(",");
+    for (let day = 13; day <= 27; day++) {
+      MJ.advanceSiteDay(state);
+      log(`  day ${String(day).padStart(2)}: ${fmtSecState(state)}`);
+    }
+    const maxesAfter = MJ.SECURITY_AXES.map((x) => state.axes[x].max).join(",");
+    log(`  maxes held through the cooldown: ${maxesBefore} -> ${maxesAfter}   ${maxesBefore === maxesAfter ? "OK" : "BUG: Max decreased"}`);
+    log("");
+
+    // Phase C — ghost runs: quiet no-glitch hits must never ratchet.
+    log("PHASE C — 10 ghost runs (quiet, no glitch) on one day");
+    const beforeGhost = fmtSecState(state);
+    let ghostRatchets = 0;
+    for (let h = 0; h < 10; h++) {
+      if (MJ.recordHit(state, {}).ratcheted) ghostRatchets += 1;
+    }
+    log(`  before: ${beforeGhost}`);
+    log(`  after:  ${fmtSecState(state)}   ratchets:${ghostRatchets} ${ghostRatchets === 0 ? "(OK — a ghost run stays a ghost run)" : "(BUG)"}`);
+    log("");
+
+    // Invariant sweep: many sites, many days of random activity.
+    log("INVARIANT SWEEP — 300 sites x 60 days of random activity");
+    log("  checks, every single step: min <= current <= max, 0 <= alert <= alertMax, max never decreases");
+    const sweepRng = MJ.makeRNG(seed + "-alert-sweep");
+    let failures = 0;
+    let totalRatchets = 0;
+    let totalMaxGrowths = 0;
+    for (let s = 0; s < 300; s++) {
+      const sw = MJ.generateSite(sweepRng.fork("site-" + s));
+      const st = MJ.initSecurityState(sweepRng.fork("init-" + s), sw);
+      const prevMax = {};
+      for (const axis of MJ.SECURITY_AXES) prevMax[axis] = st.axes[axis].max;
+      let prevAlertMax = st.alertMax;
+      for (let day = 0; day < 60; day++) {
+        const hits = sweepRng.int(0, 3);
+        for (let h = 0; h < hits; h++) {
+          const r = MJ.recordHit(st, { loud: sweepRng.chance(0.5), glitch: sweepRng.chance(0.2) });
+          if (r.ratcheted) totalRatchets += 1;
+          if (r.maxGrew) totalMaxGrowths += 1;
+        }
+        MJ.advanceSiteDay(st);
+        if (st.alert < 0 || st.alert > st.alertMax || st.alertMax < prevAlertMax) failures += 1;
+        prevAlertMax = st.alertMax;
+        for (const axis of MJ.SECURITY_AXES) {
+          const a = st.axes[axis];
+          if (a.min > a.current || a.current > a.max || a.max < prevMax[axis] || a.min < 1) failures += 1;
+          prevMax[axis] = a.max;
+        }
+      }
+    }
+    log(`  ratchet events: ${totalRatchets}   max-growth events: ${totalMaxGrowths}   invariant failures: ${failures} ${failures === 0 ? "(OK)" : "(BUG)"}`);
+  }
+
   // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
   // persistent state across button clicks (not a scripted one-shot
   // demo) — this is what "roll the day" and "save and reload" are
@@ -468,6 +559,7 @@
     document.getElementById("btn-resolve").addEventListener("click", testResolve);
     document.getElementById("btn-market-cycle").addEventListener("click", testMarketCycle);
     document.getElementById("btn-economy").addEventListener("click", testEconomy);
+    document.getElementById("btn-alert").addEventListener("click", testAlert);
     document.getElementById("btn-new-game").addEventListener("click", newGame);
     document.getElementById("btn-roll-day").addEventListener("click", rollDay);
     document.getElementById("btn-reload-save").addEventListener("click", reloadSave);
