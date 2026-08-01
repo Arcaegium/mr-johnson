@@ -21,7 +21,17 @@
        involved grows from what they actually did, but the player
        only gets paid once, for the thing they were actually hired
        to do.
-     - A job's total scope (however many missions/sites get chained
+     - A job is NOT inherently a sequence (§06, amended twice): by
+       default its missions complete in any order, interleaved with
+       anything else the operation runs, and the only universal
+       constraint is the window (daysPerMission x missionCount,
+       below). But some contracts are genuine CHAINS — "acquire the
+       item, deliver it, plug it in" is three missions that only
+       work in order — so a mission can carry `requiresMission`, and
+       the dispatch layer refuses a gated leg until its prerequisite
+       resolves. Order is per-job structure where the fiction
+       demands it, never a blanket rule in either direction.
+     - A job's total scope (however many missions/sites get bundled
        into it) is what scales without bound as the operation grows
        — never any single site's Value, which is capped at 10
        forever by design (§09). Job pay is the SUM of its missions'
@@ -72,7 +82,7 @@
   const DOMAIN_TO_ORIENTATION = { physical: "physical", data: "matrix", astral: "astral" };
 
   // ── The three mission families (§06) — the shape of ONE mission,
-  // not the whole job (a job can sequence missions of different
+  // not the whole job (a job can bundle missions of different
   // families/verbs/domains together).
   const JOB_FAMILIES = {
     infiltration: { label: "Infiltration", maxCrew: 4, verbs: ["acquire", "extract", "eliminate", "sabotage", "intel", "plant"] },
@@ -133,6 +143,7 @@
   // that's hiring the job (client != target, per §06's "hired by
   // someone to hit someone else").
   const REUSE_RATIO = 0.4; // tuning dial, per the bible's own language
+  const CHAINED_JOB_CHANCE = 0.35; // share of multi-mission contracts that are order-gated chains (placeholder)
 
   function matchSite(rng, sitePool, tierId, orientation, excludeFaction) {
     const band = TIER_BANDS[tierId];
@@ -178,6 +189,11 @@
     const tier = tierForValue(site.identity.value);
     const intendedCrew = rollIntendedCrew(rng, familyId);
 
+    // The moment a site enters the player's world it gets handed
+    // over with first-impression security numbers — true 1-10 form,
+    // only partly true (models/mission.js's ESTIMATE_ACCURACY).
+    if (!site.estimatedSecurity) MJ.generateSecurityEstimate(rng, site);
+
     const mission = {
       hiringFaction: hiringFaction,
       targetFaction: site.identity.owningFaction,
@@ -193,9 +209,13 @@
       tier: tier,
       intendedCrew: intendedCrew,
       payContribution: estimateMissionPay(rng, site.identity.value),
-      // Reserved — needs a runner-dispatch and resolution system
-      // that doesn't exist yet. Karma is earned per mission, per
-      // runner, on success, regardless of whether this mission was
+      // Set by generateJob when the contract is a chain: the sibling
+      // mission that must resolve before this one can be dispatched.
+      // A direct object reference — fine in memory; the save layer
+      // will need to serialize this as an index (integration work).
+      requiresMission: null,
+      // Karma is earned per mission, per runner, on success (via
+      // models/mission.js), regardless of whether this mission was
       // the job's actual contracted deliverable or just prep work.
       resolved: false,
       karmaAward: null,
@@ -225,14 +245,38 @@
       siteResults.push({ site, wasReused });
     }
 
-    const pay = missions.reduce((sum, m) => sum + m.payContribution, 0);
-    // More legs, more time allowed — a placeholder shape, not tuned.
-    const expiryDay = currentDay + r.int(3, 10) * missionCount;
+    // Some contracts are genuine chains (§06): "acquire the item,
+    // deliver it, plug it in" only works in order. Others are
+    // independent bundles — hit these three depots, any order, by
+    // the deadline. A chained job gates each leg on the previous
+    // one. Whether a chain's verbs read as a coherent story
+    // (acquire -> deliver -> plant, not protect -> intel) is content
+    // polish, deliberately not modeled yet.
+    const chained = missionCount > 1 && r.chance(CHAINED_JOB_CHANCE);
+    if (chained) {
+      for (let i = 1; i < missions.length; i++) {
+        missions[i].requiresMission = missions[i - 1];
+      }
+    }
+
+    const basePay = missions.reduce((sum, m) => sum + m.payContribution, 0);
+    // Deadline is a price axis (§06, confirmed design): a tight
+    // window forces committing more of the roster at once — higher
+    // odds of running dry or eating a permanent wound — so shorter
+    // days-per-mission pays a premium. Placeholder shape: 3d/mission
+    // -> x1.56, 10d/mission -> x1.00, linear between.
+    const daysPerMission = r.int(3, 10);
+    const rushMultiplier = 1 + (10 - daysPerMission) * 0.08;
+    const pay = Math.round(basePay * rushMultiplier);
+    const expiryDay = currentDay + daysPerMission * missionCount;
 
     const job = {
       hiringFaction: hiringFaction,
       missions: missions,
       pay: pay,
+      daysPerMission: daysPerMission,
+      rushMultiplier: rushMultiplier,
+      chained: chained,
       successCriteria: "allMissions", // placeholder — generally "complete every included mission"
       expiryDay: expiryDay,
       // Reserved, not yet populated — needs standing/heat, scouting,
@@ -258,7 +302,16 @@
   MJ.JOB_FAMILIES = JOB_FAMILIES;
   MJ.TIER_BANDS = TIER_BANDS;
   MJ.tierForValue = tierForValue;
+  // Contract-layer helper: a job COMPLETES when its success criteria
+  // are met — for the current "allMissions" criteria, every included
+  // mission resolved (by the dispatch layer, models/mission.js).
+  // Whether/when to pay is economy.js's collectJobPay, not this.
+  function isJobComplete(job) {
+    return job.missions.every((m) => m.resolved);
+  }
+
   MJ.generateMission = generateMission;
+  MJ.isJobComplete = isJobComplete;
   MJ.generateJob = generateJob;
   MJ.generateBoard = generateBoard;
 })();

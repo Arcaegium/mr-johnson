@@ -232,25 +232,28 @@
     dumpSite(MJ.generateSite(rng));
   }
 
-  // ── P1 — job board: a job is 1+ sequential missions, one client ─
+  // ── P1 — job board: a job is 1+ missions in a window, one client ─
   function fmtCrew(intendedCrew) {
     if (intendedCrew.fixed !== undefined) return `${intendedCrew.fixed} runner(s)`;
     return `${intendedCrew.min}-${intendedCrew.max} runners`;
   }
 
-  function dumpMission(mission, i, total) {
+  function dumpMission(mission, i, total, all) {
     const verb = MJ.OBJECTIVE_VERBS[mission.objectiveVerb];
-    log(`    mission ${i + 1}/${total}: ${verb.label} (${mission.payloadDomain})  —  ${MJ.JOB_FAMILIES[mission.family].label}  —  tier: ${mission.tier}`);
+    const reqIdx = mission.requiresMission && all ? all.indexOf(mission.requiresMission) : -1;
+    log(`    mission ${i + 1}/${total}: ${verb.label} (${mission.payloadDomain})  —  ${MJ.JOB_FAMILIES[mission.family].label}  —  tier: ${mission.tier}${reqIdx >= 0 ? `   [GATED — requires mission ${reqIdx + 1}]` : ""}`);
     log(`      target: ${mission.targetFaction}   crew: ${fmtCrew(mission.intendedCrew)}   pay contribution: ~${mission.payContribution}`);
     log(`      site: ${mission.site.identity.district} (${mission.site.identity.owningFaction})  value:${mission.site.identity.value} orientation:${mission.site.identity.orientation}`);
+    const view = MJ.siteIntelView(mission.site, 1);
+    log(`      est. security — P:${view.physical.estimated}  A:${view.astral.estimated}  M:${view.matrix.estimated}   (60-70% of these are true; recon confirms)`);
     log(`      fail state: ${verb.failState}`);
   }
 
   function dumpJob(entry, index) {
     const { job, siteResults } = entry;
     const reusedCount = siteResults.filter((s) => s.wasReused).length;
-    log(`[${index}] hiring faction: ${job.hiringFaction}   pay: ~${job.pay}   expires day ${job.expiryDay}   (${job.missions.length} mission(s), ${reusedCount} reused)`);
-    job.missions.forEach((m, i) => dumpMission(m, i, job.missions.length));
+    log(`[${index}] hiring faction: ${job.hiringFaction}   pay: ~${job.pay} (rush x${job.rushMultiplier.toFixed(2)} — ${job.daysPerMission}d/mission)   expires day ${job.expiryDay}   (${job.missions.length} mission(s), ${reusedCount} reused${job.chained ? ", CHAINED" : ""})`);
+    job.missions.forEach((m, i) => dumpMission(m, i, job.missions.length, job.missions));
     log("");
   }
 
@@ -272,6 +275,30 @@
     const totalMissions = board.reduce((sum, e) => sum + e.job.missions.length, 0);
     const reusedMissions = board.reduce((sum, e) => sum + e.siteResults.filter((s) => s.wasReused).length, 0);
     log(`total missions across board: ${totalMissions}   reused: ${reusedMissions}   (expected 0 — pool was empty)`);
+    log("");
+
+    // The handed-to-player estimate: verify the BS rate is in spec.
+    const statRng = MJ.makeRNG(seed + "-est-stats");
+    let exact = 0;
+    let total = 0;
+    for (let i = 0; i < 300; i++) {
+      const s = MJ.generateSite(statRng.fork("s" + i));
+      MJ.generateSecurityEstimate(statRng.fork("e" + i), s);
+      for (const axis of ["physical", "astral", "matrix"]) {
+        total++;
+        if (s.estimatedSecurity[axis] === s.securityState.axes[axis].current) exact++;
+      }
+    }
+    log(`estimate accuracy across ${total} axis estimates: ${((100 * exact) / total).toFixed(1)}% exact   (spec: 60-70% — the rest is BS that teaches recon)`);
+
+    // Rush premium: a shorter window must pay more for the same legs.
+    const rushRng = MJ.makeRNG(seed + "-rush-stats");
+    const buckets = {};
+    for (let i = 0; i < 500; i++) {
+      const { job } = MJ.generateJob(rushRng.fork("j" + i), [], 1);
+      buckets[job.daysPerMission] = job.rushMultiplier;
+    }
+    log(`rush premium by window: ` + Object.keys(buckets).sort((a, b) => a - b).map((d) => `${d}d:x${buckets[d].toFixed(2)}`).join("  "));
   }
 
   // ── P1 — task/skill resolution: one runner, one obstacle, one
@@ -523,6 +550,169 @@
     log(`  ratchet events: ${totalRatchets}   max-growth events: ${totalMaxGrowths}   invariant failures: ${failures} ${failures === 0 ? "(OK)" : "(BUG)"}`);
   }
 
+  // ── P1 — the full loop: job -> recon -> strike -> pay -> growth ─
+  function fmtMissionResult(r) {
+    const head = `  ${r.kind}  ${r.success ? "SUCCESS" : "FAILED"}  crew:[${(r.crew || []).join(", ")}]  karma:+${r.karmaAward}${r.intelBonusApplied ? "  (intel bonus)" : ""}`;
+    const lines = [head];
+    for (const t of r.tasks || []) {
+      lines.push(t.runner
+        ? `      ${t.obstacle} T${t.tier}: ${t.runner} ${t.skill}${t.loud ? " (LOUD)" : ""} ${t.hits}/${t.threshold} ${t.success ? "ok" : "MISS"}${t.criticalGlitch ? " CRITGLITCH+WOUND" : t.glitch ? " glitch" : ""}`
+        : `      ${t.obstacle} T${t.tier}: ${t.result}`);
+    }
+    if (r.error) lines.push(`      (${r.error})`);
+    if (r.patient) lines.push(`      patient: ${r.patient} — wounds now ${r.woundsNow}`);
+    if (r.noise) lines.push(`      noise:${r.noise.noise}${r.noise.ratcheted ? "  << RATCHET" + (r.noise.maxGrew ? "+MAXGROW" : "") : ""}`);
+    if (r.yield) lines.push(`      yield: ${r.yield.kind} x${r.yield.amount}`);
+    for (const c of r.contractEvents || []) {
+      if (c.event === "contractCompleted") lines.push(`      contract: ${c.runner} — block used up, back on the market`);
+    }
+    return lines.join("\n");
+  }
+
+  function testDispatch() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed);
+    log("THE FULL LOOP — accept a job, recon it, run it, get paid; runners grow, the site remembers.");
+    log("");
+
+    const save = MJ.defaultSave(seed);
+    save.johnson.money = 200000;
+
+    const mage = MJ.generateRunner(rng.fork("crew-mage"), { family: "mage" });
+    const decker = MJ.generateRunner(rng.fork("crew-decker"), { family: "decker" });
+    const ghost = MJ.generateRunner(rng.fork("crew-ghost"), { family: "fighter", focusId: "stealth" });
+    const crew = [mage, decker, ghost];
+
+    // Contracts are the gate: an unhired runner can't be dispatched.
+    const preHire = MJ.runActionPeriod(rng, [{ mission: MJ.createCraftingMission(), runners: [mage] }], 1);
+    log(`dispatch before hiring: ${preHire[0].error ? "correctly rejected" : "SUCCEEDED (bug!)"}`);
+    log("");
+
+    for (const r of crew) {
+      MJ.watchRunner(r, rng);
+      const h = MJ.hireRunnerWithCost(save, r, "retainer");
+      log(`hired ${r.identity.handle} (${MJ.describeDiscipline(r)} — ${r.classification.focusLabel}) on retainer   cost:${h.cost}  missions:${r.market.hired.missionsRemaining}`);
+    }
+    log(`money after hiring: ${save.johnson.money}`);
+    log("");
+
+    // Pick like a sane Johnson: a rookie crew has no business on a
+    // stretch contract, so take a safe-band job (every leg value<=3)
+    // off the pile. (First run of this demo proved the point the
+    // hard way — 14 straight days failing a value-7 site while its
+    // security ratcheted 7->9.)
+    let job = null;
+    let fallback = null;
+    for (let i = 0; i < 300 && !job; i++) {
+      const candidate = MJ.generateJob(rng.fork("job-" + i), [], 1, { missionCount: 2 }).job;
+      if (!candidate.missions.every((m) => m.site.identity.value <= 3)) continue;
+      if (!fallback) fallback = candidate;
+      if (candidate.chained) job = candidate; // prefer a chain so the gate demo always shows
+    }
+    job = job || fallback;
+    log(`JOB accepted (safe-band pick${job.chained ? ", CHAINED — legs only work in order" : ""}): ${job.missions.length} mission(s) for ${job.hiringFaction}   pay:${job.pay}   expires day ${job.expiryDay}`);
+    job.missions.forEach((m, i) => {
+      log(`  leg ${i + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain}) vs ${m.targetFaction} @ ${m.site.identity.district} (value:${m.site.identity.value} ${m.site.identity.orientation})`);
+      const v = MJ.siteIntelView(m.site, 1);
+      log(`         est. security — P:${v.physical.estimated}  A:${v.astral.estimated}  M:${v.matrix.estimated}   (word on the street — believe at your own risk)`);
+    });
+    log("");
+
+    const karmaBefore = {};
+    crew.forEach((r) => (karmaBefore[r.identity.handle] = r.karma));
+
+    let day = 1;
+    const site1 = job.missions[0].site;
+    log(`— DAY ${day}: recon sweep, queued astral -> matrix -> physical (plus an illegal 4th dispatch reusing the mage) —`);
+    const reconResults = MJ.runActionPeriod(rng, [
+      { mission: MJ.createReconMission(site1, "astral"), runners: [mage] },
+      { mission: MJ.createReconMission(site1, "matrix"), runners: [decker] },
+      { mission: MJ.createReconMission(site1, "physical"), runners: [ghost] },
+      { mission: MJ.createReconMission(site1, "astral"), runners: [mage] }, // one action per runner per period
+    ], day);
+    reconResults.forEach((r) => log(fmtMissionResult(r)));
+    log(`  intel on file: [${Object.keys(site1.intel).join(", ")}]   alert now: ${site1.securityState ? site1.securityState.alert : 0}`);
+    const pv = MJ.siteIntelView(site1, day);
+    log(`  player view: ` + ["physical", "astral", "matrix"].map((a) =>
+      `${a}: est ${pv[a].estimated}${pv[a].confirmed ? ` / CONFIRMED ${pv[a].confirmed.value} (day ${pv[a].confirmed.dayTaken}${pv[a].confirmed.fresh ? ", fresh" : ", stale"})` : ""}`
+    ).join("   "));
+    log("");
+
+    for (day = 2; day <= 15 && !MJ.isJobComplete(job); day++) {
+      const target = job.missions.find((m) => !m.resolved);
+      for (const r of crew) {
+        if (!r.market.hired && r.market.phase !== "kia") {
+          const h = MJ.hireRunnerWithCost(save, r, "freelance");
+          log(`  (re-armed ${r.identity.handle} freelance for ${h.cost})`);
+        }
+      }
+      const queue = [];
+      // On the first strike day of a chained job, try to skip ahead
+      // to the gated leg first — the dispatch layer must refuse it,
+      // costing nothing, before the legitimate leg runs.
+      if (day === 2 && job.chained && job.missions[1].requiresMission) {
+        log(`— DAY ${day}: trying gated leg 2 first (must be refused), then leg ${job.missions.indexOf(target) + 1} —`);
+        queue.push({ mission: job.missions[1], runners: crew });
+      } else {
+        log(`— DAY ${day}: full crew vs leg ${job.missions.indexOf(target) + 1} @ ${target.site.identity.district} —`);
+      }
+      queue.push({ mission: target, runners: crew });
+      MJ.runActionPeriod(rng, queue, day).forEach((r) => log(fmtMissionResult(r)));
+    }
+    log("");
+
+    if (MJ.isJobComplete(job)) {
+      const before = save.johnson.money;
+      MJ.collectJobPay(save, job);
+      log(`JOB COMPLETE — paid ${job.pay}: ${before} -> ${save.johnson.money}   reputation: ${save.johnson.reputation}`);
+      const again = save.johnson.money;
+      MJ.collectJobPay(save, job);
+      log(`double-collection guard: ${save.johnson.money === again ? "OK — second collect pays nothing" : "BUG"}`);
+    } else {
+      log(`job NOT complete by day ${day - 1} — the dice were brutal this seed (a real outcome, not a bug)`);
+    }
+    log("");
+
+    log(`— DAY ${day}: downtime economy — decker crafts at the hub, the other two harvest a discovered scrap site —`);
+    const scrapSite = MJ.discoverResourceSite(rng.fork("scrap"), "scrap");
+    for (const r of crew) {
+      if (!r.market.hired && r.market.phase !== "kia") MJ.hireRunnerWithCost(save, r, "freelance");
+    }
+    MJ.runActionPeriod(rng, [
+      { mission: MJ.createCraftingMission(4), runners: [decker] },
+      { mission: MJ.createResourceMission(scrapSite), runners: [mage, ghost] },
+    ], day).forEach((r) => log(fmtMissionResult(r)));
+    log("");
+
+    day++;
+    if (!crew.some((r) => r.wounds > 0)) {
+      ghost.wounds += 1;
+      log(`(simulating a field wound on ${ghost.identity.handle} for the Medicae demo)`);
+    }
+    const patient = crew.find((r) => r.wounds > 0);
+    const medic = crew.find((r) => r !== patient);
+    for (const r of crew) {
+      if (!r.market.hired && r.market.phase !== "kia") MJ.hireRunnerWithCost(save, r, "freelance");
+    }
+    log(`— DAY ${day}: Medicae — ${medic.identity.handle} treats ${patient.identity.handle} (the medic's mission; the patient is occupied but spends nothing) —`);
+    MJ.runActionPeriod(rng, [
+      { mission: MJ.createMedicalMission(patient), runners: [medic] },
+    ], day).forEach((r) => log(fmtMissionResult(r)));
+    log("");
+
+    log("— AFTERMATH —");
+    for (const r of crew) {
+      log(`${r.identity.handle}: karma ${karmaBefore[r.identity.handle]} -> ${r.karma}   wounds:${r.wounds}   contract: ${r.market.hired ? r.market.hired.tier + " (" + r.market.hired.missionsRemaining + " left)" : "none"}`);
+      log(`   skills now: ${fmtSkills(r.skills)}`);
+    }
+    if (site1.securityState) {
+      log(`site after the campaign: ${fmtSecState(site1.securityState)}`);
+    }
+    log(`operation: money ${save.johnson.money}   reputation ${save.johnson.reputation}`);
+  }
+
   // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
   // persistent state across button clicks (not a scripted one-shot
   // demo) — this is what "roll the day" and "save and reload" are
@@ -589,6 +779,7 @@
     document.getElementById("btn-market-cycle").addEventListener("click", testMarketCycle);
     document.getElementById("btn-economy").addEventListener("click", testEconomy);
     document.getElementById("btn-alert").addEventListener("click", testAlert);
+    document.getElementById("btn-dispatch").addEventListener("click", testDispatch);
     document.getElementById("btn-new-game").addEventListener("click", newGame);
     document.getElementById("btn-roll-day").addEventListener("click", rollDay);
     document.getElementById("btn-reload-save").addEventListener("click", reloadSave);

@@ -53,7 +53,11 @@
     return Math.max(1, Math.ceil(tier / 2));
   }
 
-  function resolveTask(rng, runner, obstacle, skillId) {
+  // opts.bonusDice: situational extra dice on top of a TRAINED pool
+  // (e.g. mission.js's fresh-intel bonus). Never rescues untrained —
+  // a zero-rank skill stays an automatic failure, bonus or not.
+  function resolveTask(rng, runner, obstacle, skillId, opts) {
+    opts = opts || {};
     const affordance = obstacle.affordances.find((a) => a.skill === skillId);
     if (!affordance) {
       return { ok: false, error: `"${skillId}" isn't an option for this obstacle` };
@@ -64,7 +68,8 @@
 
     const threshold = thresholdForTier(obstacle.tier);
     const effectiveSkills = MJ.getEffectiveSkills(runner);
-    const poolSize = effectiveSkills[skillId] || 0;
+    const baseRank = effectiveSkills[skillId] || 0;
+    const poolSize = baseRank > 0 ? baseRank + (opts.bonusDice || 0) : 0;
 
     if (poolSize <= 0) {
       // Untrained: nothing to roll, an automatic failure, not a

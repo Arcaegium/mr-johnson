@@ -74,6 +74,8 @@
   const REPUTATION_PER_JOB = 1;
 
   function collectJobPay(save, job) {
+    if (job.paid) return save.johnson.money; // one contract, one payout — never twice
+    job.paid = true;
     save.johnson.reputation += REPUTATION_PER_JOB;
     return earn(save, job.pay);
   }
