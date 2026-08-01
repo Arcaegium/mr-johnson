@@ -229,12 +229,60 @@
     dumpSite(MJ.generateSite(rng));
   }
 
+  // ── P0.5 — day clock + IndexedDB save/load ──────────────────────
+  async function testSaveLoad() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    log("SEED: " + seed);
+    log("");
+
+    log("Creating a new save (defaultSave)...");
+    const state = MJ.defaultSave(seed);
+    log(`  schemaVersion: ${state.meta.schemaVersion}  currentDay: ${state.meta.currentDay}  rootSeed: ${state.meta.rootSeed}`);
+    log("");
+
+    log("Advancing 3 action periods (MJ.advanceDay)...");
+    MJ.advanceDay(state.meta, 3);
+    log(`  currentDay is now: ${state.meta.currentDay}`);
+    log("");
+
+    log("Saving to IndexedDB...");
+    try {
+      await MJ.saveGame(state);
+      log("  saved.");
+    } catch (err) {
+      log("  SAVE FAILED: " + err);
+      return;
+    }
+    log("");
+
+    log("Simulating a fresh load (reading back from IndexedDB)...");
+    let loaded;
+    try {
+      loaded = await MJ.loadGame();
+    } catch (err) {
+      log("  LOAD FAILED: " + err);
+      return;
+    }
+    log(`  loaded schemaVersion: ${loaded.meta.schemaVersion}  currentDay: ${loaded.meta.currentDay}  rootSeed: ${loaded.meta.rootSeed}`);
+    log(`  currentDay round-trip OK: ${loaded.meta.currentDay === state.meta.currentDay}`);
+    log(`  rootSeed round-trip OK: ${loaded.meta.rootSeed === state.meta.rootSeed}`);
+    log("");
+
+    log("Regenerating a runner from the loaded rootSeed (determinism check)...");
+    const rng = MJ.makeRNG(loaded.meta.rootSeed);
+    const runner = MJ.generateRunner(rng);
+    log(`  ${runner.identity.handle} — ${MJ.describeDiscipline(runner)}`);
+    log("  (matches whatever seed 'Generate Runner' produces for this same seed)");
+  }
+
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-rng").addEventListener("click", testRNG);
     document.getElementById("btn-runner").addEventListener("click", testRunner);
     document.getElementById("btn-market").addEventListener("click", testMarket);
     document.getElementById("btn-growth").addEventListener("click", testGrowth);
     document.getElementById("btn-site").addEventListener("click", testSite);
+    document.getElementById("btn-save").addEventListener("click", testSaveLoad);
     log("Mr. Johnson — Phase 0 inspector ready.");
     log('Enter a seed and hit a button. Same seed always reproduces.');
   });
