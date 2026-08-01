@@ -5,12 +5,18 @@
    "obstacles are affordance lists" rule.
 
    Core rules this file implements:
-     - Three security axes (Physical, Astral, Matrix), each 1-10,
-       rolled around a shared hidden base +/- variance — "generally
-       aligned" (a heavily-defended site is usually secure across
-       the board) without being locked together (the bible's own
-       "astrally naked, physically stacked" example stays a real,
-       occasional outlier, not the norm).
+     - Security is a RESULT of what a site actually is, not an
+       independent roll (§06/§09). Every site has a Value (how big a
+       deal the target is, 1-10) and an Orientation (a lean toward
+       Physical, Astral, or Matrix, or Balanced across all three).
+       The leaned axis carries Value directly; the other two get a
+       steep discount — a magical research annex rolls high Astral
+       almost regardless of its Physical defenses, a data-heavy corp
+       site rolls high Matrix, a gang warehouse leans Physical and
+       can be astrally naked entirely. A Balanced site instead rolls
+       all three near Value with a small independent spread. There is
+       no separate site "tier" — a job's tier derives from whichever
+       site it gets matched to (§06), not from anything stored here.
      - Physical and Astral are two GENUINELY DIFFERENT encounter-
        point systems, not the same graph reused. Meatspace movement
        is gated by doors/guards/cameras on rooms, edges, and entries.
@@ -56,15 +62,40 @@
   const DISTRICTS = ["Downtown", "Redmond Barrens", "Bellevue", "Renton", "Tacoma", "Everett", "Puyallup"];
   const FACTIONS = ["Ares", "Renraku", "Mitsuhama", "Yakuza", "Ork Underground", "Independent", "Ancients"];
 
-  // ── Security axes: three ratings, 1-10, correlated not locked ───
-  // Roll a hidden base, then each axis independently rolls base +/-
-  // 2 (clamped) — usually close together, but real divergence is
-  // still possible (a high-tech lab bristling with ice but astrally
-  // naked stays a genuine, occasional site, not the norm).
-  function rollSecurity(rng) {
-    const base = rng.int(1, 10);
-    const vary = () => Math.max(1, Math.min(10, base + rng.int(-2, 2)));
-    return { physical: vary(), astral: vary(), matrix: vary() };
+  // ── Value & Orientation: what a site IS, before any security ────
+  // exists at all (§06/§09). Value is how big a deal the target is;
+  // Orientation decides which axis carries that Value. This is what
+  // the job board (Phase 1, not yet built) matches job slots against
+  // — a "stretch" slot wants a high-Value site, a Matrix-flavored
+  // slot wants a Matrix-leaning one — rather than security being an
+  // arbitrary number with no connection to what the site actually is.
+  const ORIENTATIONS = ["physical", "astral", "matrix", "balanced"];
+  const ORIENTATION_DISCOUNT = 0.35; // non-leaned axes, relative to Value
+  const BALANCED_SPREAD = 2;          // +/- range for a Balanced site's three axes
+
+  function rollValue(rng) {
+    return rng.int(1, 10);
+  }
+
+  function rollOrientation(rng) {
+    return rng.pick(ORIENTATIONS);
+  }
+
+  // Derives the three security ratings from Value + Orientation —
+  // security is a RESULT, never rolled on its own. The leaned axis
+  // carries Value directly; the other two take a steep discount, so
+  // a strongly-leaned site reads as genuinely lopsided (the bible's
+  // "astrally naked" example), not just "usually a bit lower."
+  // Balanced sites instead spread all three around Value evenly.
+  function deriveSecurity(rng, value, orientation) {
+    if (orientation === "balanced") {
+      const vary = () => Math.max(1, Math.min(10, value + rng.int(-BALANCED_SPREAD, BALANCED_SPREAD)));
+      return { physical: vary(), astral: vary(), matrix: vary() };
+    }
+    const discounted = Math.max(1, Math.round(value * ORIENTATION_DISCOUNT));
+    const security = { physical: discounted, astral: discounted, matrix: discounted };
+    security[orientation] = value;
+    return security;
   }
 
   // ── The verb registry: every obstacle's affordance options ──────
@@ -382,7 +413,9 @@
     options = options || {};
     const r = rng; // consume directly — see runner.js's fork-bug note; same rule applies here
 
-    const security = rollSecurity(r);
+    const value = options.value || rollValue(r);
+    const orientation = options.orientation || rollOrientation(r);
+    const security = deriveSecurity(r, value, orientation);
     const layout = generateLayout(r, security);
     const population = generatePopulation(r, security);
 
@@ -390,6 +423,8 @@
       identity: {
         district: options.district || r.pick(DISTRICTS),
         owningFaction: options.faction || r.pick(FACTIONS),
+        value: value,             // 1-10 — what the job board matches a job slot's tier against
+        orientation: orientation, // "physical" | "astral" | "matrix" | "balanced"
       },
       security: security,
       layout: layout,
@@ -484,7 +519,11 @@
 
   MJ.DISTRICTS = DISTRICTS;
   MJ.FACTIONS = FACTIONS;
+  MJ.ORIENTATIONS = ORIENTATIONS;
   MJ.OBSTACLE_TEMPLATES = OBSTACLE_TEMPLATES;
+  MJ.rollValue = rollValue;
+  MJ.rollOrientation = rollOrientation;
+  MJ.deriveSecurity = deriveSecurity;
   MJ.generateSite = generateSite;
   MJ.allObstacles = allObstacles;
   MJ.hasBruteForceOption = hasBruteForceOption;

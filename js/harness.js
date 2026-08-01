@@ -174,7 +174,7 @@
 
   function dumpSite(site) {
     log(`${site.identity.district} — ${site.identity.owningFaction}`);
-    log(`  security — physical:${site.security.physical}  astral:${site.security.astral}  matrix:${site.security.matrix}`);
+    log(`  value:${site.identity.value}  orientation:${site.identity.orientation}   →  security — physical:${site.security.physical}  astral:${site.security.astral}  matrix:${site.security.matrix}`);
     log(`  rooms: ${site.layout.rooms.map((r) => `${r.label}(${r.size})`).join(", ")}`);
     log("  entry points:");
     for (const entry of site.layout.entryPoints) {
