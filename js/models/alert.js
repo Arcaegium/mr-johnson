@@ -120,7 +120,10 @@
     const wasElevated = state.alert > 0;
 
     state.alert = Math.min(state.alertMax, state.alert + noise);
-    state.quietDays = 0;
+    // A hit the site never noticed can't interrupt its cooldown
+    // either — only noise resets the quiet-day counter (QA fix: the
+    // ghost-run rule applies to cooling, not just to pressure).
+    if (noise > 0) state.quietDays = 0;
 
     let ratcheted = false;
     let maxGrew = false;

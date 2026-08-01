@@ -341,16 +341,23 @@
     let day = 1;
     let hired = false;
     for (; day <= 120 && runner.market.phase !== "kia"; day++) {
-      const result = MJ.advanceMarketDay(runner, rng, day);
+      const result = MJ.advanceMarketDay(runner, rng);
       if (result.event !== "none" && result.event !== "protected") {
         log(`day ${day}: ${result.event}   (phase:${runner.market.phase}  hired:${runner.market.hired ? runner.market.hired.tier : "no"})`);
       }
       // Once we see a real Available window, hire on a retainer to
       // demonstrate the cycle being suppressed.
       if (!hired && runner.market.phase === "available" && day > 5) {
-        MJ.hireRunner(runner, rng, "retainer", day);
+        MJ.hireRunner(runner, "retainer");
         hired = true;
-        log(`day ${day}: HIRED (retainer)   protectedUntilDay:${runner.market.hired.protectedUntilDay}`);
+        log(`day ${day}: HIRED (retainer)   missionsRemaining:${runner.market.hired.missionsRemaining}`);
+      }
+      // Burn the retainer down with a dispatch every few days —
+      // contracts end by consumption, never by calendar. Quiet
+      // stretches in between prove downtime costs nothing.
+      if (runner.market.hired && day % 4 === 0) {
+        const c = MJ.consumeContractMission(runner, rng);
+        log(`day ${day}: dispatched -> ${c.event}${c.event === "consumed" ? "  remaining:" + c.missionsRemaining : ""}`);
       }
     }
     log("");
@@ -366,7 +373,7 @@
     log("");
 
     const save = MJ.defaultSave(seed);
-    save.johnson.money = 20000;
+    save.johnson.money = 30000;
     log(`starting money: ${save.johnson.money}   reputation: ${save.johnson.reputation}   boardCapacity: ${save.johnson.boardCapacity}`);
     log("");
 
@@ -377,8 +384,8 @@
     log(`  permanent cost: ${MJ.hireCost(runner, "permanent")}`);
     log("");
 
-    const hireResult = MJ.hireRunnerWithCost(save, runner, rng, "retainer", 1);
-    log(`hire (retainer): ${hireResult.ok ? "OK" : "FAILED"}   cost:${hireResult.cost}   money now: ${save.johnson.money}`);
+    const hireResult = MJ.hireRunnerWithCost(save, runner, "retainer");
+    log(`hire (retainer): ${hireResult.ok ? "OK" : "FAILED — " + hireResult.error}   cost:${hireResult.cost}   money now: ${save.johnson.money}${hireResult.ok ? "   missionsRemaining:" + runner.market.hired.missionsRemaining : ""}`);
     log("");
 
     const { job } = MJ.generateJob(rng, [], 1);
@@ -389,7 +396,10 @@
     log(`collected pay: ${beforeMoney} -> ${save.johnson.money}   reputation: ${beforeRep} -> ${save.johnson.reputation}`);
     log("");
 
-    log("board capacity expansion, three steps:");
+    // Top the ledger up so the expansion demo shows the cost curve
+    // actually being climbed, not just the guard rejecting.
+    save.johnson.money = 60000;
+    log(`board capacity expansion, three steps (money topped up to ${save.johnson.money}):`);
     for (let i = 0; i < 3; i++) {
       const cost = MJ.expandBoardCapacityCost(save);
       const result = MJ.expandBoardCapacity(save);
@@ -397,10 +407,23 @@
     }
     log("");
 
-    // Overspend check: try to hire something the operation can't afford.
+    // Overspend check: try to hire something the operation can't
+    // afford. (The runner hired above is released first so this
+    // tests the ledger guard, not the hireable guard below.)
+    MJ.releaseRunner(runner, rng);
     save.johnson.money = 100;
-    const overspend = MJ.hireRunnerWithCost(save, runner, rng, "permanent", 1);
+    const overspend = MJ.hireRunnerWithCost(save, runner, "permanent");
     log(`overspend guard: attempted permanent hire with only 100 nuyen  →  ${overspend.ok ? "SUCCEEDED (bug!)" : "correctly rejected"}   money unchanged: ${save.johnson.money}`);
+
+    // Hireable check: money can't buy a runner who isn't on the
+    // market to be bought — under contract or KIA (QA fix: the
+    // wrapper now enforces market.js's own isHireable rule).
+    save.johnson.money = 999999;
+    const dead = MJ.generateRunner(rng);
+    MJ.watchRunner(dead, rng);
+    dead.market.phase = "kia";
+    const kiaHire = MJ.hireRunnerWithCost(save, dead, "freelance");
+    log(`hireable guard: attempted to hire a KIA runner with plenty of nuyen  →  ${kiaHire.ok ? "SUCCEEDED (bug!)" : "correctly rejected"}   money unchanged: ${save.johnson.money}`);
   }
 
   // ── P1 — live security: Min/Current/Max triples + the Alert pool
@@ -450,15 +473,21 @@
     log(`  maxes held through the cooldown: ${maxesBefore} -> ${maxesAfter}   ${maxesBefore === maxesAfter ? "OK" : "BUG: Max decreased"}`);
     log("");
 
-    // Phase C — ghost runs: quiet no-glitch hits must never ratchet.
-    log("PHASE C — 10 ghost runs (quiet, no glitch) on one day");
-    const beforeGhost = fmtSecState(state);
+    // Phase C — ghost runs: quiet no-glitch hits must never ratchet,
+    // AND must not interrupt Current's cooldown — the site can't
+    // respond to (or stay tense about) what it never noticed.
+    log("PHASE C — 10 more days, one ghost run (quiet, no glitch) per day");
+    const currentsBefore = MJ.SECURITY_AXES.map((x) => state.axes[x].current);
     let ghostRatchets = 0;
-    for (let h = 0; h < 10; h++) {
+    for (let day = 28; day <= 37; day++) {
       if (MJ.recordHit(state, {}).ratcheted) ghostRatchets += 1;
+      MJ.advanceSiteDay(state);
+      log(`  day ${String(day).padStart(2)}: ${fmtSecState(state)}`);
     }
-    log(`  before: ${beforeGhost}`);
-    log(`  after:  ${fmtSecState(state)}   ratchets:${ghostRatchets} ${ghostRatchets === 0 ? "(OK — a ghost run stays a ghost run)" : "(BUG)"}`);
+    const cooledDuringGhosts = MJ.SECURITY_AXES.some(
+      (x, i) => state.axes[x].current < currentsBefore[i] || state.axes[x].current === state.axes[x].min
+    );
+    log(`  ratchets:${ghostRatchets} ${ghostRatchets === 0 ? "(OK)" : "(BUG)"}   cooldown continued under daily ghost runs: ${cooledDuringGhosts ? "OK" : "BUG — ghosts froze the cooldown"}`);
     log("");
 
     // Invariant sweep: many sites, many days of random activity.

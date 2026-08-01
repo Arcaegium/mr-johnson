@@ -531,7 +531,7 @@
       karma: 0,
       market: {
         state: "unwatched", // "unwatched" | "watched"
-        hired: null,        // null | { tier: "freelance"|"retainer"|"permanent", protectedUntilDay }
+        hired: null,        // null | { tier: "freelance"|"retainer"|"permanent", missionsRemaining } — mission-counted contracts (models/market.js)
         daysOnMarket: 0,
         // Shelf-life / Working / OutOfTown / KIA state machine (§03,
         // implemented in models/market.js). `phase` only means

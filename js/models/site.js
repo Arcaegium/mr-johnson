@@ -43,9 +43,13 @@
      - Fixed hardpoints (guards-as-posted, cameras, maglocks, wards,
        stationed spirits) are generated once and never change mid-
        mission — a scout who spent a day learning the inventory
-       needs that to still be true when the crew walks in. Mission-
-       time escalation is a wholly separate future system, not
-       modeled here.
+       needs that to still be true when the crew walks in. Same-day
+       pressure and between-run escalation live in models/alert.js
+       (the Alert pool and the Min/Current/Max live-security layer),
+       not here. This file's derived `security` numbers are each
+       axis's capability ceiling (Max); obstacle distribution below
+       still reads them directly at generation time — re-deriving
+       placement from live Current is tracked integration work.
      - Three generator invariants (below) are enforced by
        construction, then re-verified across many random seeds in
        the dev harness rather than trusted on paper alone.
@@ -433,8 +437,10 @@
       // record shape doesn't change later, but stays empty until the
       // player actually scouts or a job leaves a mark. Layout itself
       // always regenerates from seed. `adjustments` is where the
-      // post-mission security ratchet (a separate future system)
-      // will apply its deltas — not wired up yet. `intel` is where
+      // live-security layer's lasting changes (models/alert.js —
+      // ratcheted Current, grown Max, the Alert value) get
+      // serialized once the integration layer exists — alert.js
+      // currently attaches transient state, not deltas. `intel` is where
       // per-lens scouting snapshots land once that system exists —
       // a text description ("map") of what's been learned is a
       // query over this plus `layout`, not a new data model.

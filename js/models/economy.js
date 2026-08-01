@@ -40,7 +40,7 @@
      MJ.earn(save, amount);
      MJ.collectJobPay(save, job);
      MJ.hireCost(runner, "retainer");
-     MJ.hireRunnerWithCost(save, runner, rng, "retainer", currentDay);
+     MJ.hireRunnerWithCost(save, runner, "retainer");
      MJ.expandBoardCapacityCost(save);
      MJ.expandBoardCapacity(save);
    ============================================================ */
@@ -78,32 +78,38 @@
     return earn(save, job.pay);
   }
 
-  // ── Hiring: a ladder of protection duration (§03) ───────────────
+  // ── Hiring: a ladder of contracted missions (§03) ───────────────
+  // Contracts are counted in missions consumed (market.js's
+  // CONTRACT_MISSIONS), so pricing is per-mission by construction:
+  // freelance buys exactly one at market price, retainer buys the
+  // block at a discount, permanent is the lump-sum buyout.
   const NUYEN_PER_VALUE = 50;       // computePrice's karma-cost scale -> nuyen
-  const RETAINER_AVG_DAYS = 20;     // matches market.js's rng.int(10,30) average, pricing only
-  const RETAINER_JOB_SPAN_DAYS = 5; // assumed days/job, for estimating the block size
   const RETAINER_DISCOUNT = 0.7;    // "a contracted block... at a discount off current price"
   const PERMANENT_MULTIPLIER = 10;  // "a lump sum relative to current price"
 
   function hireCost(runner, tier) {
-    const base = MJ.computePrice(runner) * NUYEN_PER_VALUE;
+    const base = MJ.computePrice(runner) * NUYEN_PER_VALUE; // one mission at market price
     if (tier === "freelance") return Math.round(base);
     if (tier === "permanent") return Math.round(base * PERMANENT_MULTIPLIER);
     if (tier === "retainer") {
-      const approxJobs = Math.max(1, Math.round(RETAINER_AVG_DAYS / RETAINER_JOB_SPAN_DAYS));
-      return Math.round(base * approxJobs * RETAINER_DISCOUNT);
+      return Math.round(base * MJ.CONTRACT_MISSIONS.retainer * RETAINER_DISCOUNT);
     }
     return 0;
   }
 
   // Charges the ledger, then applies the hire via market.js — only
-  // if the operation can actually afford it. Returns { ok, cost }.
-  function hireRunnerWithCost(save, runner, rng, tier, currentDay) {
+  // if the runner is actually hireable (market.js's own rule: not
+  // already under contract, not KIA) and the operation can afford
+  // it. Returns { ok, cost }.
+  function hireRunnerWithCost(save, runner, tier) {
+    if (!MJ.isHireable(runner)) {
+      return { ok: false, cost: 0, error: "not hireable — already under contract, or KIA" };
+    }
     const cost = hireCost(runner, tier);
     if (!spend(save, cost)) {
       return { ok: false, cost, error: "can't afford it" };
     }
-    MJ.hireRunner(runner, rng, tier, currentDay);
+    MJ.hireRunner(runner, tier);
     return { ok: true, cost };
   }
 

@@ -13,10 +13,13 @@
        Available, or -> KIA (terminal). Odds are tier-weighted off
        the runner's own trueValue (§04/§09) — a genuinely skilled
        runner is simply too good at not dying, not a separate stat.
-     - Hiring (any tier) suppresses the whole cycle for the
-       contract's duration — a hired runner cannot roll KIA out from
-       under the player. Permanent hires suppress it forever;
-       freelance/retainer contracts expire back into Available.
+     - Hiring (any tier) suppresses the whole cycle while the
+       contract lasts — a hired runner cannot roll KIA out from
+       under the player. Contracts are counted in MISSIONS CONSUMED,
+       never calendar days (§03, confirmed): freelance is exactly 1
+       dispatch, retainer a block of them, permanent is forever.
+       Contracts end via consumeContractMission, never by the daily
+       tick.
      - Growth is explicitly NOT this file's job (design bible §03,
        corrected): a Watched-but-not-hired runner cycling through
        these phases never grows from it — these states are about
@@ -25,9 +28,10 @@
 
    Usage:
      MJ.watchRunner(runner, rng);
-     MJ.hireRunner(runner, rng, "retainer", currentDay);
+     MJ.hireRunner(runner, "retainer");
+     MJ.consumeContractMission(runner, rng);  // per dispatch
      MJ.releaseRunner(runner, rng);
-     const result = MJ.advanceMarketDay(runner, rng, currentDay);
+     const result = MJ.advanceMarketDay(runner, rng);
    ============================================================ */
 (function () {
   window.MJ = window.MJ || {};
@@ -56,28 +60,56 @@
     return runner;
   }
 
-  // ── Hiring tiers — a ladder of protection duration (§03) ────────
-  // NOTE: freelance's "one job's duration" is a placeholder (3 days)
-  // until a real mission-length model exists to derive it from.
-  // Nuyen cost is deliberately not calculated here — this function
-  // only ever applies the hire and rolls its protection window;
-  // models/economy.js's hireRunnerWithCost() is the one that charges
-  // the ledger before calling this.
-  const HIRE_PROTECTION_DAYS = {
-    freelance: () => 3,
-    retainer: (rng) => rng.int(10, 30),
-    permanent: () => Infinity,
+  // ── Hiring tiers — a ladder of contracted missions (§03) ────────
+  // Counted in missions consumed, never calendar days (confirmed
+  // design): the money paid to the runner is for the tasks they
+  // actually do. Downtime — healing in the Medicae, sitting benched
+  // — burns nothing, and an untouched retainer never lapses, on
+  // purpose: a benched runner doesn't grow while the operation
+  // scales past them, so holding a beloved roll is its own real
+  // cost, an aesthetic choice honored rather than punished.
+  // RETAINER_BLOCK_MISSIONS is a flat first-pass block size —
+  // negotiated/variable blocks are a natural future Reputation hook.
+  // Nuyen cost is deliberately not calculated here — models/
+  // economy.js's hireRunnerWithCost() charges the ledger before
+  // calling this.
+  const RETAINER_BLOCK_MISSIONS = 5;
+  const CONTRACT_MISSIONS = {
+    freelance: 1,
+    retainer: RETAINER_BLOCK_MISSIONS,
+    permanent: Infinity,
   };
 
-  function hireRunner(runner, rng, tier, currentDay) {
+  function hireRunner(runner, tier) {
     runner.market.state = "watched"; // all Hired runners are Watched (§03)
-    const days = HIRE_PROTECTION_DAYS[tier](rng);
     runner.market.hired = {
       tier: tier,
-      protectedUntilDay: days === Infinity ? Infinity : currentDay + days,
+      missionsRemaining: CONTRACT_MISSIONS[tier],
     };
     runner.market.phase = null; // suppressed while under contract
     return runner;
+  }
+
+  // One dispatch = one consumption, charged at dispatch time — the
+  // task is what was bought, succeed or fail. The eventual mission
+  // dispatch system calls this for every hired runner it sends out
+  // (crafting duty included: a dispatch is a dispatch). At zero the
+  // contract completes and the runner lands back on the shelf with
+  // a fresh Available window.
+  function consumeContractMission(runner, rng) {
+    const hired = runner.market.hired;
+    if (!hired) return { event: "notUnderContract" };
+    if (hired.tier === "permanent") {
+      return { event: "consumed", missionsRemaining: Infinity };
+    }
+    hired.missionsRemaining -= 1;
+    if (hired.missionsRemaining <= 0) {
+      runner.market.hired = null;
+      runner.market.phase = "available";
+      runner.market.hiddenShelfDaysRemaining = rng.int(3, 14);
+      return { event: "contractCompleted" };
+    }
+    return { event: "consumed", missionsRemaining: hired.missionsRemaining };
   }
 
   function releaseRunner(runner, rng) {
@@ -95,17 +127,14 @@
   // one day. Returns a small event descriptor so the caller (the
   // eventual roster board) can react — replace an expired unwatched
   // slot, notify the player of a KIA, etc. Never touches skills.
-  function advanceMarketDay(runner, rng, currentDay) {
+  function advanceMarketDay(runner, rng) {
     const m = runner.market;
     m.daysOnMarket += 1; // a simple age counter, independent of state/phase
 
     if (m.hired) {
-      if (m.hired.tier !== "permanent" && currentDay >= m.hired.protectedUntilDay) {
-        m.hired = null;
-        m.phase = "available";
-        m.hiddenShelfDaysRemaining = rng.int(3, 14);
-        return { event: "contractExpired" };
-      }
+      // Contracts never expire by calendar — only consumption ends
+      // them (consumeContractMission). The daily tick just confirms
+      // the market cycle stays suppressed.
       return { event: "protected" };
     }
 
@@ -147,7 +176,9 @@
 
   MJ.kiaChance = kiaChance;
   MJ.watchRunner = watchRunner;
+  MJ.CONTRACT_MISSIONS = CONTRACT_MISSIONS;
   MJ.hireRunner = hireRunner;
+  MJ.consumeContractMission = consumeContractMission;
   MJ.releaseRunner = releaseRunner;
   MJ.isHireable = isHireable;
   MJ.advanceMarketDay = advanceMarketDay;

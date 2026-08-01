@@ -116,8 +116,19 @@
     return "breadAndButter";
   }
 
-  // ── Reuse vs. introduce, matched on Value + Orientation (§06) ───
-  // Loose match on purpose — see site.js. excludeFaction keeps a
+  // ── Reuse vs. introduce (§06): reuse matches on Value band ONLY —
+  // deliberately Orientation-agnostic (confirmed design). Any site
+  // with the right anchor can host any mission, whatever its
+  // security leans; a mismatch is a scouting discovery, not an
+  // error ("weak matrix, high physical — take over their cameras to
+  // crack the building"). What a mismatch SHOULD eventually shape
+  // is pay: clients price off the PERCEIVED (estimated) security
+  // relevant to the mission's domain, so a believed-matrix-lite
+  // target commands a lower fee for a data heist. estimateMissionPay
+  // below doesn't model that yet (flat off Value) — future work,
+  // needs the estimated-security/scouting layer to exist first.
+  // Orientation still steers the INTRODUCE path, so fresh sites fit
+  // their mission's flavor on average. excludeFaction keeps a
   // mission's target from accidentally being the same faction
   // that's hiring the job (client != target, per §06's "hired by
   // someone to hit someone else").
