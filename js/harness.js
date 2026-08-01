@@ -232,6 +232,41 @@
     dumpSite(MJ.generateSite(rng));
   }
 
+  // ── P1 — job board: reuse vs. introduce, tier derived from site ─
+  function fmtCrew(intendedCrew) {
+    if (intendedCrew.fixed !== undefined) return `${intendedCrew.fixed} runner(s)`;
+    return `${intendedCrew.min}-${intendedCrew.max} runners`;
+  }
+
+  function dumpJob(entry, index) {
+    const { job, site, wasReused } = entry;
+    const verb = MJ.OBJECTIVE_VERBS[job.objectiveVerb];
+    log(`[${index}] ${verb.label} (${job.payloadDomain})  —  ${MJ.JOB_FAMILIES[job.family].label}  —  tier: ${job.tier}`);
+    log(`    client: ${job.client}   target: ${job.target}   pay: ~${job.pay}   crew: ${fmtCrew(job.intendedCrew)}   expires day ${job.expiryDay}`);
+    log(`    site: ${site.identity.district} (${site.identity.owningFaction})  value:${site.identity.value} orientation:${site.identity.orientation}  ${wasReused ? "[REUSED]" : "[introduced]"}`);
+    log(`    fail state: ${verb.failState}`);
+    log("");
+  }
+
+  function testBoard() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed + "   (board of 6, empty starting site pool)");
+    log("");
+
+    // A fresh operation starts with no persistent site pool — every
+    // job on day one has to introduce. A returning pool would let
+    // some of these reuse instead (see the harness console notes).
+    const sitePool = [];
+    const currentDay = 1;
+    const board = MJ.generateBoard(rng, sitePool, currentDay, 6);
+    board.forEach((entry, i) => dumpJob(entry, i));
+
+    const reusedCount = board.filter((e) => e.wasReused).length;
+    log(`reused: ${reusedCount}/${board.length}   (expected 0 — pool was empty)`);
+  }
+
   // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
   // persistent state across button clicks (not a scripted one-shot
   // demo) — this is what "roll the day" and "save and reload" are
@@ -293,6 +328,7 @@
     document.getElementById("btn-market").addEventListener("click", testMarket);
     document.getElementById("btn-growth").addEventListener("click", testGrowth);
     document.getElementById("btn-site").addEventListener("click", testSite);
+    document.getElementById("btn-board").addEventListener("click", testBoard);
     document.getElementById("btn-new-game").addEventListener("click", newGame);
     document.getElementById("btn-roll-day").addEventListener("click", rollDay);
     document.getElementById("btn-reload-save").addEventListener("click", reloadSave);
