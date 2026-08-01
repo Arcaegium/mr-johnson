@@ -267,6 +267,53 @@
     log(`reused: ${reusedCount}/${board.length}   (expected 0 — pool was empty)`);
   }
 
+  // ── P1 — task/skill resolution: one runner, one obstacle, one
+  // affordance, resolve. Runs a handful of picks so both a trained
+  // and an untrained attempt, and a blocked one, all show up.
+  function fmtOutcome(outcome) {
+    if (!outcome.ok) return `REJECTED — ${outcome.error}`;
+    const diceStr = outcome.dice.length ? `[${outcome.dice.join(",")}]` : "(no dice — untrained)";
+    const glitchTag = outcome.criticalGlitch ? "  CRITICAL GLITCH" : outcome.glitch ? "  glitch" : "";
+    return `pool=${outcome.poolSize} dice=${diceStr} hits=${outcome.hits} threshold=${outcome.threshold} margin=${outcome.margin >= 0 ? "+" : ""}${outcome.margin}  →  ${outcome.success ? "SUCCESS" : "FAIL"}${glitchTag}`;
+  }
+
+  function testResolve() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed);
+    log("");
+
+    const runner = MJ.generateRunner(rng);
+    const site = MJ.generateSite(rng);
+    log(`runner: ${runner.identity.handle} — ${MJ.describeDiscipline(runner)}  (${runner.classification.focusLabel})`);
+    log(`site: ${site.identity.district} — value:${site.identity.value} orientation:${site.identity.orientation}`);
+    log("");
+
+    const obstacles = MJ.allObstacles(site);
+    if (obstacles.length === 0) {
+      log("(this site rolled zero obstacles — try another seed)");
+      return;
+    }
+
+    // Try every affordance on a handful of obstacles, so a trained
+    // hit, an untrained automatic-fail, and a blocked rejection all
+    // have a real chance to show up in one pass.
+    let shown = 0;
+    for (const obstacle of obstacles) {
+      if (shown >= 6) break;
+      for (const affordance of obstacle.affordances) {
+        if (!affordance.skill) continue; // skip the skill-less "route around" option
+        if (shown >= 6) break;
+        const outcome = MJ.resolveTask(rng, runner, obstacle, affordance.skill);
+        log(`[${obstacle.label} T${obstacle.tier}] attempt "${affordance.skill}" (${affordance.verb}):`);
+        log(`  ${fmtOutcome(outcome)}`);
+        log("");
+        shown++;
+      }
+    }
+  }
+
   // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
   // persistent state across button clicks (not a scripted one-shot
   // demo) — this is what "roll the day" and "save and reload" are
@@ -329,6 +376,7 @@
     document.getElementById("btn-growth").addEventListener("click", testGrowth);
     document.getElementById("btn-site").addEventListener("click", testSite);
     document.getElementById("btn-board").addEventListener("click", testBoard);
+    document.getElementById("btn-resolve").addEventListener("click", testResolve);
     document.getElementById("btn-new-game").addEventListener("click", newGame);
     document.getElementById("btn-roll-day").addEventListener("click", rollDay);
     document.getElementById("btn-reload-save").addEventListener("click", reloadSave);
