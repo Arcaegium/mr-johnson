@@ -5,11 +5,15 @@
    version stamped from day one so future shape changes have
    something to migrate from.
 
-   Only `meta` is real right now — Phase 0 has no roster, armory,
-   market, or job board yet. The rest of the schema is reserved
-   with the exact shape the bible already specifies, so Phase 1
-   populates fields that already exist rather than changing the
-   top-level shape.
+   Only `meta` is genuinely wired up right now. The roster/market
+   (models/market.js), job (models/job.js), and economy
+   (models/economy.js) systems all exist and are independently
+   verified, but nothing yet writes their results into `roster`,
+   `market`, or `world` below — there's no integration layer calling
+   watchRunner/generateBoard/etc. and persisting the result. The
+   armory doesn't exist at all yet. The shape is the bible's own
+   §09 spec either way, so wiring these up later populates fields
+   that already exist rather than changing the top-level schema.
 
    Usage:
      const state = MJ.defaultSave(rootSeed);
@@ -41,7 +45,7 @@
   function defaultSave(rootSeed) {
     return {
       meta: { schemaVersion: SCHEMA_VERSION, currentDay: 1, rootSeed: rootSeed },
-      johnson: { money: 0, hubUpgrades: [], boardCapacity: 4 },
+      johnson: { money: 0, reputation: 0, hubUpgrades: [], boardCapacity: 4 },
       roster: { watchedRunners: [], contracts: [] },
       armory: { items: [], craftQueue: [] },
       market: { unwatchedSlots: [] },     // seeds only — §03/§09

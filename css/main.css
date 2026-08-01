@@ -1,6 +1,7 @@
 /* Mr. Johnson — main.css
-   Phase 0: minimal terminal styling for the dev inspector.
-   The real Profile-derived hub aesthetic comes in Phase 1. */
+   Minimal terminal styling for the dev inspector — not the game's
+   own UI. The real Profile-derived hub aesthetic comes later, once
+   the hub console itself is being built. */
 
 :root {
   --bg: #0b0f14;

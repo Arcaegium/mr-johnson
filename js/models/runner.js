@@ -77,13 +77,11 @@
   };
   const METATYPE_IDS = Object.keys(METATYPES);
 
-  // ── Origins: the power source behind a focus (§04) ────────────
-  // cyber: mundane, chrome. Essence starts partially spent.
-  // magic: adept/mage. Full Essence kept; Magic attribute granted.
-  // infected: HMHVV-flavored. Mundane stats, distinct flavor only.
-  const ORIGINS = ["cyber", "magic", "infected", "mundane"];
-
   // ── Focus templates: family, key skill, allowed origins ───────
+  // Origins (cyber/magic/infected/mundane) live per-focus below —
+  // cyber: mundane, chrome, Essence starts partially spent; magic:
+  // adept/mage, full Essence kept, Magic attribute granted; infected:
+  // HMHVV-flavored, mundane stats, distinct flavor only.
   // This table is the whole "systems are expensive, rows are
   // cheap" bet — every archetype in the bible is just a row here.
   const FOCUSES = [
@@ -421,9 +419,9 @@
   // NOTE — scale: this returns a karma-cost-derived value (roughly
   // 40-250 for a fresh runner), NOT a final nuyen figure. The rest
   // of the design (job pay, gear, hiring costs) runs in the
-  // thousands of nuyen. A NUYEN_PER_VALUE conversion multiplier
-  // belongs in Phase 1 once the wider economy exists to calibrate
-  // against — deliberately not guessed at here.
+  // thousands of nuyen. The conversion multiplier (NUYEN_PER_VALUE)
+  // now lives in models/economy.js's hireCost(), which is the only
+  // place this karma-cost scale actually gets turned into nuyen.
   function computePrice(runner) {
     const base = trueValue(getEffectiveSkills(runner));
     const c = runner.classification;

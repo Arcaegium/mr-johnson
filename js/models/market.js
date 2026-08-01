@@ -59,9 +59,10 @@
   // ── Hiring tiers — a ladder of protection duration (§03) ────────
   // NOTE: freelance's "one job's duration" is a placeholder (3 days)
   // until a real mission-length model exists to derive it from.
-  // Nuyen cost is deliberately not calculated here — the economy
-  // isn't calibrated yet (runner.js's own computePrice carries the
-  // same disclaimer).
+  // Nuyen cost is deliberately not calculated here — this function
+  // only ever applies the hire and rolls its protection window;
+  // models/economy.js's hireRunnerWithCost() is the one that charges
+  // the ledger before calling this.
   const HIRE_PROTECTION_DAYS = {
     freelance: () => 3,
     retainer: (rng) => rng.int(10, 30),
@@ -96,6 +97,7 @@
   // slot, notify the player of a KIA, etc. Never touches skills.
   function advanceMarketDay(runner, rng, currentDay) {
     const m = runner.market;
+    m.daysOnMarket += 1; // a simple age counter, independent of state/phase
 
     if (m.hired) {
       if (m.hired.tier !== "permanent" && currentDay >= m.hired.protectedUntilDay) {

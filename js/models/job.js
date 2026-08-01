@@ -1,41 +1,55 @@
 /* ============================================================
    Mr. Johnson — models/job.js
-   The job record: generation from a seed, per design bible §06
-   ("Jobs, The Board & Missions").
+   The job/mission records: generation from a seed, per design
+   bible §06 ("Jobs, The Board & Missions").
 
    Core rules this file implements:
-     - A job is a grammar, not a type: objective verb x payload
-       domain x a matched site x a derived tier. No hand-authored
-       job list.
-     - Security is a result of the site (§09, site.js) — a job's
-       tier and pay are simply a readout of whichever site got
-       matched, never an independent roll. Payload domain maps to
-       the Orientation a matching site is sought for (physical ->
-       Physical, data -> Matrix, astral -> Astral).
-     - Reuse vs. introduce (§06): given an existing site pool, a job
-       either reuses the closest Value/Orientation match or
-       introduces a fresh site calibrated to what the slot wants.
-       The match is loose on purpose — a job can run a bit harder
-       or easier than its tier label implies, and that gap is meant
-       to be discoverable through scouting later, not hidden here.
-     - Crew size: intended (fixed or a range) is board-card metadata,
-       never a hard requirement — runnable-vs-solvable is a mission-
-       resolution concern, not something this generator enforces.
-     - This file does NOT implement: faction standing/heat (needs
-       persistent cross-job state the save layer doesn't carry yet),
-       tags/combos (needs job outcomes, which need a resolution
-       system that doesn't exist), or static/dynamic complications
-       (needs scouting). Deliberately deferred, not forgotten — see
-       the build plan backlog.
+     - A JOB is the contract: one hiring faction, one nuyen payout,
+       paid once on completing the success criteria (generally "all
+       included missions done"). A job can have multiple TARGET
+       factions across its missions, even though the client stays
+       the same throughout.
+     - A MISSION is the actual dispatch unit: its own target
+       faction, its own site (or, later, a route between two
+       sites — see locationType below), its own objective, its own
+       intended crew. Completing a mission's objective pays Karma to
+       the runners who ran it — never nuyen. Nuyen is a job-level
+       event, tied to the contract's deliverable, not to any one
+       mission along the way. This is what makes "soften up a
+       target with a couple of recon/removal missions, then send
+       the closing team in" a real, meaningful choice: every runner
+       involved grows from what they actually did, but the player
+       only gets paid once, for the thing they were actually hired
+       to do.
+     - A job's total scope (however many missions/sites get chained
+       into it) is what scales without bound as the operation grows
+       — never any single site's Value, which is capped at 10
+       forever by design (§09). Job pay is the SUM of its missions'
+       site-derived contributions, so a job's payout genuinely
+       scales with how elaborate an operation the player can mount,
+       not with a single site's ceiling.
+     - Reuse vs. introduce, per mission (§06): each mission
+       independently reuses the closest Value/Orientation match from
+       the site pool or introduces a fresh site. The match is loose
+       on purpose — see site.js's own notes on this.
+     - This file does NOT implement: faction standing/heat, tags/
+       combos, static/dynamic complications, or actual mission
+       resolution (playing out a mission's objective against its
+       site's obstacles) or Karma awarding (that needs a runner-
+       dispatch system this file has no knowledge of). `karmaAward`
+       and `resolved` are reserved fields, not yet populated.
+       Route-type missions (movement between two sites) are a
+       reserved shape too — site.js can't generate a route-shaped
+       site yet, so `locationType` is always "site" for now.
 
    Usage:
-     const { job, site, wasReused } = MJ.generateJob(rng, sitePool, currentDay);
+     const { job, siteResults } = MJ.generateJob(rng, sitePool, currentDay);
      const board = MJ.generateBoard(rng, sitePool, currentDay, 6);
    ============================================================ */
 (function () {
   window.MJ = window.MJ || {};
 
-  // ── The job grammar: objective verb x payload domain ────────────
+  // ── The mission grammar: objective verb x payload domain ────────
   // Every verb names its natural fail state (§06) — flavor/UI text,
   // not yet wired to a resolution system.
   const OBJECTIVE_VERBS = {
@@ -57,7 +71,9 @@
   // for (site.js: "physical" | "astral" | "matrix" | "balanced").
   const DOMAIN_TO_ORIENTATION = { physical: "physical", data: "matrix", astral: "astral" };
 
-  // ── The three job families (§06) ────────────────────────────────
+  // ── The three mission families (§06) — the shape of ONE mission,
+  // not the whole job (a job can sequence missions of different
+  // families/verbs/domains together).
   const JOB_FAMILIES = {
     infiltration: { label: "Infiltration", maxCrew: 4, verbs: ["acquire", "extract", "eliminate", "sabotage", "intel", "plant"] },
     gauntlet:     { label: "Gauntlet",     maxCrew: 4, verbs: ["protect", "deliver"] },
@@ -66,9 +82,9 @@
   const FAMILY_IDS = Object.keys(JOB_FAMILIES);
 
   // ── Intended crew size: fixed number or a suggested range (§06) ─
-  // Board-card metadata, visible before commit — never a hard
-  // requirement (runnable is universal, solvable is a separate
-  // question, both mission-resolution concerns, not this file's).
+  // Board-card metadata, per mission — never a hard requirement
+  // (runnable is universal, solvable is a separate question, both
+  // mission-resolution concerns, not this file's).
   function rollIntendedCrew(rng, familyId) {
     const family = JOB_FAMILIES[familyId];
     if (familyId === "remote") return { fixed: 1 };
@@ -82,8 +98,10 @@
 
   // ── Tier bands: value ranges the board's three rungs look for ───
   // (§06 "Board size, refresh & scaling" — safe / bread-and-butter /
-  // stretch). A job's tier is simply which band its matched site's
-  // Value fell into, not a separate roll.
+  // stretch). A mission's tier is simply which band its matched
+  // site's Value fell into, not a separate roll. A job no longer
+  // has one single tier — it can span missions of different tiers —
+  // so tier lives on the mission, not the job.
   const TIER_BANDS = {
     safe: { min: 1, max: 3 },
     breadAndButter: { min: 4, max: 7 },
@@ -99,78 +117,112 @@
   }
 
   // ── Reuse vs. introduce, matched on Value + Orientation (§06) ───
-  // Loose match on purpose: prefer a pool site whose Value falls in
-  // the desired band, but don't require an exact Orientation hit —
-  // a mismatch here is exactly what scouting exists to surface later
-  // (a "safe" job that landed on an unusually well-defended site).
+  // Loose match on purpose — see site.js. excludeFaction keeps a
+  // mission's target from accidentally being the same faction
+  // that's hiring the job (client != target, per §06's "hired by
+  // someone to hit someone else").
   const REUSE_RATIO = 0.4; // tuning dial, per the bible's own language
 
-  function matchSite(rng, sitePool, tierId, orientation) {
+  function matchSite(rng, sitePool, tierId, orientation, excludeFaction) {
     const band = TIER_BANDS[tierId];
-    const candidates = (sitePool || []).filter(
+    let candidates = (sitePool || []).filter(
       (s) => s.identity.value >= band.min && s.identity.value <= band.max
     );
+    if (excludeFaction) {
+      candidates = candidates.filter((s) => s.identity.owningFaction !== excludeFaction);
+    }
     if (candidates.length > 0 && rng.chance(REUSE_RATIO)) {
       return { site: rng.pick(candidates), wasReused: true };
     }
     const value = rng.int(band.min, band.max);
-    const site = MJ.generateSite(rng, { value, orientation });
+    let site = MJ.generateSite(rng, { value, orientation });
+    let guard = 0;
+    while (excludeFaction && site.identity.owningFaction === excludeFaction && guard++ < 10) {
+      site = MJ.generateSite(rng, { value, orientation });
+    }
     return { site, wasReused: false };
   }
 
-  // ── Client / target (§06) ───────────────────────────────────────
-  // Target is simply the matched site's owning faction — you're
-  // sent against whoever already owns the place. Client is a
-  // different faction who hired you. Standing/heat tracking is
-  // deferred (needs persistent cross-job state the save layer
-  // doesn't carry yet).
-  function pickClient(rng, targetFaction) {
-    const candidates = MJ.FACTIONS.filter((f) => f !== targetFaction);
-    return rng.pick(candidates);
-  }
-
-  // NOTE — scale: like runner.js's computePrice, this is a
-  // placeholder shape (roughly proportional to Value), not a
-  // calibrated nuyen figure. Real economy calibration is deferred
-  // to when hiring costs, gear prices, and upkeep all exist to
-  // weigh it against.
-  function estimatePay(rng, value) {
+  // NOTE — scale: a placeholder shape (roughly proportional to
+  // Value), not a calibrated nuyen figure — see economy.js, the one
+  // place karma-cost-scale/site-value-scale numbers actually become
+  // nuyen. A job's total pay sums this across every mission it
+  // contains, which is the actual mechanism for job pay scaling
+  // without bound (§06) — never any single mission's site Value,
+  // which stays capped at 10 forever.
+  function estimateMissionPay(rng, value) {
     return Math.round(value * 100 * rng.range(0.85, 1.15));
   }
 
-  // ── Top-level generator ──────────────────────────────────────────
-  // sitePool: the persistent site pool to reuse from (an array of
-  // already-generated sites) — pass [] or omit if none exist yet.
-  // currentDay: for stamping the job's expiry.
+  // ── One mission: the actual dispatch unit ───────────────────────
+  function generateMission(rng, sitePool, hiringFaction) {
+    const familyId = rng.pick(FAMILY_IDS);
+    const family = JOB_FAMILIES[familyId];
+    const verbId = rng.pick(family.verbs);
+    const domain = rng.pick(PAYLOAD_DOMAINS);
+    const tierId = rng.pick(TIER_IDS);
+    const orientation = DOMAIN_TO_ORIENTATION[domain];
+
+    const { site, wasReused } = matchSite(rng, sitePool, tierId, orientation, hiringFaction);
+    const tier = tierForValue(site.identity.value);
+    const intendedCrew = rollIntendedCrew(rng, familyId);
+
+    const mission = {
+      hiringFaction: hiringFaction,
+      targetFaction: site.identity.owningFaction,
+      // "site" today; "route" (movement between two sites, excluding
+      // both endpoints — a Gauntlet-style transit) is a reserved
+      // shape site.js can't generate yet (§07: "the site model must
+      // support route-shaped sites, not just buildings").
+      locationType: "site",
+      site: site,
+      objectiveVerb: verbId,
+      payloadDomain: domain,
+      family: familyId,
+      tier: tier,
+      intendedCrew: intendedCrew,
+      payContribution: estimateMissionPay(rng, site.identity.value),
+      // Reserved — needs a runner-dispatch and resolution system
+      // that doesn't exist yet. Karma is earned per mission, per
+      // runner, on success, regardless of whether this mission was
+      // the job's actual contracted deliverable or just prep work.
+      resolved: false,
+      karmaAward: null,
+    };
+
+    return { mission, site, wasReused };
+  }
+
+  // ── The job: one contract, one hiring faction, 1+ missions ──────
+  // options: { hiringFaction?, missionCount? } — missionCount is a
+  // placeholder (1-3, uniform) for how many legs a contract bundles;
+  // a real distribution (and the player's own choice to run extra,
+  // non-contracted prep missions against the same targets) is later
+  // work, not this generator's job.
   function generateJob(rng, sitePool, currentDay, options) {
     options = options || {};
     const r = rng;
 
-    const familyId = options.familyId || r.pick(FAMILY_IDS);
-    const family = JOB_FAMILIES[familyId];
-    const verbId = options.verbId || r.pick(family.verbs);
-    const domain = options.domain || r.pick(PAYLOAD_DOMAINS);
-    const tierId = options.tierId || r.pick(TIER_IDS);
+    const hiringFaction = options.hiringFaction || r.pick(MJ.FACTIONS);
+    const missionCount = options.missionCount || r.int(1, 3);
 
-    const orientation = DOMAIN_TO_ORIENTATION[domain];
-    const { site, wasReused } = matchSite(r, sitePool, tierId, orientation);
-    const actualTierId = tierForValue(site.identity.value); // the site is the source of truth
+    const missions = [];
+    const siteResults = [];
+    for (let i = 0; i < missionCount; i++) {
+      const { mission, site, wasReused } = generateMission(r, sitePool, hiringFaction);
+      missions.push(mission);
+      siteResults.push({ site, wasReused });
+    }
 
-    const intendedCrew = rollIntendedCrew(r, familyId);
-    const target = site.identity.owningFaction;
-    const client = pickClient(r, target);
-    const pay = estimatePay(r, site.identity.value);
-    const expiryDay = currentDay + r.int(3, 10);
+    const pay = missions.reduce((sum, m) => sum + m.payContribution, 0);
+    // More legs, more time allowed — a placeholder shape, not tuned.
+    const expiryDay = currentDay + r.int(3, 10) * missionCount;
 
     const job = {
-      objectiveVerb: verbId,
-      payloadDomain: domain,
-      family: familyId,
-      tier: actualTierId,       // derived from the matched site's Value, not an independent roll
-      intendedCrew: intendedCrew,
-      client: client,
-      target: target,
+      hiringFaction: hiringFaction,
+      missions: missions,
       pay: pay,
+      successCriteria: "allMissions", // placeholder — generally "complete every included mission"
       expiryDay: expiryDay,
       // Reserved, not yet populated — needs standing/heat, scouting,
       // and a resolution system this file doesn't build:
@@ -178,7 +230,7 @@
       dynamicFacts: [],
     };
 
-    return { job, site, wasReused };
+    return { job, siteResults };
   }
 
   // ── A small board: a handful of active contracts (§06: 4-8) ────
@@ -195,6 +247,7 @@
   MJ.JOB_FAMILIES = JOB_FAMILIES;
   MJ.TIER_BANDS = TIER_BANDS;
   MJ.tierForValue = tierForValue;
+  MJ.generateMission = generateMission;
   MJ.generateJob = generateJob;
   MJ.generateBoard = generateBoard;
 })();

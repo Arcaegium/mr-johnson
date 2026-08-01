@@ -1,8 +1,8 @@
 /* ============================================================
    Mr. Johnson — harness.js
-   Phase 0 developer inspector. Not part of the game — a bench
-   for proving the foundational systems produce sane, varied,
-   reproducible output before any real UI exists.
+   Developer inspector, Phase 0 and now Phase 1. Not part of the
+   game — a bench for proving the foundational systems produce
+   sane, varied, reproducible output before any real UI exists.
    ============================================================ */
 (function () {
   const out = () => document.getElementById("out");
@@ -232,19 +232,25 @@
     dumpSite(MJ.generateSite(rng));
   }
 
-  // ── P1 — job board: reuse vs. introduce, tier derived from site ─
+  // ── P1 — job board: a job is 1+ sequential missions, one client ─
   function fmtCrew(intendedCrew) {
     if (intendedCrew.fixed !== undefined) return `${intendedCrew.fixed} runner(s)`;
     return `${intendedCrew.min}-${intendedCrew.max} runners`;
   }
 
+  function dumpMission(mission, i, total) {
+    const verb = MJ.OBJECTIVE_VERBS[mission.objectiveVerb];
+    log(`    mission ${i + 1}/${total}: ${verb.label} (${mission.payloadDomain})  —  ${MJ.JOB_FAMILIES[mission.family].label}  —  tier: ${mission.tier}`);
+    log(`      target: ${mission.targetFaction}   crew: ${fmtCrew(mission.intendedCrew)}   pay contribution: ~${mission.payContribution}`);
+    log(`      site: ${mission.site.identity.district} (${mission.site.identity.owningFaction})  value:${mission.site.identity.value} orientation:${mission.site.identity.orientation}`);
+    log(`      fail state: ${verb.failState}`);
+  }
+
   function dumpJob(entry, index) {
-    const { job, site, wasReused } = entry;
-    const verb = MJ.OBJECTIVE_VERBS[job.objectiveVerb];
-    log(`[${index}] ${verb.label} (${job.payloadDomain})  —  ${MJ.JOB_FAMILIES[job.family].label}  —  tier: ${job.tier}`);
-    log(`    client: ${job.client}   target: ${job.target}   pay: ~${job.pay}   crew: ${fmtCrew(job.intendedCrew)}   expires day ${job.expiryDay}`);
-    log(`    site: ${site.identity.district} (${site.identity.owningFaction})  value:${site.identity.value} orientation:${site.identity.orientation}  ${wasReused ? "[REUSED]" : "[introduced]"}`);
-    log(`    fail state: ${verb.failState}`);
+    const { job, siteResults } = entry;
+    const reusedCount = siteResults.filter((s) => s.wasReused).length;
+    log(`[${index}] hiring faction: ${job.hiringFaction}   pay: ~${job.pay}   expires day ${job.expiryDay}   (${job.missions.length} mission(s), ${reusedCount} reused)`);
+    job.missions.forEach((m, i) => dumpMission(m, i, job.missions.length));
     log("");
   }
 
@@ -256,15 +262,16 @@
     log("");
 
     // A fresh operation starts with no persistent site pool — every
-    // job on day one has to introduce. A returning pool would let
-    // some of these reuse instead (see the harness console notes).
+    // mission on day one has to introduce. A returning pool would
+    // let some of these reuse instead.
     const sitePool = [];
     const currentDay = 1;
     const board = MJ.generateBoard(rng, sitePool, currentDay, 6);
     board.forEach((entry, i) => dumpJob(entry, i));
 
-    const reusedCount = board.filter((e) => e.wasReused).length;
-    log(`reused: ${reusedCount}/${board.length}   (expected 0 — pool was empty)`);
+    const totalMissions = board.reduce((sum, e) => sum + e.job.missions.length, 0);
+    const reusedMissions = board.reduce((sum, e) => sum + e.siteResults.filter((s) => s.wasReused).length, 0);
+    log(`total missions across board: ${totalMissions}   reused: ${reusedMissions}   (expected 0 — pool was empty)`);
   }
 
   // ── P1 — task/skill resolution: one runner, one obstacle, one
@@ -350,6 +357,52 @@
     log(`stopped at day ${day - 1}. final phase:${runner.market.phase}  hired:${runner.market.hired ? runner.market.hired.tier : "no"}`);
   }
 
+  // ── P1 — the nuyen ledger: job pay, hiring costs, capacity ──────
+  function testEconomy() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed);
+    log("SEED: " + seed);
+    log("");
+
+    const save = MJ.defaultSave(seed);
+    save.johnson.money = 20000;
+    log(`starting money: ${save.johnson.money}   reputation: ${save.johnson.reputation}   boardCapacity: ${save.johnson.boardCapacity}`);
+    log("");
+
+    const runner = MJ.generateRunner(rng);
+    log(`runner: ${runner.identity.handle} — ${MJ.describeDiscipline(runner)}   computePrice:${MJ.computePrice(runner)}`);
+    log(`  freelance cost: ${MJ.hireCost(runner, "freelance")}`);
+    log(`  retainer cost:  ${MJ.hireCost(runner, "retainer")}`);
+    log(`  permanent cost: ${MJ.hireCost(runner, "permanent")}`);
+    log("");
+
+    const hireResult = MJ.hireRunnerWithCost(save, runner, rng, "retainer", 1);
+    log(`hire (retainer): ${hireResult.ok ? "OK" : "FAILED"}   cost:${hireResult.cost}   money now: ${save.johnson.money}`);
+    log("");
+
+    const { job } = MJ.generateJob(rng, [], 1);
+    log(`job: ${job.missions.length} mission(s) for ${job.hiringFaction}   total pay:${job.pay}`);
+    const beforeMoney = save.johnson.money;
+    const beforeRep = save.johnson.reputation;
+    MJ.collectJobPay(save, job);
+    log(`collected pay: ${beforeMoney} -> ${save.johnson.money}   reputation: ${beforeRep} -> ${save.johnson.reputation}`);
+    log("");
+
+    log("board capacity expansion, three steps:");
+    for (let i = 0; i < 3; i++) {
+      const cost = MJ.expandBoardCapacityCost(save);
+      const result = MJ.expandBoardCapacity(save);
+      log(`  capacity ${result.ok ? result.newCapacity - 1 : save.johnson.boardCapacity} -> ${result.ok ? result.newCapacity : "FAILED"}   cost:${cost}   money now: ${save.johnson.money}`);
+    }
+    log("");
+
+    // Overspend check: try to hire something the operation can't afford.
+    save.johnson.money = 100;
+    const overspend = MJ.hireRunnerWithCost(save, runner, rng, "permanent", 1);
+    log(`overspend guard: attempted permanent hire with only 100 nuyen  →  ${overspend.ok ? "SUCCEEDED (bug!)" : "correctly rejected"}   money unchanged: ${save.johnson.money}`);
+  }
+
   // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
   // persistent state across button clicks (not a scripted one-shot
   // demo) — this is what "roll the day" and "save and reload" are
@@ -414,6 +467,7 @@
     document.getElementById("btn-board").addEventListener("click", testBoard);
     document.getElementById("btn-resolve").addEventListener("click", testResolve);
     document.getElementById("btn-market-cycle").addEventListener("click", testMarketCycle);
+    document.getElementById("btn-economy").addEventListener("click", testEconomy);
     document.getElementById("btn-new-game").addEventListener("click", newGame);
     document.getElementById("btn-roll-day").addEventListener("click", rollDay);
     document.getElementById("btn-reload-save").addEventListener("click", reloadSave);
@@ -422,7 +476,7 @@
     currentSave = await MJ.loadGame();
     updateDayStatus();
 
-    log("Mr. Johnson — Phase 0 inspector ready.");
+    log("Mr. Johnson — dev inspector ready.");
     log('Enter a seed and hit a button. Same seed always reproduces.');
     if (currentSave) log(`Existing save found: day ${currentSave.meta.currentDay}.`);
   });
