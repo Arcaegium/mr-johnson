@@ -53,7 +53,10 @@
   }
 
   // ── Watching: turns on the state machine, no growth implied ────
+  // KIA is terminal (§03): watching a dead runner must never revive
+  // them — found by the mechanical stress plan's resurrection audit.
   function watchRunner(runner, rng) {
+    if (runner.market.phase === "kia") return runner;
     runner.market.state = "watched";
     runner.market.phase = "available";
     runner.market.hiddenShelfDaysRemaining = rng.int(3, 14);
@@ -114,6 +117,7 @@
 
   function releaseRunner(runner, rng) {
     runner.market.hired = null;
+    if (runner.market.phase === "kia") return runner; // terminal stays terminal
     runner.market.phase = "available";
     runner.market.hiddenShelfDaysRemaining = rng.int(3, 14);
     return runner;

@@ -1,0 +1,613 @@
+/* ============================================================
+   Mr. Johnson — stress.js
+   Mechanical stress harness. Not part of the game, and not a
+   balance tool: this hunts PLUMBING bugs — data that doesn't
+   cross a system boundary, state that mutates when an operation
+   was refused, parallel pieces communicating at the wrong time.
+   Organized by failure class, not by module, because the bugs it
+   exists for live BETWEEN modules.
+
+   Classes:
+     1. Determinism — same seed + same actions = identical world,
+        byte for byte. (The seed fixes the WORLD, never the story:
+        any different action diverges everything after it.)
+     2. Upstream->downstream integrity — noise really lands on
+        Alert; karma ledgers reconcile exactly; recon really
+        writes intel; job pay really equals its formula.
+     3. Timing / same-day communication — queue order effects are
+        real (a ratchet mid-period raises a later mission's karma);
+        a chain gate opens same-day once its prerequisite resolves
+        (confirmed design: speed is a reward); the acted-set holds.
+     4. Refusal purity — a refused operation leaves ZERO
+        fingerprints: snapshot before === snapshot after.
+     5. State-machine legality — KIA is truly terminal (no
+        resurrection by any path); contracts never go negative;
+        permanent never completes.
+     6. Aliasing safety — shared site objects share ratchets on
+        purpose but estimates are first-write-wins; templates stay
+        pristine; securityState is never silently re-initialized.
+     7. The soak — randomized multi-seed campaigns, the full
+        invariant battery asserted after EVERY day, illegal
+        dispatches injected throughout. Failures report seed+day
+        so they replay exactly.
+
+   Zero tolerance: the suite ends in one verdict line. Every
+   future system has to keep it green.
+   ============================================================ */
+(function () {
+  const out = () => document.getElementById("out");
+  const log = (line) => { out().textContent += line + "\n"; };
+  const clear = () => { out().textContent = ""; };
+
+  let failures = [];
+  let assertions = 0;
+
+  function check(cond, label) {
+    assertions += 1;
+    if (!cond) failures.push(label);
+    return cond;
+  }
+
+  const snap = (o) => JSON.stringify(o);
+  const AXES = ["physical", "astral", "matrix"];
+
+  // Roster helper: unique handles so ledger bookkeeping can key on
+  // them without collision.
+  function makeRoster(rng, count, families) {
+    const roster = [];
+    const seen = new Set();
+    let i = 0;
+    while (roster.length < count && i < count * 30) {
+      const r = MJ.generateRunner(rng.fork("roster-" + i), families ? { family: families[roster.length % families.length] } : {});
+      i += 1;
+      if (seen.has(r.identity.handle)) continue;
+      seen.add(r.identity.handle);
+      roster.push(r);
+    }
+    return roster;
+  }
+
+  // ── Class 1: determinism ────────────────────────────────────────
+  function scriptedCampaign(seed) {
+    const rng = MJ.makeRNG(seed);
+    const save = MJ.defaultSave(seed);
+    save.johnson.money = 500000;
+    const crew = makeRoster(rng, 3, ["mage", "decker", "fighter"]);
+    for (const r of crew) {
+      MJ.watchRunner(r, rng);
+      MJ.hireRunnerWithCost(save, r, "retainer");
+    }
+    const sitePool = [];
+    const jobs = [];
+    for (let i = 0; i < 3; i++) {
+      jobs.push(MJ.generateJob(rng.fork("job" + i), sitePool, 1).job);
+      for (const m of jobs[i].missions) if (!sitePool.includes(m.site)) sitePool.push(m.site);
+    }
+    for (let day = 1; day <= 30; day++) {
+      for (const r of crew) {
+        if (!r.market.hired && MJ.isHireable(r)) MJ.hireRunnerWithCost(save, r, "freelance");
+      }
+      const queue = [];
+      const wounded = crew.find((r) => r.wounds > 0 && MJ.isDispatchable(r));
+      if (day % 5 === 1) {
+        queue.push({ mission: MJ.createReconMission(sitePool[(day * 7) % sitePool.length], MJ.RECON_LENSES[day % 3]), runners: [crew[day % 3]] });
+        queue.push({ mission: MJ.createCraftingMission(1 + (day % 5)), runners: [crew[(day + 1) % 3]] });
+      } else if (wounded && day % 5 === 2) {
+        const medic = crew.find((r) => r !== wounded && MJ.isDispatchable(r));
+        if (medic) queue.push({ mission: MJ.createMedicalMission(wounded), runners: [medic] });
+      } else {
+        const job = jobs.find((j) => !MJ.isJobComplete(j));
+        if (job) {
+          const target = job.missions.find((m) => !m.resolved && (!m.requiresMission || m.requiresMission.resolved));
+          if (target) queue.push({ mission: target, runners: crew.filter(MJ.isDispatchable) });
+        }
+      }
+      MJ.runActionPeriod(rng, queue, day);
+      for (const j of jobs) if (MJ.isJobComplete(j)) MJ.collectJobPay(save, j);
+      for (const s of sitePool) if (s.securityState) MJ.advanceSiteDay(s.securityState);
+      for (const r of crew) MJ.advanceMarketDay(r, rng);
+    }
+    return snap({
+      save: save,
+      crew: crew,
+      jobs: jobs.map((j) => ({ paid: !!j.paid, pay: j.pay, resolved: j.missions.map((m) => m.resolved) })),
+      sites: sitePool.map((s) => ({ sec: s.securityState || null, est: s.estimatedSecurity || null, intel: s.intel })),
+    });
+  }
+
+  function class1_determinism() {
+    const a = scriptedCampaign("stress-det");
+    const b = scriptedCampaign("stress-det");
+    check(a === b, "C1: same seed + same actions must produce byte-identical final state");
+    const c = scriptedCampaign("stress-det-other");
+    check(a !== c, "C1: a different seed should diverge (sanity check on the comparison itself)");
+  }
+
+  // ── Class 2: upstream -> downstream integrity ───────────────────
+  function class2_dataIntegrity() {
+    // Noise -> Alert: the site's pool must move by exactly what the
+    // mission result reported, every time.
+    const rngN = MJ.makeRNG("stress-noise");
+    let noiseChecked = 0;
+    for (let i = 0; i < 60; i++) {
+      const site = MJ.generateSite(rngN.fork("s" + i));
+      MJ.generateSecurityEstimate(rngN.fork("e" + i), site);
+      const r = makeRoster(rngN.fork("rr" + i), 1)[0];
+      MJ.watchRunner(r, rngN);
+      MJ.hireRunner(r, "permanent");
+      const before = site.securityState.alert;
+      const cap = site.securityState.alertMax;
+      const res = MJ.runActionPeriod(rngN, [{ mission: MJ.createResourceMission(site), runners: [r] }], 1)[0];
+      if (res.error) continue;
+      noiseChecked += 1;
+      check(site.securityState.alert === Math.min(cap, before + res.noise.noise), "C2: noise->alert mismatch (site " + i + ")");
+    }
+    check(noiseChecked > 30, "C2: noise probe barely ran (" + noiseChecked + ")");
+
+    // Recon -> intel: stamped today, own axis only, estimates untouched.
+    let intelProved = false;
+    for (let i = 0; i < 100 && !intelProved; i++) {
+      const rng = MJ.makeRNG("stress-intel-" + i);
+      const site = MJ.generateSite(rng.fork("s"), { value: 3 });
+      MJ.generateSecurityEstimate(rng.fork("e"), site);
+      const estBefore = snap(site.estimatedSecurity);
+      const r = makeRoster(rng.fork("r"), 1, ["mage"])[0];
+      MJ.watchRunner(r, rng);
+      MJ.hireRunner(r, "permanent");
+      const res = MJ.runActionPeriod(rng, [{ mission: MJ.createReconMission(site, "astral"), runners: [r] }], 7)[0];
+      if (!res.success) continue;
+      intelProved = true;
+      check(site.intel.astral && site.intel.astral.dayTaken === 7, "C2: intel must be stamped with the recon day");
+      const view = MJ.siteIntelView(site, 8);
+      check(view.astral.confirmed && view.astral.confirmed.fresh === true, "C2: fresh confirmation missing");
+      check(view.physical.confirmed === null && view.matrix.confirmed === null, "C2: a lens must confirm only its own axis");
+      check(snap(site.estimatedSecurity) === estBefore, "C2: recon must never mutate the handed estimate");
+      check(MJ.siteIntelView(site, 13).astral.confirmed.fresh === false, "C2: staleness horizon not enforced");
+    }
+    check(intelProved, "C2: no successful recon in 100 attempts (suspicious)");
+
+    // Bonus dice: applies on top of trained pools, never rescues untrained.
+    const rngB = MJ.makeRNG("stress-bonus");
+    const rb = makeRoster(rngB, 1, ["fighter"])[0];
+    const eff = MJ.getEffectiveSkills(rb);
+    const trained = Object.keys(eff).find((k) => eff[k] > 0);
+    const untrained = Object.keys(eff).find((k) => eff[k] === 0);
+    const obT = { tier: 2, affordances: [{ skill: trained, verb: "x", loud: false }] };
+    const obU = { tier: 2, affordances: [{ skill: untrained, verb: "x", loud: false }] };
+    check(MJ.resolveTask(rngB, rb, obT, trained, { bonusDice: 2 }).poolSize === eff[trained] + 2, "C2: bonus dice must add to a trained pool");
+    check(MJ.resolveTask(rngB, rb, obU, untrained, { bonusDice: 2 }).poolSize === 0, "C2: bonus dice must never rescue untrained");
+
+    // Job pay formula + chain wiring, in bulk.
+    const rngJ = MJ.makeRNG("stress-pay");
+    for (let i = 0; i < 1000; i++) {
+      const { job } = MJ.generateJob(rngJ.fork("j" + i), [], 1);
+      const sum = job.missions.reduce((t, m) => t + m.payContribution, 0);
+      check(job.pay === Math.round(sum * job.rushMultiplier), "C2: pay formula broken (job " + i + ")");
+      if (job.chained) {
+        for (let k = 1; k < job.missions.length; k++) {
+          check(job.missions[k].requiresMission === job.missions[k - 1], "C2: chain wiring broken (job " + i + ")");
+        }
+      } else {
+        check(job.missions.every((m) => !m.requiresMission), "C2: unchained job carries a gate (job " + i + ")");
+      }
+    }
+
+    // collectJobPay: exact delta, exactly once, reputation rides along.
+    const save = MJ.defaultSave("stress-collect");
+    const { job } = MJ.generateJob(MJ.makeRNG("stress-collect"), [], 1);
+    for (const m of job.missions) m.resolved = true; // fabricated completion, probe only
+    MJ.collectJobPay(save, job);
+    check(save.johnson.money === job.pay && save.johnson.reputation === 1, "C2: collectJobPay wrong delta");
+    MJ.collectJobPay(save, job);
+    check(save.johnson.money === job.pay && save.johnson.reputation === 1, "C2: double collection must be inert");
+  }
+
+  // ── Class 3: timing / same-day communication ────────────────────
+  function class3_timing() {
+    // A ratchet fired by an earlier mission in the queue must raise a
+    // later mission's karma (start-of-mission Current snapshot).
+    let proved = false;
+    for (let i = 0; i < 200 && !proved; i++) {
+      const build = () => {
+        const rng = MJ.makeRNG("stress-queue-" + i);
+        const site = MJ.generateSite(rng.fork("s"), { value: 2, orientation: "physical" });
+        MJ.generateSecurityEstimate(rng.fork("e"), site);
+        const good = makeRoster(rng.fork("g"), 1, ["fighter"])[0];
+        MJ.growRunner(good, 300, rng.fork("gr"));
+        MJ.watchRunner(good, rng);
+        MJ.hireRunner(good, "permanent");
+        const bad = makeRoster(rng.fork("b"), 1, ["mage"])[0];
+        for (const k of Object.keys(bad.skills)) bad.skills[k] = 0; // guaranteed stall
+        MJ.watchRunner(bad, rng);
+        MJ.hireRunner(bad, "permanent");
+        return { rng, site, good, bad };
+      };
+      const A = build();
+      const B = build();
+      B.site.securityState.alert = 3;      // pre-loaded pressure so B's
+      B.site.securityState.sustainedHits = 2; // first noisy hit ratchets
+      const run = (X) => MJ.runActionPeriod(X.rng, [
+        { mission: MJ.createResourceMission(X.site), runners: [X.bad] },
+        { mission: MJ.createResourceMission(X.site), runners: [X.good] },
+      ], 1);
+      const ra = run(A);
+      const rb = run(B);
+      if (!(rb[0].noise && rb[0].noise.ratcheted)) continue;
+      if (!(ra[1].success && rb[1].success)) continue;
+      check(rb[1].karmaAward >= ra[1].karmaAward, "C3: added same-day pressure must never lower a later mission's karma");
+      if (rb[1].karmaAward > ra[1].karmaAward) proved = true;
+    }
+    check(proved, "C3: never observed a same-day ratchet raising a later mission's karma (visibility broken?)");
+
+    // Same-day gate opening (confirmed design): prerequisite resolved
+    // earlier in the period opens the gated leg immediately — with a
+    // second crew, since each runner still only acts once.
+    let gateProved = false;
+    for (let i = 0; i < 200 && !gateProved; i++) {
+      const rng = MJ.makeRNG("stress-gate-" + i);
+      const { job } = MJ.generateJob(rng.fork("j"), [], 1, { missionCount: 2 });
+      if (!job.chained || !job.missions.every((m) => m.site.identity.value <= 2)) continue;
+      const crewA = makeRoster(rng.fork("ca"), 2, ["fighter", "decker"]);
+      const crewB = makeRoster(rng.fork("cb"), 2, ["fighter", "mage"]);
+      for (const r of [...crewA, ...crewB]) {
+        MJ.growRunner(r, 400, rng.fork("gr" + r.identity.handle));
+        MJ.watchRunner(r, rng);
+        MJ.hireRunner(r, "permanent");
+      }
+      const refused = MJ.runActionPeriod(rng.fork("ctrl"), [{ mission: job.missions[1], runners: crewA }], 1)[0];
+      check(refused.error && refused.error.indexOf("gated") === 0, "C3: gate must refuse before the prerequisite");
+      const res = MJ.runActionPeriod(rng.fork("run"), [
+        { mission: job.missions[0], runners: crewA },
+        { mission: job.missions[1], runners: crewB },
+      ], 2);
+      if (!res[0].success) continue;
+      check(!res[1].error, "C3: gate must open same-day once the prerequisite resolved earlier in the period");
+      gateProved = true;
+    }
+    check(gateProved, "C3: same-day gate probe never met its conditions");
+
+    // Acted-set: one action per runner per period, across roles.
+    const rngA = MJ.makeRNG("stress-acted");
+    const pair = makeRoster(rngA, 2, ["decker", "fighter"]);
+    for (const r of pair) { MJ.watchRunner(r, rngA); MJ.hireRunner(r, "retainer"); }
+    const remBefore = pair[0].market.hired.missionsRemaining;
+    const twice = MJ.runActionPeriod(rngA, [
+      { mission: MJ.createCraftingMission(2), runners: [pair[0]] },
+      { mission: MJ.createCraftingMission(2), runners: [pair[0]] },
+    ], 1);
+    check(!!twice[1].error, "C3: second dispatch of the same runner in one period must be refused");
+    check(pair[0].market.hired.missionsRemaining === remBefore - 1, "C3: refused double-dispatch must consume exactly one contract mission");
+    pair[1].wounds = 1;
+    const busy = MJ.runActionPeriod(rngA, [
+      { mission: MJ.createCraftingMission(2), runners: [pair[1]] },
+      { mission: MJ.createMedicalMission(pair[1]), runners: [pair[0]] },
+    ], 2);
+    check(!!busy[1].error, "C3: a runner who already acted cannot also be a patient");
+    // The medic never legitimately acted on day 2 (the craft was the
+    // patient's; the treatment was refused before consumption), so
+    // their contract still shows only day 1's craft.
+    check(pair[0].market.hired.missionsRemaining === remBefore - 1, "C3: medic's contract must be untouched by the refused treatment");
+  }
+
+  // ── Class 4: refusal purity — refused means untouched ───────────
+  function class4_refusalPurity() {
+    function pure(label, entities, attempt, isRefused) {
+      const before = snap(entities);
+      const result = attempt();
+      check(isRefused(result), "C4: " + label + " — expected a refusal");
+      check(snap(entities) === before, "C4: " + label + " — refusal left fingerprints on state");
+    }
+
+    // Gated leg.
+    {
+      const rng = MJ.makeRNG("stress-p1");
+      let job = null;
+      for (let i = 0; i < 100 && !job; i++) {
+        const cand = MJ.generateJob(rng.fork("j" + i), [], 1, { missionCount: 2 }).job;
+        if (cand.chained) job = cand;
+      }
+      const crew = makeRoster(rng.fork("c"), 2);
+      for (const r of crew) { MJ.watchRunner(r, rng); MJ.hireRunner(r, "permanent"); }
+      pure("gated dispatch", { job: { paid: !!job.paid, missions: job.missions.map((m) => ({ resolved: m.resolved, karmaAward: m.karmaAward })) }, crew: crew, sites: job.missions.map((m) => m.site.securityState) },
+        () => MJ.runActionPeriod(rng, [{ mission: job.missions[1], runners: crew }], 1)[0],
+        (r) => !!r.error);
+    }
+
+    // Uncontracted dispatch.
+    {
+      const rng = MJ.makeRNG("stress-p2");
+      const r = makeRoster(rng, 1)[0]; // unwatched, unhired
+      pure("uncontracted dispatch", { r: r },
+        () => MJ.runActionPeriod(rng, [{ mission: MJ.createCraftingMission(2), runners: [r] }], 1)[0],
+        (res) => !!res.error);
+    }
+
+    // Medical: no wounds / self-treatment.
+    {
+      const rng = MJ.makeRNG("stress-p3");
+      const pair = makeRoster(rng, 2, ["mage", "fighter"]);
+      for (const r of pair) { MJ.watchRunner(r, rng); MJ.hireRunner(r, "permanent"); }
+      pure("treating the unwounded", { pair: pair },
+        () => MJ.runActionPeriod(rng, [{ mission: MJ.createMedicalMission(pair[1]), runners: [pair[0]] }], 1)[0],
+        (res) => !!res.error);
+      pair[0].wounds = 1;
+      pure("self-treatment", { pair: pair },
+        () => MJ.runActionPeriod(rng, [{ mission: MJ.createMedicalMission(pair[0]), runners: [pair[0]] }], 2)[0],
+        (res) => !!res.error);
+    }
+
+    // Economy: hiring a KIA runner, and overspending.
+    {
+      const rng = MJ.makeRNG("stress-p4");
+      const save = MJ.defaultSave("stress-p4");
+      save.johnson.money = 999999;
+      const dead = makeRoster(rng, 1)[0];
+      MJ.watchRunner(dead, rng);
+      dead.market.phase = "kia";
+      pure("hiring the dead", { save: save, dead: dead },
+        () => MJ.hireRunnerWithCost(save, dead, "freelance"),
+        (res) => res.ok === false);
+      const broke = MJ.defaultSave("stress-p4b");
+      broke.johnson.money = 10;
+      const alive = makeRoster(rng.fork("x"), 1)[0];
+      MJ.watchRunner(alive, rng);
+      pure("overspending", { save: broke, alive: alive },
+        () => MJ.hireRunnerWithCost(broke, alive, "permanent"),
+        (res) => res.ok === false);
+    }
+
+    // consumeContractMission on the uncontracted.
+    {
+      const rng = MJ.makeRNG("stress-p5");
+      const r = makeRoster(rng, 1)[0];
+      pure("consuming a nonexistent contract", { r: r },
+        () => MJ.consumeContractMission(r, rng),
+        (res) => res.event === "notUnderContract");
+    }
+  }
+
+  // ── Class 5: state-machine legality ─────────────────────────────
+  function class5_stateMachines() {
+    const rng = MJ.makeRNG("stress-sm");
+
+    // KIA is terminal: no path revives.
+    const dead = makeRoster(rng, 1)[0];
+    MJ.watchRunner(dead, rng);
+    dead.market.phase = "kia";
+    MJ.watchRunner(dead, rng);
+    check(dead.market.phase === "kia", "C5: watchRunner resurrected a KIA runner");
+    MJ.releaseRunner(dead, rng);
+    check(dead.market.phase === "kia", "C5: releaseRunner resurrected a KIA runner");
+    MJ.advanceMarketDay(dead, rng);
+    check(dead.market.phase === "kia", "C5: the daily tick moved a KIA runner");
+    check(MJ.isHireable(dead) === false && MJ.isDispatchable(dead) === false, "C5: a KIA runner is hireable or dispatchable");
+
+    // Permanent contracts never complete; counters never go negative.
+    const perm = makeRoster(rng.fork("perm"), 1)[0];
+    MJ.watchRunner(perm, rng);
+    MJ.hireRunner(perm, "permanent");
+    for (let i = 0; i < 30; i++) MJ.consumeContractMission(perm, rng);
+    check(!!perm.market.hired && perm.market.hired.tier === "permanent", "C5: a permanent contract completed");
+    const free = makeRoster(rng.fork("free"), 1)[0];
+    MJ.watchRunner(free, rng);
+    MJ.hireRunner(free, "freelance");
+    MJ.consumeContractMission(free, rng);
+    check(free.market.hired === null && free.market.phase === "available", "C5: freelance must complete after exactly one dispatch");
+    const after = MJ.consumeContractMission(free, rng);
+    check(after.event === "notUnderContract", "C5: consuming after completion must be inert");
+  }
+
+  // ── Class 6: aliasing safety ────────────────────────────────────
+  function class6_aliasing() {
+    // Templates must stay pristine through heavy generation.
+    const templatesBefore = snap(MJ.OBSTACLE_TEMPLATES);
+    const rng = MJ.makeRNG("stress-alias");
+    for (let i = 0; i < 1500; i++) {
+      const s = MJ.generateSite(rng.fork("s" + i));
+      MJ.generateSecurityEstimate(rng.fork("e" + i), s);
+    }
+    check(snap(MJ.OBSTACLE_TEMPLATES) === templatesBefore, "C6: obstacle templates were mutated by instance generation");
+
+    // Estimates are first-write-wins across job reuse.
+    let reuseProved = false;
+    for (let i = 0; i < 300 && !reuseProved; i++) {
+      const r2 = MJ.makeRNG("stress-alias2-" + i);
+      const site = MJ.generateSite(r2.fork("s"));
+      MJ.generateSecurityEstimate(r2.fork("e"), site);
+      const est = snap(site.estimatedSecurity);
+      const { job } = MJ.generateJob(r2.fork("j"), [site], 1);
+      if (!job.missions.some((m) => m.site === site)) continue;
+      reuseProved = true;
+      check(snap(site.estimatedSecurity) === est, "C6: reuse re-rolled a site's handed estimate");
+    }
+    check(reuseProved, "C6: reuse probe never reused (300 tries — suspicious)");
+
+    // securityState is never silently re-initialized.
+    const r3 = MJ.makeRNG("stress-alias3");
+    const site3 = MJ.generateSite(r3.fork("s"));
+    MJ.generateSecurityEstimate(r3.fork("e"), site3);
+    const stateRef = site3.securityState;
+    stateRef.alert = 4;
+    stateRef.axes.physical.max += 2;
+    stateRef.axes.physical.current = stateRef.axes.physical.max;
+    const runner3 = makeRoster(r3.fork("r"), 1)[0];
+    MJ.watchRunner(runner3, r3);
+    MJ.hireRunner(runner3, "permanent");
+    MJ.runActionPeriod(r3, [{ mission: MJ.createResourceMission(site3), runners: [runner3] }], 1);
+    MJ.generateSecurityEstimate(r3.fork("e2-should-not-matter"), site3); // direct call — must not re-init either
+    check(site3.securityState === stateRef, "C6: securityState object identity changed (re-initialized)");
+    check(site3.securityState.axes.physical.max === stateRef.axes.physical.max, "C6: accumulated Max was wiped");
+  }
+
+  // ── Class 7: the soak ───────────────────────────────────────────
+  function class7_soak() {
+    const LEGAL_PHASES = [null, "available", "working", "outOfTown", "kia"];
+    let daysRun = 0;
+    for (let s = 0; s < 6; s++) {
+      const seedName = "soak-" + s;
+      const rng = MJ.makeRNG(seedName);
+      const save = MJ.defaultSave(seedName);
+      save.johnson.money = 300000;
+      const roster = makeRoster(rng, 5);
+      const tierFor = (i) => (i === 0 ? "permanent" : i % 2 ? "retainer" : "freelance");
+      roster.forEach((r, i) => {
+        MJ.watchRunner(r, rng);
+        MJ.hireRunnerWithCost(save, r, tierFor(i));
+      });
+      const byHandle = new Map(roster.map((r) => [r.identity.handle, r]));
+      const expectedKarma = new Map(roster.map((r) => [r, 0]));
+      const prevSkills = new Map(roster.map((r) => [r, Object.assign({}, r.skills)]));
+      const kiaLatch = new Set();
+      const jobs = [];
+      const sites = [];
+      const prevMax = new Map();
+      const estSnap = new Map();
+      let completedJobs = 0;
+
+      const fail = (day, label) => check(false, "C7[" + seedName + " day " + day + "]: " + label);
+      const ok = (cond, day, label) => { assertions += 1; if (!cond) failures.push("C7[" + seedName + " day " + day + "]: " + label); };
+
+      for (let day = 1; day <= 60; day++) {
+        daysRun += 1;
+        if (save.johnson.money < 50000) save.johnson.money += 200000; // mechanical top-up; economics is not on trial here
+        for (const r of roster) {
+          if (!r.market.hired && MJ.isHireable(r)) MJ.hireRunnerWithCost(save, r, rng.chance(0.3) ? "retainer" : "freelance");
+        }
+        if (jobs.filter((j) => !MJ.isJobComplete(j)).length < 2 && rng.chance(0.5)) {
+          const { job } = MJ.generateJob(rng.fork("job-d" + day), sites, day);
+          jobs.push(job);
+          for (const m of job.missions) {
+            if (!sites.includes(m.site)) {
+              sites.push(m.site);
+              estSnap.set(m.site, snap(m.site.estimatedSecurity));
+              prevMax.set(m.site, null);
+            }
+          }
+        }
+        const queue = [];
+        const avail = roster.filter((r) => MJ.isDispatchable(r));
+        const activeJob = jobs.find((j) => !MJ.isJobComplete(j));
+        if (activeJob && avail.length) {
+          const gated = activeJob.missions.find((m) => m.requiresMission && !m.requiresMission.resolved);
+          if (gated && rng.chance(0.3)) queue.push({ mission: gated, runners: avail }); // deliberate illegal injection
+          const target = activeJob.missions.find((m) => !m.resolved && (!m.requiresMission || m.requiresMission.resolved));
+          if (target) queue.push({ mission: target, runners: avail.slice(0, 1 + rng.int(0, Math.max(0, Math.min(2, avail.length - 1)))) });
+        }
+        if (sites.length && avail.length > 2 && rng.chance(0.5)) {
+          queue.push({ mission: MJ.createReconMission(rng.pick(sites), rng.pick(MJ.RECON_LENSES)), runners: [avail[avail.length - 1]] });
+        }
+        const wounded = roster.find((r) => r.wounds > 0 && MJ.isDispatchable(r));
+        if (wounded && rng.chance(0.6)) {
+          const medic = roster.find((r) => r !== wounded && MJ.isDispatchable(r));
+          if (medic) queue.push({ mission: MJ.createMedicalMission(wounded), runners: [medic] });
+        }
+        if (rng.chance(0.3) && avail.length) queue.push({ mission: MJ.createCraftingMission(1 + rng.int(0, 4)), runners: [rng.pick(avail)] });
+
+        const results = MJ.runActionPeriod(rng, queue, day);
+        for (const res of results) {
+          if (res.success && res.karmaAward) {
+            for (const h of res.crew) {
+              const rr = byHandle.get(h);
+              if (rr) expectedKarma.set(rr, expectedKarma.get(rr) + res.karmaAward);
+            }
+          }
+        }
+        for (const j of jobs) {
+          if (MJ.isJobComplete(j) && !j.paid) {
+            const before = save.johnson.money;
+            MJ.collectJobPay(save, j);
+            completedJobs += 1;
+            ok(save.johnson.money === before + j.pay, day, "collectJobPay delta wrong");
+          }
+        }
+        for (const site of sites) if (site.securityState) MJ.advanceSiteDay(site.securityState);
+        for (const r of roster) MJ.advanceMarketDay(r, rng);
+
+        // ── the daily battery ──
+        ok(Number.isFinite(save.johnson.money) && save.johnson.money >= 0, day, "ledger corrupt");
+        ok(save.johnson.reputation === completedJobs, day, "reputation out of sync with completed jobs");
+        for (const r of roster) {
+          ok(r.karma === expectedKarma.get(r), day, "karma ledger mismatch for " + r.identity.handle + " (have " + r.karma + ", expected " + expectedKarma.get(r) + ")");
+          ok(r.wounds >= 0 && Number.isFinite(r.wounds), day, "wounds corrupt");
+          const prev = prevSkills.get(r);
+          for (const k of Object.keys(r.skills)) {
+            ok(r.skills[k] >= prev[k], day, "skill " + k + " decreased for " + r.identity.handle);
+          }
+          prevSkills.set(r, Object.assign({}, r.skills));
+          ok(LEGAL_PHASES.indexOf(r.market.phase) !== -1, day, "illegal phase " + r.market.phase);
+          if (r.market.hired) {
+            ok(r.market.phase === null, day, "hired runner has an active market phase");
+            ok(r.market.hired.missionsRemaining > 0, day, "hired with a non-positive contract");
+          }
+          if (r.market.phase === "kia") kiaLatch.add(r);
+          if (kiaLatch.has(r)) ok(r.market.phase === "kia" && !r.market.hired, day, "KIA runner came back: " + r.identity.handle);
+        }
+        for (const site of sites) {
+          const st = site.securityState;
+          if (!st) continue;
+          for (const axis of AXES) {
+            const a = st.axes[axis];
+            ok(a.min >= 1 && a.min <= a.current && a.current <= a.max, day, "security triple out of order (" + axis + ")");
+            const pm = prevMax.get(site);
+            if (pm) ok(a.max >= pm[axis], day, "Max decreased (" + axis + ")");
+          }
+          ok(st.alert >= 0 && st.alert <= st.alertMax, day, "alert out of bounds");
+          const pm = prevMax.get(site);
+          if (pm) ok(st.alertMax >= pm.alertMax, day, "alertMax decreased");
+          prevMax.set(site, { physical: st.axes.physical.max, astral: st.axes.astral.max, matrix: st.axes.matrix.max, alertMax: st.alertMax });
+          ok(snap(site.estimatedSecurity) === estSnap.get(site), day, "a handed estimate mutated");
+          for (const lens of Object.keys(site.intel || {})) {
+            ok(site.intel[lens].dayTaken <= day, day, "intel stamped in the future");
+          }
+        }
+        for (const j of jobs) {
+          const sum = j.missions.reduce((t, m) => t + m.payContribution, 0);
+          ok(j.pay === Math.round(sum * j.rushMultiplier), day, "job pay drifted");
+          for (const m of j.missions) {
+            if (m.resolved && m.requiresMission) ok(m.requiresMission.resolved, day, "a gated mission resolved before its prerequisite");
+            if (m.resolved) ok(m.karmaAward >= 1, day, "resolved mission with no karma award");
+          }
+          if (j.paid) ok(MJ.isJobComplete(j), day, "a job paid out before completion");
+        }
+      }
+    }
+    log("  soak: " + daysRun + " simulated days across 6 seeds, battery asserted after every day");
+  }
+
+  // ── Runner ──────────────────────────────────────────────────────
+  function runStress() {
+    clear();
+    failures = [];
+    assertions = 0;
+    log("MECHANICAL STRESS SUITE — plumbing, not balance. Zero tolerance.");
+    log("");
+    const classes = [
+      ["1. Determinism (seed fixes the world, never the story)", class1_determinism],
+      ["2. Upstream->downstream data integrity", class2_dataIntegrity],
+      ["3. Timing & same-day communication", class3_timing],
+      ["4. Refusal purity (refused means untouched)", class4_refusalPurity],
+      ["5. State-machine legality (KIA is terminal, contracts behave)", class5_stateMachines],
+      ["6. Aliasing safety (shared refs share on purpose only)", class6_aliasing],
+      ["7. Randomized soak", class7_soak],
+    ];
+    for (const [label, fn] of classes) {
+      const before = failures.length;
+      const beforeAsserts = assertions;
+      fn();
+      const newFails = failures.length - before;
+      log((newFails === 0 ? "PASS" : "FAIL(" + newFails + ")") + "  " + label + "   [" + (assertions - beforeAsserts) + " assertions]");
+    }
+    log("");
+    if (failures.length === 0) {
+      log("VERDICT: 0 failures across " + assertions + " assertions. The pieces are locked in.");
+    } else {
+      log("VERDICT: " + failures.length + " FAILURES across " + assertions + " assertions:");
+      failures.slice(0, 20).forEach((f) => log("  ✗ " + f));
+      if (failures.length > 20) log("  ... and " + (failures.length - 20) + " more");
+    }
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("btn-stress").addEventListener("click", runStress);
+  });
+})();
