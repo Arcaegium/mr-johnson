@@ -574,6 +574,62 @@
     log("  soak: " + daysRun + " simulated days across 6 seeds, battery asserted after every day");
   }
 
+  // ── Class 8: the universe site registry ─────────────────────────
+  // Lazy, infinite, deterministic, and faction/district-balanced —
+  // the §09 "pull from the universe seed on demand" contract.
+  function class8_registry() {
+    const U = "stress-universe";
+
+    // Determinism: same universe + same index = byte-identical site.
+    const a = snap(MJ.mintSite(U, 42, { value: 5, orientation: "matrix" }));
+    const b = snap(MJ.mintSite(U, 42, { value: 5, orientation: "matrix" }));
+    check(a === b, "C8: minting the same index twice must be byte-identical");
+    const c = snap(MJ.mintSite(U, 43, { value: 5, orientation: "matrix" }));
+    check(a !== c, "C8: adjacent indices must differ");
+    const d = snap(MJ.mintSite("stress-universe-2", 42, { value: 5, orientation: "matrix" }));
+    check(a !== d, "C8: a different universe must yield a different site at the same index");
+
+    // Infinity: huge indices work and stay deterministic.
+    const far1 = snap(MJ.mintSite(U, 1048576, {}));
+    const far2 = snap(MJ.mintSite(U, 1048576, {}));
+    check(far1 === far2 && far1.length > 100, "C8: the registry must be lazy-infinite (index 1048576)");
+
+    // Balance: every consecutive block of N indices visits all N
+    // districts and all N factions exactly once — no streaks, ever.
+    const D = MJ.DISTRICTS.length;
+    const F = MJ.FACTIONS.length;
+    const SPAN = 700;
+    const ids = [];
+    for (let i = 0; i < SPAN; i++) ids.push(MJ.siteIdentityFromIndex(U, i));
+    for (let block = 0; block * D + D <= SPAN; block++) {
+      const districts = new Set(ids.slice(block * D, block * D + D).map((x) => x.district));
+      check(districts.size === D, "C8: district bag leaked a repeat in block " + block);
+    }
+    for (let block = 0; block * F + F <= SPAN; block++) {
+      const factions = new Set(ids.slice(block * F, block * F + F).map((x) => x.owningFaction));
+      check(factions.size === F, "C8: faction bag leaked a repeat in block " + block);
+    }
+
+    // Independence: the district<->faction pairing must not lock
+    // ("every building in Tacoma is owned by Mitsuhama" is the
+    // immersion-breaker this exists to prevent).
+    const pairings = new Map();
+    for (const id of ids) {
+      if (!pairings.has(id.district)) pairings.set(id.district, new Set());
+      pairings.get(id.district).add(id.owningFaction);
+    }
+    for (const [district, owners] of pairings) {
+      check(owners.size >= Math.min(F, 4), "C8: district " + district + " is owned by too few factions (" + owners.size + ") — pairing has locked");
+    }
+
+    // No fixed rotation: consecutive blocks must not deal the bag in
+    // the same order every time.
+    const block0 = ids.slice(0, D).map((x) => x.district).join("|");
+    const block1 = ids.slice(D, 2 * D).map((x) => x.district).join("|");
+    const block2 = ids.slice(2 * D, 3 * D).map((x) => x.district).join("|");
+    check(!(block0 === block1 && block1 === block2), "C8: the bag deals a fixed rotation — reshuffle per block is broken");
+  }
+
   // ── Runner ──────────────────────────────────────────────────────
   function runStress() {
     clear();
@@ -589,6 +645,7 @@
       ["5. State-machine legality (KIA is terminal, contracts behave)", class5_stateMachines],
       ["6. Aliasing safety (shared refs share on purpose only)", class6_aliasing],
       ["7. Randomized soak", class7_soak],
+      ["8. Universe site registry (lazy, infinite, balanced)", class8_registry],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

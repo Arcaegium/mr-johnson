@@ -450,6 +450,51 @@
     };
   }
 
+  // ── The universe site registry: lazy, infinite, balanced ────────
+  // Sites are never pre-generated. The universe seed defines a pure
+  // function from index -> site, evaluated only when a job (or a
+  // player discovery) actually needs one — "when a job requires a
+  // site, you have a universe seed to pull from" (§09, confirmed).
+  // The integration layer owns the mint counter (saved state); this
+  // is just the function. Consequence, by design: reloading to
+  // before a job generated loses that contract forever (jobs are
+  // timestamp-seeded), but the next job needing a fresh site mints
+  // the same next index — the building behind the next door is
+  // universe-fixed, the deal offered against it is not.
+  //
+  // District and faction come from SHUFFLE-BAGS keyed to the index,
+  // not uniform rolls — uniform streaks ("everything is in Tacoma,
+  // Mitsuhama owns every building") break immersion immediately at
+  // scale. Every consecutive block of N sites visits all N
+  // districts exactly once (reshuffled per block, so no fixed
+  // rotation), and factions ride an independently shuffled bag so
+  // the district<->faction pairing never locks either.
+  function bagPick(universeSeed, bagLabel, pool, index) {
+    const block = Math.floor(index / pool.length);
+    const order = MJ.makeRNG(universeSeed).fork(bagLabel + "-" + block).shuffle(pool);
+    return order[index % pool.length];
+  }
+
+  function siteIdentityFromIndex(universeSeed, index) {
+    return {
+      district: bagPick(universeSeed, "district-bag", DISTRICTS, index),
+      owningFaction: bagPick(universeSeed, "faction-bag", FACTIONS, index),
+    };
+  }
+
+  // Mint the universe's site #index. Layout, population, and
+  // obstacle rolls all derive from (universeSeed, index) alone —
+  // same index, same universe, same site, forever. value/orientation
+  // stay caller-supplied where a job's needs dictate them (the
+  // request is part of the reveal, not the universe).
+  function mintSite(universeSeed, index, options) {
+    const identity = siteIdentityFromIndex(universeSeed, index);
+    const rng = MJ.makeRNG(universeSeed).fork("site-" + index);
+    const site = generateSite(rng, Object.assign({ district: identity.district, faction: identity.owningFaction }, options || {}));
+    site.identity.universeIndex = index;
+    return site;
+  }
+
   // ── Every obstacle instance on a site, any slot, any projection ─
   function allObstacles(site) {
     const physicalSlots = [
@@ -531,6 +576,8 @@
   MJ.rollOrientation = rollOrientation;
   MJ.deriveSecurity = deriveSecurity;
   MJ.generateSite = generateSite;
+  MJ.siteIdentityFromIndex = siteIdentityFromIndex;
+  MJ.mintSite = mintSite;
   MJ.allObstacles = allObstacles;
   MJ.hasBruteForceOption = hasBruteForceOption;
   MJ.usableNonLoudWays = usableNonLoudWays;
