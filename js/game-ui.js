@@ -303,38 +303,52 @@
   }
 
   // ── The armory: the operation's second roster ───────────────────
+  function itemEffectText(t) {
+    if (t.category === "cyberware") return Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + ` · −${t.essenceCost} ess (implant)`;
+    if (t.category === "armor") return `guards ${MJ.gearBonusForTier(t.tier)} wound(s)/mission`;
+    if (t.category === "consumable") {
+      return t.effect === "absorbWound"
+        ? "absorbs a wound · single use"
+        : `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}, one roll · single use`;
+    }
+    if (t.category === "program") return `+${MJ.gearBonusForTier(t.tier)}d ${t.skill} (needs a deck)`;
+    if (t.category === "formula") return `teaches ${t.spellCategory} spell (casting pending)`;
+    return `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}`;
+  }
+
   function renderArmory() {
-    const items = S.save.armory.items;
+    const items = S.save.armory.items.filter((it) => !it.consumed);
     const crew = S.roster.map((r, i) => ({ r: r, i: i })).filter((x) => x.r.market.hired);
     const crewOpts = crew.map((x) => `<option value="${x.i}">${x.r.identity.handle}</option>`).join("");
-    const rows = items.map((item, i) => {
+    const mageOpts = crew.filter((x) => x.r.classification.family === "mage").map((x) => `<option value="${x.i}">${x.r.identity.handle}</option>`).join("");
+    const rows = items.map((item) => {
+      const i = S.save.armory.items.indexOf(item);
       const t = MJ.ITEM_TEMPLATES[item.templateId];
-      const isCyber = t.category === "cyberware";
-      const effect = isCyber
-        ? Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + ` · −${t.essenceCost} ess`
-        : `+${MJ.gearBonusForTier(item.tier)}d ${t.skill}`;
       const holder = item.issuedTo ? ` — <span class="good">with ${item.issuedTo.identity.handle}</span>` : ' — <span class="muted">in storage</span>';
-      const controls = crew.length
-        ? (isCyber
-            ? `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="implant-item" data-idx="${i}">implant</button>`
-            : `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="issue-item" data-idx="${i}">issue</button>` +
-              (item.issuedTo ? ` <button class="sm" data-act="reclaim-item" data-idx="${i}">reclaim</button>` : ""))
-        : '<span class="muted">hire someone first</span>';
+      let controls;
+      if (!crew.length) controls = '<span class="muted">hire someone first</span>';
+      else if (t.category === "cyberware") controls = `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="implant-item" data-idx="${i}">implant</button>`;
+      else if (t.category === "formula") controls = mageOpts
+        ? `<select class="armory-sel" data-item="${i}">${mageOpts}</select> <button class="sm" data-act="teach-item" data-idx="${i}">teach</button>`
+        : '<span class="muted">needs a mage on the crew</span>';
+      else controls = `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="issue-item" data-idx="${i}">issue</button>` +
+        (item.issuedTo ? ` <button class="sm" data-act="reclaim-item" data-idx="${i}">reclaim</button>` : "");
       const sell = !item.issuedTo ? ` <button class="sm" data-act="sell-item" data-idx="${i}">sell ¥${Math.round(MJ.itemCost(item.templateId) * 0.4)}</button>` : "";
-      return `<div class="row">${item.label} (T${item.tier}) <span class="muted">${effect}</span>${holder}<br>${controls}${sell}</div>`;
+      return `<div class="row">${item.label} (T${item.tier}) <span class="muted">${itemEffectText(t)}</span>${holder}<br>${controls}${sell}</div>`;
     }).join("") || '<span class="muted">The racks are empty — buy below, or craft at the Hub.</span>';
     const mats = Object.entries(S.save.armory.materials || {}).filter(([, n]) => n > 0).map(([k, n]) =>
       `<div class="row">${k.replace("resource:", "")} x${n} <button class="sm" data-act="sell-mats" data-kind="${k}">sell all</button></div>`).join("");
-    const shop = Object.keys(MJ.ITEM_TEMPLATES).map((id) => {
-      const t = MJ.ITEM_TEMPLATES[id];
-      const effect = t.category === "cyberware"
-        ? Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + `, −${t.essenceCost} ess (implant)`
-        : `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}`;
-      return `<button class="sm" data-act="buy-item" data-tpl="${id}" title="${effect}">${t.label} ¥${MJ.itemCost(id)}</button>`;
-    }).join(" ");
+    const CATEGORY_ORDER = ["weapon", "armor", "deck", "program", "drone", "focus", "gear", "consumable", "formula", "cyberware"];
+    const shop = CATEGORY_ORDER.map((cat) => {
+      const btns = Object.keys(MJ.ITEM_TEMPLATES).filter((id) => MJ.ITEM_TEMPLATES[id].category === cat).map((id) => {
+        const t = MJ.ITEM_TEMPLATES[id];
+        return `<button class="sm" data-act="buy-item" data-tpl="${id}" title="${itemEffectText(t)}">${t.label} ¥${MJ.itemCost(id)}</button>`;
+      }).join(" ");
+      return btns ? `<div class="muted" style="margin-top:4px">${cat.toUpperCase()}</div><div style="line-height:2.4">${btns}</div>` : "";
+    }).join("");
     $("panel-armory").innerHTML = rows +
       (mats ? `<div class="good" style="margin-top:8px">MATERIALS</div>${mats}` : "") +
-      `<div class="good" style="margin-top:8px">GEAR SHOP <span class="muted" style="text-transform:none;letter-spacing:0">(hover for effect)</span></div><div style="line-height:2.4">${shop}</div>`;
+      `<div class="good" style="margin-top:8px">GEAR SHOP <span class="muted" style="text-transform:none;letter-spacing:0">(hover for effect)</span></div>${shop}`;
   }
 
   function renderLog() {
@@ -382,12 +396,13 @@
     else if (action === "buy-item") MJ.game.buyGear(S, el.dataset.tpl);
     else if (action === "sell-item") MJ.game.sellGear(S, S.save.armory.items[idx]);
     else if (action === "reclaim-item") MJ.game.issueGear(S, S.save.armory.items[idx], null);
-    else if (action === "issue-item" || action === "implant-item") {
+    else if (action === "issue-item" || action === "implant-item" || action === "teach-item") {
       const sel = document.querySelector('.armory-sel[data-item="' + idx + '"]');
       const runner = sel && sel.value !== "" ? S.roster[+sel.value] : null;
       if (runner) {
         if (action === "issue-item") MJ.game.issueGear(S, S.save.armory.items[idx], runner);
-        else MJ.game.implantGear(S, S.save.armory.items[idx], runner);
+        else if (action === "implant-item") MJ.game.implantGear(S, S.save.armory.items[idx], runner);
+        else MJ.game.teachGear(S, S.save.armory.items[idx], runner);
       }
     }
     else if (action === "sell-mats") MJ.game.sellStock(S, el.dataset.kind);

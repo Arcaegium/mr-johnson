@@ -287,6 +287,9 @@
     let anyGlitch = false;
     let failed = false;
     const tasks = [];
+    // Armor: reusable wound guards, refreshed per mission.
+    const armorGuard = new Map();
+    for (const r of runners) armorGuard.set(r, MJ.woundGuardFor(r));
 
     for (const obstacle of obstacles) {
       const approach = pickApproach(runners, obstacle);
@@ -297,18 +300,45 @@
         tasks.push({ obstacle: obstacle.label, tier: obstacle.tier, result: "no usable approach — stalled" });
         continue;
       }
+      // Boost consumables auto-trigger on the first matching roll —
+      // one roll, then gone (v1 auto-use, flagged).
+      let boostDice = 0;
+      let boostLabel = null;
+      const boostItem = MJ.findConsumable(approach.runner, "boost", approach.skill);
+      if (boostItem) {
+        boostDice = MJ.gearBonusForTier(boostItem.tier);
+        boostLabel = boostItem.label;
+        MJ.consumeItem(boostItem);
+      }
       const outcome = MJ.resolveTask(rng, approach.runner, obstacle, approach.skill, {
-        bonusDice: bonusDice + MJ.gearBonusFor(approach.runner, approach.skill),
+        bonusDice: bonusDice + MJ.gearBonusFor(approach.runner, approach.skill) + boostDice,
       });
       if (approach.loud) anyLoud = true;
       if (outcome.glitch) anyGlitch = true;
-      if (outcome.criticalGlitch) approach.runner.wounds += 1; // placeholder wound rule
+      let guarded = null;
+      if (outcome.criticalGlitch) {
+        // Armor eats it first (reusable this mission); then a patch
+        // (consumed); only then does the wound land.
+        if (armorGuard.get(approach.runner) > 0) {
+          armorGuard.set(approach.runner, armorGuard.get(approach.runner) - 1);
+          guarded = "armor";
+        } else {
+          const patch = MJ.findConsumable(approach.runner, "absorbWound", null);
+          if (patch) {
+            guarded = patch.label;
+            MJ.consumeItem(patch);
+          } else {
+            approach.runner.wounds += 1; // placeholder wound rule
+          }
+        }
+      }
       if (!outcome.success) failed = true;
       tasks.push({
         obstacle: obstacle.label, tier: obstacle.tier,
         runner: approach.runner.identity.handle, skill: approach.skill, pool: outcome.poolSize,
         loud: approach.loud, hits: outcome.hits, threshold: outcome.threshold,
         success: outcome.success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch,
+        boosted: boostLabel, guarded: guarded,
       });
     }
 

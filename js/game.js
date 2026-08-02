@@ -265,6 +265,14 @@
     return result;
   }
 
+  function teachGear(session, item, runner) {
+    const result = MJ.teachFormula(runner, item, session.save.armory.items);
+    logLine(session, result.ok
+      ? runner.identity.handle + " learned " + item.label + " (casting mechanics arrive with the magic pillar)"
+      : "study refused (" + item.label + ") — " + result.error);
+    return result;
+  }
+
   function sellStock(session, kind) {
     const result = MJ.sellMaterials(session.save, kind);
     logLine(session, result.ok
@@ -332,7 +340,7 @@
       // what's actually guarding the place.
       for (const t of res.tasks || []) {
         logLine(session, t.runner
-          ? "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" : t.glitch ? " + glitch" : "")
+          ? "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : "")
           : "    " + t.obstacle + " T" + t.tier + ": " + t.result);
       }
       if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
@@ -375,6 +383,11 @@
       if (ev.event === "unwatchedExpired") session.market.splice(i, 1);
     }
     fillMarket(session);
+
+    // Sweep spent consumables off the racks.
+    for (let i = session.save.armory.items.length - 1; i >= 0; i--) {
+      if (session.save.armory.items[i].consumed) session.save.armory.items.splice(i, 1);
+    }
 
     session.day += 1;
 
@@ -498,6 +511,7 @@
     sellGear: sellGear,
     issueGear: issueGear,
     implantGear: implantGear,
+    teachGear: teachGear,
     sellStock: sellStock,
     queueDispatch: queueDispatch,
     unqueue: unqueue,

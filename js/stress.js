@@ -622,6 +622,22 @@
       check(owners.size >= Math.min(F, 4), "C8: district " + district + " is owned by too few factions (" + owners.size + ") — pairing has locked");
     }
 
+    // Runner handles: the universe deals base names from a bag —
+    // within one full block, every base appears exactly once (no
+    // "Static_32" + "Static_42" brand confusion), handles are
+    // deterministic per index, and styling keeps them distinct.
+    const N = MJ.HANDLES.length;
+    check(N >= 150, "C8: handle pool too small (" + N + ")");
+    const bases = new Set();
+    const handles = new Set();
+    for (let i = 0; i < N; i++) {
+      bases.add(MJ.handleBaseFromIndex(U, i));
+      handles.add(MJ.mintRunner(U, i).identity.handle);
+    }
+    check(bases.size === N, "C8: base-name bag leaked a repeat (" + bases.size + "/" + N + ")");
+    check(handles.size === N, "C8: full handles collided within one block");
+    check(MJ.mintRunner(U, 7).identity.handle === MJ.mintRunner(U, 7).identity.handle, "C8: handle must be deterministic per index");
+
     // No fixed rotation: consecutive blocks must not deal the bag in
     // the same order every time.
     const block0 = ids.slice(0, D).map((x) => x.district).join("|");
@@ -922,6 +938,55 @@
     save.armory.items.push(cyber2);
     check(MJ.implantSurgery(soldier, cyber2, save.armory.items).ok === false, "C11: Essence floor must hold");
     check(save.armory.items.indexOf(cyber2) !== -1, "C11: refused surgery must not consume the item");
+
+    // Programs only run on a deck.
+    const prog = MJ.makeItem("ghostware");
+    save.armory.items.push(prog);
+    MJ.issueItem(prog, decker); // decker currently carries deckMk2
+    check(MJ.gearBonusFor(decker, "hacking") === 2, "C11: program must not beat the deck alone (best tool)");
+    MJ.reclaimItem(deck2);
+    check(MJ.gearBonusFor(decker, "hacking") === 0, "C11: a program without a deck must be dead weight");
+    MJ.issueItem(deck2, decker);
+    check(MJ.gearBonusFor(decker, "hacking") === 2, "C11: program+deck restores the bonus");
+
+    // Armor guards and patches absorb critical-glitch wounds.
+    const tank = MJ.generateRunner(rng.fork("tank"), { family: "fighter" });
+    MJ.watchRunner(tank, rng);
+    MJ.hireRunner(tank, "permanent");
+    const vest = MJ.makeItem("riotCarapace");
+    save.armory.items.push(vest);
+    MJ.issueItem(vest, tank);
+    check(MJ.woundGuardFor(tank) === 2, "C11: T6 armor must guard 2 wounds");
+    const patch = MJ.makeItem("traumaPatch");
+    save.armory.items.push(patch);
+    MJ.issueItem(patch, tank);
+    check(MJ.findConsumable(tank, "absorbWound", null) === patch, "C11: patch must be findable");
+    MJ.consumeItem(patch);
+    check(patch.consumed === true && tank.gear.indexOf(patch) === -1, "C11: consumption must strip the carrier");
+    check(MJ.findConsumable(tank, "absorbWound", null) === null, "C11: consumed patch must not be found again");
+
+    // Boost consumables: found by skill, burned on use.
+    const smoke = MJ.makeItem("smokeGrenade");
+    save.armory.items.push(smoke);
+    MJ.issueItem(smoke, tank);
+    check(MJ.findConsumable(tank, "boost", "stealth") === smoke, "C11: boost must match its skill");
+    check(MJ.findConsumable(tank, "boost", "firearms") === null, "C11: boost must not match other skills");
+    check(MJ.gearBonusFor(tank, "stealth") === 0, "C11: consumables must not count as passive gear");
+
+    // Formulas: mages only, recorded on the dossier, copy consumed.
+    const formula = MJ.makeItem("fmlManabolt");
+    save.armory.items.push(formula);
+    check(MJ.issueItem(formula, tank).ok === false, "C11: formulas must refuse issue");
+    check(MJ.teachFormula(tank, formula, save.armory.items).ok === false, "C11: non-mage must refuse formulas");
+    const mage = MJ.generateRunner(rng.fork("mage"), { family: "mage" });
+    MJ.watchRunner(mage, rng);
+    MJ.hireRunner(mage, "permanent");
+    check(MJ.teachFormula(mage, formula, save.armory.items).ok === true, "C11: mage must learn the formula");
+    check(mage.classification.spellFormulasKnown.indexOf("Formula: Manabolt") !== -1, "C11: formula must land on the dossier");
+    check(save.armory.items.indexOf(formula) === -1, "C11: taught formula must be consumed");
+    const formula2 = MJ.makeItem("fmlManabolt");
+    save.armory.items.push(formula2);
+    check(MJ.teachFormula(mage, formula2, save.armory.items).ok === false, "C11: re-learning the same formula must refuse");
 
     // Materials: exact sale, stock zeroed.
     save.armory.materials["resource:scrap"] = 3;

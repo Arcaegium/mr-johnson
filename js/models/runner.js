@@ -178,11 +178,77 @@
   // any mechanical value — personality/aims text stays inert per
   // the design rule (§03): the only legible market signal is the
   // Discipline line, never the flavor text.
+  // ── Street handles ─────────────────────────────────────────────
+  // A big base pool, dealt per-universe from a shuffle-bag (below)
+  // so the same base can't recur until the whole pool is exhausted —
+  // "Static_32" and "Static_42" in one universe is brand confusion,
+  // and the bag makes it structurally near-impossible. Per-runner
+  // styling (leet substitutions, suffix shapes) varies on top.
   const HANDLES = [
     "Chrome", "Dodger", "Wraith", "Static", "Copper", "Halcyon", "Torque",
     "Marrow", "Ledger", "Vex", "Quill", "Ballast", "Ember", "Thistle",
     "Grit", "Nickel", "Ferro", "Lumen", "Ratchet", "Sable",
+    "Anvil", "Aria", "Ash", "Aspect", "Axiom", "Bishop", "Blindside",
+    "Bolt", "Breaker", "Brick", "Cache", "Cadence", "Canto", "Cinder",
+    "Cipher", "Clank", "Cobalt", "Comet", "Crank", "Creed", "Crow",
+    "Dazzle", "Delta", "Dice", "Diesel", "Dirge", "Draft", "Drift",
+    "Echo", "Eclipse", "Edge", "Enigma", "Fade", "Fathom", "Feral",
+    "Fidget", "Flint", "Fracture", "Frost", "Fuse", "Gale", "Gauge",
+    "Ghostlight", "Gimbal", "Glimmer", "Gloam", "Gouge", "Grackle",
+    "Grifter", "Gutter", "Half-Life", "Hallow", "Harrow", "Hatchet",
+    "Havoc", "Haze", "Hex", "Hollow", "Hush", "Ion", "Jackal", "Jinx",
+    "Karma", "Keel", "Kindle", "Knuckle", "Lacuna", "Larkspur", "Latch",
+    "Lattice", "Locus", "Lowdown", "Lynx", "Mantis", "Mercury", "Mirage",
+    "Miter", "Mongoose", "Monsoon", "Moth", "Muffler", "Needle", "Neon",
+    "Nightjar", "Nimble", "Nocturne", "Null", "Ochre", "Onyx", "Oracle",
+    "Osprey", "Paradox", "Parallax", "Patch", "Pewter", "Phantom",
+    "Pincer", "Pivot", "Prism", "Prowl", "Pulse", "Quarrel", "Quartz",
+    "Quicksilver", "Ramble", "Rasp", "Raven", "Razor", "Redline",
+    "Relay", "Requiem", "Ricochet", "Riddle", "Rime", "Ripcord",
+    "Rook", "Rumor", "Rust", "Saffron", "Scatter", "Sepia", "Shale",
+    "Shard", "Shiver", "Signal", "Sixgun", "Sketch", "Slate", "Slink",
+    "Smolder", "Snare", "Solder", "Sonnet", "Spindle", "Splice",
+    "Stanza", "Stiletto", "Strobe", "Switch", "Sythe", "Tangent",
+    "Tarnish", "Tempo", "Tether", "Tinder", "Trace", "Trellis",
+    "Tremor", "Trick", "Umbra", "Undertow", "Valve", "Vandal",
+    "Vapor", "Vector", "Verdict", "Vesper", "Vice", "Vigil", "Volt",
+    "Warden", "Whisper", "Wick", "Widget", "Willow", "Wisp", "Zephyr",
   ];
+
+  // Leet styling: one or two substitutions, applied sparingly so
+  // handles stay readable ("St4tic", not "5747!c").
+  const LEET_MAP = { a: "4", e: "3", i: "1", o: "0", s: "5", t: "7" };
+
+  function leetify(base, rng) {
+    const candidates = [];
+    for (let i = 0; i < base.length; i++) {
+      if (LEET_MAP[base[i].toLowerCase()]) candidates.push(i);
+    }
+    if (candidates.length === 0) return base;
+    const swaps = rng.shuffle(candidates).slice(0, rng.int(1, Math.min(2, candidates.length)));
+    let out = "";
+    for (let i = 0; i < base.length; i++) {
+      out += swaps.indexOf(i) !== -1 ? LEET_MAP[base[i].toLowerCase()] : base[i];
+    }
+    return out;
+  }
+
+  // The universe deals base handles from index-keyed shuffle-bags —
+  // same pattern as site.js's district bags: every consecutive block
+  // of HANDLES.length mints uses every base exactly once.
+  function handleBaseFromIndex(universeSeed, index) {
+    const block = Math.floor(index / HANDLES.length);
+    const order = MJ.makeRNG(universeSeed).fork("handle-bag-" + block).shuffle(HANDLES);
+    return order[index % HANDLES.length];
+  }
+
+  function styleHandle(base, rng) {
+    const styled = rng.chance(0.3) ? leetify(base, rng) : base;
+    const roll = rng.float();
+    if (roll < 0.4) return styled + "_" + rng.int(10, 99);
+    if (roll < 0.6) return styled + rng.int(2, 99);
+    return styled; // bare — the bag already guarantees base uniqueness per block
+  }
   const PERSONALITY_LINES = [
     "Doesn't talk about the last job. Or the one before that.",
     "Chews gum like it owes them money.",
@@ -483,9 +549,11 @@
   }
 
   // ── Identity ───────────────────────────────────────────────────
-  function generateIdentity(rng, metatypeId) {
+  // handleBase comes from the universe bag when minting; bench
+  // generation without one just picks from the pool.
+  function generateIdentity(rng, metatypeId, handleBase) {
     return {
-      handle: rng.pick(HANDLES) + "_" + rng.int(10, 99),
+      handle: styleHandle(handleBase || rng.pick(HANDLES), rng),
       metatype: metatypeId,
       metatypeLabel: METATYPES[metatypeId].label,
       portraitSeed: rng.int(1, 1e9),
@@ -531,7 +599,7 @@
     const skills = generateSkillSpread(r, focus, trueArchetype, skillTiers);
 
     const runner = {
-      identity: generateIdentity(r, metatypeId),
+      identity: generateIdentity(r, metatypeId, options.handleBase),
       classification: {
         family: focus.family,
         focusId: focus.id,
@@ -571,12 +639,15 @@
   // pure function of (universeSeed, index) — lazy, infinite, and
   // identical every time that universe asks.
   function mintRunner(universeSeed, index, options) {
-    const runner = generateRunner(MJ.makeRNG(universeSeed).fork("runner-" + index), options);
+    const opts = Object.assign({}, options, { handleBase: handleBaseFromIndex(universeSeed, index) });
+    const runner = generateRunner(MJ.makeRNG(universeSeed).fork("runner-" + index), opts);
     runner.identity.universeIndex = index;
     return runner;
   }
 
   MJ.SKILLS = SKILLS;
+  MJ.HANDLES = HANDLES;
+  MJ.handleBaseFromIndex = handleBaseFromIndex;
   MJ.mintRunner = mintRunner;
   MJ.METATYPES = METATYPES;
   MJ.FOCUSES = FOCUSES;
