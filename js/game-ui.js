@@ -137,7 +137,9 @@
       const legs = job.missions.map((m, k) => {
         const v = MJ.siteIntelView(m.site, S.day);
         const gated = m.requiresMission ? ` <span class="gated">[gated by leg ${job.missions.indexOf(m.requiresMission) + 1}]</span>` : "";
-        return `<div class="muted">leg ${k + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain}) @ ${siteTag(m.site)}${gated}<br>&nbsp;&nbsp;est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</div>`;
+        return `<div class="muted">leg ${k + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain}) @ ${siteTag(m.site)}${gated}<br>` +
+          (m.site.identity.name ? `&nbsp;&nbsp;<span class="good">"${m.site.identity.name}"</span><br>` : "") +
+          `&nbsp;&nbsp;est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</div>`;
       }).join("");
       return `<div class="card"><div class="head">${job.hiringFaction} — ¥${job.pay} <span class="muted">(rush x${job.rushMultiplier.toFixed(2)}, ${job.daysPerMission}d/leg, expires day ${job.expiryDay})</span>${job.chained ? ' <span class="warn">CHAINED</span>' : ""}</div>${legs}<button class="sm" data-act="accept" data-idx="${i}">Accept</button></div>`;
     }).join("");
@@ -249,6 +251,7 @@
     $("panel-sites").innerHTML = MJ.siteListView(S.knownSites, S.day).map((row, i) => {
       const site = S.knownSites[i];
       return `<div class="row">#${row.universeIndex} <b>${row.district}</b> (${row.owningFaction}) v:${row.value} ${row.orientation} <span class="muted">via ${row.source} d${row.dayKnown}</span>${targetMarks(site)}<br>` +
+        (row.name ? `<span class="good">"${row.name}"</span><br>` : "") +
         `P:${fmtAxis(row.security.physical)} A:${fmtAxis(row.security.astral)} M:${fmtAxis(row.security.matrix)}` +
         (row.tags.length ? ` <span class="muted">[${row.tags.join(", ")}]</span>` : "") + `</div>`;
     }).join("");

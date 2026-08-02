@@ -482,39 +482,103 @@
     };
   }
 
+  // ── Site names: Adverb-Adjective-Noun-NNN ───────────────────────
+  // The what3words idea, weaponized: every site gets a unique
+  // human-memorable name — and the NAME IS THE SEED. A site's
+  // content (value roll, layout, obstacles, resting security)
+  // derives from the name string alone, so
+  // "Beautifully-Quiet-Bicycle-123" is the same building in every
+  // universe that ever names it — only district and owner are
+  // universe-local (the bags above). 64^3 x 1000 ≈ 262M names.
+  const NAME_ADVERBS = [
+    "Absurdly", "Almost", "Awfully", "Badly", "Barely", "Blindly",
+    "Boldly", "Briskly", "Broadly", "Calmly", "Carefully", "Cheaply",
+    "Cleanly", "Clearly", "Coldly", "Crudely", "Curiously", "Daily",
+    "Darkly", "Dearly", "Deeply", "Dimly", "Doubly", "Dryly",
+    "Eagerly", "Early", "Easily", "Evenly", "Exactly", "Faintly",
+    "Fairly", "Fiercely", "Finally", "Firmly", "Fondly", "Freely",
+    "Freshly", "Gently", "Gladly", "Grandly", "Gravely", "Greatly",
+    "Grimly", "Half", "Hardly", "Hastily", "Highly", "Honestly",
+    "Hourly", "Idly", "Justly", "Keenly", "Kindly", "Lately",
+    "Lightly", "Loosely", "Loudly", "Madly", "Mildly", "Mostly",
+    "Nearly", "Neatly", "Newly", "Nicely",
+  ];
+  const NAME_ADJECTIVES = [
+    "Amber", "Ancient", "Ashen", "Bitter", "Bright", "Broken",
+    "Bronze", "Cheerful", "Chilly", "Civil", "Clever", "Cloudy",
+    "Copper", "Crimson", "Crooked", "Curious", "Dusty", "Eager",
+    "Electric", "Elegant", "Faded", "Famous", "Fickle", "Formal",
+    "Fragrant", "Frozen", "Gentle", "Gilded", "Glass", "Golden",
+    "Graceful", "Gray", "Green", "Heavy", "Hidden", "Hollow",
+    "Humble", "Iron", "Ivory", "Jagged", "Jolly", "Lanky",
+    "Lavender", "Little", "Lonely", "Loyal", "Lucky", "Marble",
+    "Mellow", "Misty", "Modest", "Narrow", "Nimble", "Olive",
+    "Patient", "Pearl", "Proud", "Quiet", "Rapid", "Rusty",
+    "Scarlet", "Silent", "Silver", "Velvet",
+  ];
+  const NAME_NOUNS = [
+    "Anchor", "Anthem", "Arrow", "Badger", "Balloon", "Banjo",
+    "Beacon", "Bell", "Bicycle", "Bottle", "Bridge", "Bucket",
+    "Button", "Candle", "Canyon", "Castle", "Chimney", "Compass",
+    "Cricket", "Crown", "Dolphin", "Drum", "Falcon", "Feather",
+    "Fiddle", "Flag", "Fountain", "Garden", "Hammer", "Harbor",
+    "Heron", "Kettle", "Ladder", "Lantern", "Lemon", "Magnet",
+    "Marble", "Mirror", "Mountain", "Needle", "Orchard", "Otter",
+    "Paddle", "Pepper", "Piano", "Pigeon", "Pillar", "Prairie",
+    "Rabbit", "Ribbon", "River", "Rocket", "Saddle", "Sparrow",
+    "Spindle", "Steeple", "Tangerine", "Telescope", "Thimble",
+    "Trumpet", "Tunnel", "Turbine", "Walnut", "Windmill",
+  ];
+
+  function siteNameFromIndex(universeSeed, index) {
+    const rng = MJ.makeRNG(universeSeed).fork("site-name-" + index);
+    const num = String(rng.int(0, 999)).padStart(3, "0");
+    return rng.pick(NAME_ADVERBS) + "-" + rng.pick(NAME_ADJECTIVES) + "-" + rng.pick(NAME_NOUNS) + "-" + num;
+  }
+
   // Mint the universe's site #index. Layout, population, and
   // obstacle rolls all derive from (universeSeed, index) alone —
   // same index, same universe, same site, forever. value/orientation
   // stay caller-supplied where a job's needs dictate them (the
   // request is part of the reveal, not the universe).
-  function mintSite(universeSeed, index, options) {
+  // Core mint: content derives from the NAME string — the name is
+  // the seed. district/faction overrides come last in generateSite's
+  // stream, so overriding them (universe bags) never desyncs the
+  // layout: the same name yields the same building everywhere.
+  function mintSiteNamed(name, options, identityOverride) {
     options = options || {};
-    const identity = siteIdentityFromIndex(universeSeed, index);
-    const rng = MJ.makeRNG(universeSeed).fork("site-" + index);
-    // Only value/orientation may come from the caller (a job's needs)
-    // — district and faction are the bags' business, never overridable,
-    // or the balance guarantee dies quietly.
+    const rng = MJ.makeRNG("site|" + name);
     const site = generateSite(rng, {
-      district: identity.district,
-      faction: identity.owningFaction,
+      district: identityOverride ? identityOverride.district : undefined,
+      faction: identityOverride ? identityOverride.owningFaction : undefined,
       value: options.value,
       orientation: options.orientation,
     });
-    site.identity.universeIndex = index;
-    // The exact request is part of the site's re-mintable identity:
-    // §09 compression stores THESE, not the resulting values —
-    // passing explicit values where none were requested would skip
-    // rolls and desync the layout stream on revival.
+    site.identity.name = name;
     const mintOptions = {};
     if (options.value !== undefined) mintOptions.value = options.value;
     if (options.orientation !== undefined) mintOptions.orientation = options.orientation;
     site.identity.mintOptions = mintOptions;
-    // Resting security posture is universe-fixed ("what kind of
-    // security is currently in it" is pre-determined, §09) — derive
-    // the Min/Current/Max triples from the universe, not from
-    // whichever transient stream first touches the site.
-    MJ.initSecurityState(MJ.makeRNG(universeSeed).fork("site-security-" + index), site);
+    // Resting security posture rides the name too — the same
+    // building is the same nut to crack in every universe.
+    MJ.initSecurityState(MJ.makeRNG("site-security|" + name), site);
     return site;
+  }
+
+  function mintSite(universeSeed, index, options) {
+    // The universe decides WHICH names its indices draw and who owns
+    // the building locally; the name decides everything else.
+    const name = siteNameFromIndex(universeSeed, index);
+    const site = mintSiteNamed(name, options, siteIdentityFromIndex(universeSeed, index));
+    site.identity.universeIndex = index;
+    return site;
+  }
+
+  // Cross-universe recreation: hand any name (with the same mint
+  // options) to get that exact building — district and faction roll
+  // from the name itself since no universe is supplying them.
+  function mintSiteByName(name, options) {
+    return mintSiteNamed(name, options, null);
   }
 
   // ── Every obstacle instance on a site, any slot, any projection ─
@@ -599,7 +663,9 @@
   MJ.deriveSecurity = deriveSecurity;
   MJ.generateSite = generateSite;
   MJ.siteIdentityFromIndex = siteIdentityFromIndex;
+  MJ.siteNameFromIndex = siteNameFromIndex;
   MJ.mintSite = mintSite;
+  MJ.mintSiteByName = mintSiteByName;
   MJ.allObstacles = allObstacles;
   MJ.hasBruteForceOption = hasBruteForceOption;
   MJ.usableNonLoudWays = usableNonLoudWays;

@@ -622,6 +622,22 @@
       check(owners.size >= Math.min(F, 4), "C8: district " + district + " is owned by too few factions (" + owners.size + ") — pairing has locked");
     }
 
+    // Site names: Adverb-Adjective-Noun-NNN, deterministic per
+    // index — and THE NAME IS THE SEED: the same name mints the
+    // same building in any universe (only district/owner are
+    // universe-local, and their picks come after all content rolls
+    // so overriding them never desyncs the layout).
+    const nm = MJ.siteNameFromIndex(U, 5);
+    check(/^[A-Z][a-z]+-[A-Z][a-z]+-[A-Z][a-z]+-\d{3}$/.test(nm), "C8: site name format broken: " + nm);
+    check(nm === MJ.siteNameFromIndex(U, 5), "C8: site name must be deterministic per index");
+    const contentOf = (s) => snap({ v: s.identity.value, o: s.identity.orientation, sec: s.security, st: s.securityState, layout: s.layout, pop: s.population });
+    const viaUniverse = MJ.mintSite(U, 5, { value: 4 });
+    const viaName = MJ.mintSiteByName(nm, { value: 4 });
+    check(viaUniverse.identity.name === nm, "C8: minted site must carry its name");
+    check(contentOf(viaUniverse) === contentOf(viaName), "C8: the name must be the seed — same name, same building, any universe");
+    check(contentOf(viaName) === contentOf(MJ.mintSiteByName(nm, { value: 4 })), "C8: mintSiteByName must be deterministic");
+    check(contentOf(viaName) !== contentOf(MJ.mintSiteByName(MJ.siteNameFromIndex(U, 6), { value: 4 })), "C8: different names must differ");
+
     // Runner handles: the universe deals base names from a bag —
     // within one full block, every base appears exactly once (no
     // "Static_32" + "Static_42" brand confusion), handles are

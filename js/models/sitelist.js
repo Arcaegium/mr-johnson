@@ -72,6 +72,7 @@
   function siteListView(list, day) {
     return list.map((site) => ({
       universeIndex: site.identity.universeIndex !== undefined ? site.identity.universeIndex : null,
+      name: site.identity.name || null,
       district: site.identity.district,
       owningFaction: site.identity.owningFaction,
       value: site.identity.value,
