@@ -842,6 +842,95 @@
     check(b1 !== b2, "C10: two live board refreshes matched exactly (astronomically unlikely — check the wiring)");
   }
 
+  // ── Class 11: the armory ────────────────────────────────────────
+  // Equipment is the operation's second roster: exclusive issue,
+  // best-tool-no-stacking, gear never rescues untrained, cyberware
+  // consumes and spends Essence permanently, crafting yields real
+  // items, and the ledger moves by exact amounts.
+  function class11_armory() {
+    const save = MJ.defaultSave("stress-armory");
+    save.johnson.money = 100000;
+    const rng = MJ.makeRNG("stress-armory");
+    const decker = makeRoster(rng, 1, ["decker"])[0];
+    MJ.watchRunner(decker, rng);
+    MJ.hireRunner(decker, "permanent");
+
+    // Buy: exact delta, item lands unissued.
+    const m0 = save.johnson.money;
+    const buy = MJ.buyItem(save, "deckMk1");
+    check(buy.ok && save.johnson.money === m0 - MJ.itemCost("deckMk1"), "C11: buy must move exactly itemCost");
+    check(save.armory.items.length === 1 && buy.item.issuedTo === null, "C11: bought item must land unissued");
+
+    // Issue: both sides stay consistent; bonus applies; best tool wins.
+    MJ.issueItem(buy.item, decker);
+    check(buy.item.issuedTo === decker && decker.gear.indexOf(buy.item) !== -1, "C11: issue must sync item and carrier");
+    check(MJ.gearBonusFor(decker, "hacking") === 1, "C11: T3 deck must grant +1");
+    const deck2 = MJ.makeItem("deckMk2");
+    save.armory.items.push(deck2);
+    MJ.issueItem(deck2, decker);
+    check(MJ.gearBonusFor(decker, "hacking") === 2, "C11: best tool wins — never stacked (+2, not +3)");
+    check(MJ.gearBonusFor(decker, "sorcery") === 0, "C11: no focus, no bonus");
+
+    // Pool math through resolveTask; untrained never rescued.
+    const eff = MJ.getEffectiveSkills(decker);
+    const ob = { tier: 2, affordances: [{ skill: "hacking", verb: "x", loud: false }] };
+    check(MJ.resolveTask(rng, decker, ob, "hacking", { bonusDice: MJ.gearBonusFor(decker, "hacking") }).poolSize === eff.hacking + 2, "C11: pool must include gear dice");
+    const untrained = Object.keys(eff).find((k) => eff[k] === 0);
+    const obU = { tier: 2, affordances: [{ skill: untrained, verb: "x", loud: false }] };
+    check(MJ.resolveTask(rng, decker, obU, untrained, { bonusDice: 2 }).poolSize === 0, "C11: gear must never rescue untrained");
+
+    // Reissue moves cleanly off the old carrier.
+    const soldier = makeRoster(rng.fork("s"), 1, ["fighter"])[0];
+    MJ.watchRunner(soldier, rng);
+    MJ.hireRunner(soldier, "permanent");
+    MJ.issueItem(buy.item, soldier);
+    check(buy.item.issuedTo === soldier && decker.gear.indexOf(buy.item) === -1, "C11: reissue must leave the old carrier empty-handed");
+
+    // Sell: refused while issued; exact resale once reclaimed.
+    check(MJ.sellItem(save, buy.item).ok === false, "C11: selling issued gear must refuse");
+    MJ.reclaimItem(buy.item);
+    const m1 = save.johnson.money;
+    const sale = MJ.sellItem(save, buy.item);
+    check(sale.ok && save.johnson.money === m1 + Math.round(MJ.itemCost("deckMk1") * 0.4), "C11: resale ratio wrong");
+    check(save.armory.items.indexOf(buy.item) === -1, "C11: sold item must leave the armory");
+
+    // Template crafting yields the real item through the dispatch loop.
+    let crafted = null;
+    for (let i = 0; i < 60 && !crafted; i++) {
+      const doc = MJ.generateRunner(rng.fork("doc" + i), { focusId: "streetDoc" });
+      MJ.watchRunner(doc, rng);
+      MJ.hireRunner(doc, "permanent");
+      const res = MJ.runActionPeriod(rng.fork("cd" + i), [{ mission: MJ.createCraftingMission("medkit"), runners: [doc] }], 1)[0];
+      if (res.success) crafted = res;
+    }
+    check(!!crafted && !!crafted.yield && !!crafted.yield.item && crafted.yield.item.templateId === "medkit", "C11: template crafting must yield the actual item");
+
+    // Cyberware: essence spent exactly, mods live only where trained,
+    // the item is consumed, and the floor holds.
+    const cyber = MJ.makeItem("smartlink");
+    save.armory.items.push(cyber);
+    check(MJ.issueItem(cyber, soldier).ok === false, "C11: cyberware must refuse issue");
+    const effB = MJ.getEffectiveSkills(soldier);
+    const essB = soldier.essence.current;
+    const surgery = MJ.implantSurgery(soldier, cyber, save.armory.items);
+    check(surgery.ok && soldier.essence.current === Math.round((essB - 0.6) * 100) / 100, "C11: surgery must spend exact Essence");
+    check(save.armory.items.indexOf(cyber) === -1, "C11: implant must be consumed");
+    const effA = MJ.getEffectiveSkills(soldier);
+    if (effB.firearms > 0) check(effA.firearms === effB.firearms + 2, "C11: implant skillMod must apply to trained skill");
+    soldier.essence.current = 0.7;
+    const cyber2 = MJ.makeItem("reflexWiring");
+    save.armory.items.push(cyber2);
+    check(MJ.implantSurgery(soldier, cyber2, save.armory.items).ok === false, "C11: Essence floor must hold");
+    check(save.armory.items.indexOf(cyber2) !== -1, "C11: refused surgery must not consume the item");
+
+    // Materials: exact sale, stock zeroed.
+    save.armory.materials["resource:scrap"] = 3;
+    const m2 = save.johnson.money;
+    const matSale = MJ.sellMaterials(save, "resource:scrap");
+    check(matSale.ok && save.johnson.money === m2 + 3 * 150 && save.armory.materials["resource:scrap"] === 0, "C11: material sale must be exact and zero the stock");
+    check(MJ.sellMaterials(save, "resource:scrap").ok === false, "C11: empty stock must refuse");
+  }
+
   // ── Runner ──────────────────────────────────────────────────────
   function runStress() {
     clear();
@@ -860,6 +949,7 @@
       ["8. Universe site registry (lazy, infinite, balanced)", class8_registry],
       ["9. Site list & compression (seeds+deltas, proven live)", class9_sitelist],
       ["10. Integration layer (session commands, expiry teeth)", class10_integration],
+      ["11. Armory (second roster: issue, chrome, craft, ledger)", class11_armory],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

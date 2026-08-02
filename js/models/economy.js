@@ -17,14 +17,16 @@
        slots) should get disproportionately expensive at scale, on
        purpose, matching §01's "gaps grow with scale."
 
+   Also in scope now that the armory exists: gear purchase/resale
+   (itemCost/buyItem/sellItem) and material sales (sellMaterials).
+
    Explicitly OUT of scope — needs a system that doesn't exist yet:
      - Data sales (needs the Matrix pillar's run-yield mechanic).
-     - Loot/gear resale, gear purchase, crafting, consumables restock
-       (all need the armory, not built).
-     - Wound therapy / cyberware surgery cost (needs the healer-mage
-       and Street Doc internal-job flow, not built).
-     - Gear replacement after a wipe (needs mission resolution and
-       the armory both).
+     - Wound therapy / cyberware surgery COST (surgery itself lives
+       in armory.js but charges nothing yet — the Street Doc
+       internal-job flow will price it).
+     - Gear replacement after a wipe (needs wipe outcomes in
+       mission resolution).
 
    NOTE — scale: NUYEN_PER_VALUE and every multiplier below are
    first-pass placeholders (the design bible's own open note flags
@@ -124,6 +126,47 @@
     return { ok: true, cost };
   }
 
+  // ── Gear: buy, resell, and material sales (armory is live) ──────
+  // Costs ride the item tier on the same curve family as everything
+  // else (tier*(tier+1)); resale takes the street's cut. All
+  // placeholder scales, flagged — same shape rule as hiring: gear
+  // must be affordable from job pay at matching rung.
+  const ITEM_COST_SCALE = 150;
+  const ITEM_RESALE_RATIO = 0.4;
+  const MATERIAL_PRICES = { "resource:scrap": 150, "resource:reagents": 250 };
+
+  function itemCost(templateId) {
+    const t = MJ.ITEM_TEMPLATES[templateId];
+    return ITEM_COST_SCALE * t.tier * (t.tier + 1);
+  }
+
+  function buyItem(save, templateId) {
+    const cost = itemCost(templateId);
+    if (!spend(save, cost)) return { ok: false, cost: cost, error: "can't afford it" };
+    const item = MJ.makeItem(templateId);
+    save.armory.items.push(item);
+    return { ok: true, item: item, cost: cost };
+  }
+
+  function sellItem(save, item) {
+    if (item.issuedTo) return { ok: false, error: "reclaim it first — it's in someone's hands" };
+    const i = save.armory.items.indexOf(item);
+    if (i === -1) return { ok: false, error: "not in the armory" };
+    save.armory.items.splice(i, 1);
+    const price = Math.round(itemCost(item.templateId) * ITEM_RESALE_RATIO);
+    earn(save, price);
+    return { ok: true, price: price };
+  }
+
+  function sellMaterials(save, kind) {
+    const amount = (save.armory.materials && save.armory.materials[kind]) || 0;
+    if (amount <= 0) return { ok: false, error: "nothing stocked" };
+    const price = amount * (MATERIAL_PRICES[kind] || 100);
+    save.armory.materials[kind] = 0;
+    earn(save, price);
+    return { ok: true, amount: amount, price: price };
+  }
+
   // ── Board/roster capacity expansion: an increasing cost (§03) ───
   // Reuses runner.js's karmaCost shape (rank*(rank+1)) at a nuyen
   // scale — the same "disproportionately expensive at scale" curve
@@ -148,6 +191,10 @@
   MJ.collectJobPay = collectJobPay;
   MJ.hireCost = hireCost;
   MJ.hireRunnerWithCost = hireRunnerWithCost;
+  MJ.itemCost = itemCost;
+  MJ.buyItem = buyItem;
+  MJ.sellItem = sellItem;
+  MJ.sellMaterials = sellMaterials;
   MJ.expandBoardCapacityCost = expandBoardCapacityCost;
   MJ.expandBoardCapacity = expandBoardCapacity;
 })();

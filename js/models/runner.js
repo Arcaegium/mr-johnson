@@ -443,6 +443,15 @@
     for (const skill of Object.keys(runner.skills)) {
       out[skill] = Math.floor(runner.skills[skill]);
     }
+    // Implant modifiers — the §09 read-time slot, now live (armory).
+    // Chrome augments training, it never substitutes for it: a mod
+    // only applies to a skill with real ranks (same never-rescue-
+    // untrained rule as gear and intel bonuses).
+    for (const implant of runner.implants || []) {
+      for (const skill of Object.keys(implant.skillMods || {})) {
+        if (out[skill] !== undefined && out[skill] > 0) out[skill] += implant.skillMods[skill];
+      }
+    }
     const key = runner.classification.focusKeySkill;
     if (runner.wounds > 0 && out[key] !== undefined) {
       out[key] = Math.max(0, out[key] - runner.wounds);

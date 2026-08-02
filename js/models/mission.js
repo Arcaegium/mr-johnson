@@ -68,10 +68,11 @@
      - Karma formulas (KARMA_PER_SECURITY etc.), the intel bonus
        size, route/recon sample caps, crafting tier: all shape-
        only numbers for tuning later.
-     - Resource yields are returned in the result, stored nowhere
-       (no armory yet). Matrix recon samples hacking/electronics-
-       bearing obstacles (the card-based Matrix pillar isn't
-       built).
+     - Yields are returned in the result; the integration layer
+       stores them (crafted items and harvested materials both
+       land in save.armory). Matrix recon samples hacking/
+       electronics-bearing obstacles (the card-based Matrix pillar
+       isn't built).
 
    Usage:
      MJ.createReconMission(site, "astral");
@@ -117,8 +118,15 @@
     return { kind: "recon", lens: lens, site: site, locationType: "site", resolved: false, karmaAward: null };
   }
 
-  function createCraftingMission(itemTier) {
-    return { kind: "crafting", itemTier: itemTier || DEFAULT_CRAFT_TIER, site: null, locationType: "hub", resolved: false, karmaAward: null };
+  // Two modes: pass a template id string ("medkit") to craft a real
+  // armory item — tier, skill, and the yield all come from the
+  // template — or a bare number (or nothing) for the legacy generic
+  // exercise the bench tests use.
+  function createCraftingMission(templateOrTier) {
+    if (typeof templateOrTier === "string") {
+      return { kind: "crafting", templateId: templateOrTier, site: null, locationType: "hub", resolved: false, karmaAward: null };
+    }
+    return { kind: "crafting", itemTier: templateOrTier || DEFAULT_CRAFT_TIER, site: null, locationType: "hub", resolved: false, karmaAward: null };
   }
 
   // A treatment session: the medic's mission, the patient's day on
@@ -245,8 +253,11 @@
     for (const a of obstacle.affordances) {
       if (!a.skill || a.blocked) continue;
       for (const runner of runners) {
-        const pool = MJ.getEffectiveSkills(runner)[a.skill] || 0;
-        if (pool <= 0) continue;
+        const trained = MJ.getEffectiveSkills(runner)[a.skill] || 0;
+        if (trained <= 0) continue;
+        // Issued gear counts toward who's actually best equipped for
+        // this — the smartgun can flip which approach the crew takes.
+        const pool = trained + MJ.gearBonusFor(runner, a.skill);
         const cand = { runner: runner, skill: a.skill, loud: a.loud, pool: pool };
         if (!best) best = cand;
         else if (best.loud && !cand.loud) best = cand;
@@ -286,14 +297,16 @@
         tasks.push({ obstacle: obstacle.label, tier: obstacle.tier, result: "no usable approach — stalled" });
         continue;
       }
-      const outcome = MJ.resolveTask(rng, approach.runner, obstacle, approach.skill, { bonusDice: bonusDice });
+      const outcome = MJ.resolveTask(rng, approach.runner, obstacle, approach.skill, {
+        bonusDice: bonusDice + MJ.gearBonusFor(approach.runner, approach.skill),
+      });
       if (approach.loud) anyLoud = true;
       if (outcome.glitch) anyGlitch = true;
       if (outcome.criticalGlitch) approach.runner.wounds += 1; // placeholder wound rule
       if (!outcome.success) failed = true;
       tasks.push({
         obstacle: obstacle.label, tier: obstacle.tier,
-        runner: approach.runner.identity.handle, skill: approach.skill,
+        runner: approach.runner.identity.handle, skill: approach.skill, pool: outcome.poolSize,
         loud: approach.loud, hits: outcome.hits, threshold: outcome.threshold,
         success: outcome.success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch,
       });
@@ -356,25 +369,29 @@
   const CRAFTING_SKILLS = ["computer", "electronics", "rigging", "enchanting", "medicine"];
 
   function resolveCraftingMission(rng, mission, runners) {
-    // The crafter rolls their best trade skill against a flat tier —
-    // reusing resolveTask via a pseudo-obstacle so the dice rules
-    // stay in one place.
+    // Template mode crafts a REAL armory item: the template dictates
+    // the trade skill and the difficulty tier, and success yields an
+    // instance (the integration layer stores it). Legacy mode keeps
+    // the old best-of-trades generic exercise for the bench.
+    const template = mission.templateId ? MJ.ITEM_TEMPLATES[mission.templateId] : null;
+    const skills = template ? [template.craftSkill] : CRAFTING_SKILLS;
     let bestRunner = runners[0];
-    let bestSkill = CRAFTING_SKILLS[0];
+    let bestSkill = skills[0];
     let bestPool = -1;
     for (const runner of runners) {
       const eff = MJ.getEffectiveSkills(runner);
-      for (const skill of CRAFTING_SKILLS) {
-        if ((eff[skill] || 0) > bestPool) {
-          bestPool = eff[skill] || 0;
+      for (const skill of skills) {
+        const pool = (eff[skill] || 0) + MJ.gearBonusFor(runner, skill);
+        if (pool > bestPool) {
+          bestPool = pool;
           bestRunner = runner;
           bestSkill = skill;
         }
       }
     }
-    const tier = mission.itemTier || DEFAULT_CRAFT_TIER;
+    const tier = template ? template.tier : (mission.itemTier || DEFAULT_CRAFT_TIER);
     const pseudo = { tier: tier, affordances: [{ skill: bestSkill, verb: "craft", loud: false }] };
-    const outcome = MJ.resolveTask(rng, bestRunner, pseudo, bestSkill);
+    const outcome = MJ.resolveTask(rng, bestRunner, pseudo, bestSkill, { bonusDice: MJ.gearBonusFor(bestRunner, bestSkill) });
     const success = outcome.success;
     let karmaAward = 0;
     if (success) {
@@ -383,10 +400,11 @@
       mission.resolved = true;
       mission.karmaAward = karmaAward;
     }
+    const label = template ? `${template.label} (T${tier})` : `item T${tier}`;
     return {
       kind: "crafting", success: success, karmaAward: karmaAward,
-      tasks: [{ obstacle: `workbench (item T${tier})`, tier: tier, runner: bestRunner.identity.handle, skill: bestSkill, hits: outcome.hits, threshold: outcome.threshold, success: success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch }],
-      yield: success ? { kind: "craftedItem", amount: 1 } : undefined,
+      tasks: [{ obstacle: `workbench — ${label}`, tier: tier, runner: bestRunner.identity.handle, skill: bestSkill, pool: outcome.poolSize, hits: outcome.hits, threshold: outcome.threshold, success: success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch }],
+      yield: success ? (template ? { item: MJ.makeItem(mission.templateId) } : { kind: "craftedItem", amount: 1 }) : undefined,
     };
   }
 
@@ -408,8 +426,9 @@
     for (const runner of runners) {
       const eff = MJ.getEffectiveSkills(runner);
       for (const skill of MEDICAL_SKILLS) {
-        if ((eff[skill] || 0) > bestPool) {
-          bestPool = eff[skill] || 0;
+        const pool = (eff[skill] || 0) + MJ.gearBonusFor(runner, skill);
+        if (pool > bestPool) {
+          bestPool = pool;
           bestRunner = runner;
           bestSkill = skill;
         }
@@ -418,7 +437,7 @@
     const essenceSpent = Math.max(0, patient.essence.max - patient.essence.current);
     const tier = Math.max(1, Math.min(10, patient.wounds + Math.floor(essenceSpent)));
     const pseudo = { tier: tier, affordances: [{ skill: bestSkill, verb: "treat", loud: false }] };
-    const outcome = MJ.resolveTask(rng, bestRunner, pseudo, bestSkill);
+    const outcome = MJ.resolveTask(rng, bestRunner, pseudo, bestSkill, { bonusDice: MJ.gearBonusFor(bestRunner, bestSkill) });
     let karmaAward = 0;
     if (outcome.success) {
       patient.wounds -= 1;

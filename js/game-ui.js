@@ -56,7 +56,11 @@
   function actionOptions(locValue) {
     const acts = [];
     if (locValue === "hub") {
-      acts.push({ v: "craft", label: "Craft (item T3)" });
+      for (const id of Object.keys(MJ.ITEM_TEMPLATES)) {
+        const t = MJ.ITEM_TEMPLATES[id];
+        if (t.category === "cyberware") continue; // buy-only in v1
+        acts.push({ v: "craft:" + id, label: `Craft — ${t.label} (T${t.tier}, ${t.craftSkill})` });
+      }
       S.roster.forEach((r, i) => {
         if (r.wounds > 0 && r.market.hired) acts.push({ v: "treat:" + i, label: `Medicae — treat ${r.identity.handle} (${r.wounds} wound${r.wounds > 1 ? "s" : ""})` });
       });
@@ -88,7 +92,10 @@
     const act = $("action-select") ? $("action-select").value : null;
     if (!loc || !act) return null;
     if (loc === "hub") {
-      if (act === "craft") return { mission: MJ.createCraftingMission(3), label: "craft (T3)" };
+      if (act.indexOf("craft:") === 0) {
+        const tpl = act.split(":")[1];
+        return { mission: MJ.createCraftingMission(tpl), label: "craft " + MJ.ITEM_TEMPLATES[tpl].label };
+      }
       if (act.indexOf("treat:") === 0) {
         const p = S.roster[+act.split(":")[1]];
         return { mission: MJ.createMedicalMission(p), label: "treat " + p.identity.handle };
@@ -143,10 +150,13 @@
   function runnerCard(r) {
     const a = r.attributes;
     const c = r.classification;
-    const skills = Object.entries(r.skills)
+    // Effective at read time (§09): base + implants − wounds — the
+    // dossier shows what they can actually do today.
+    const eff = MJ.getEffectiveSkills(r);
+    const skills = Object.entries(eff)
       .filter(([, v]) => v > 0)
       .sort((x, y) => y[1] - x[1])
-      .map(([k, v]) => `${k}:${Math.floor(v)}`)
+      .map(([k, v]) => `${k}:${v}`)
       .join("  ");
     // Class first, in teal ("Enchanting Mage"); the market's
     // Generalist/Specialist claim follows in gray (user ruling).
@@ -156,9 +166,14 @@
     const trade = c.focusLabel.toLowerCase() === c.family.toLowerCase()
       ? famNoun
       : `${c.focusLabel} ${famNoun}`;
+    const kit = [
+      ...(r.gear || []).map((g) => g.label + " T" + g.tier),
+      ...(r.implants || []).map((im) => "⟨" + im.label + "⟩"),
+    ];
     return `<b>${r.identity.handle}</b> — <span class="good">${trade}</span> <span class="muted">· ${MJ.describeDiscipline(r)} · ${r.identity.metatypeLabel}, ${c.origin}${c.deckerAffinity ? " · " + c.deckerAffinity : ""}</span><br>` +
       `<span class="muted">B${a.body} A${a.agility} W${a.willpower} I${a.intelligence} C${a.charisma}${a.magic ? " M" + a.magic : ""} · ess ${a.magic || c.origin === "cyber" ? r.essence.current + "/" + r.essence.max : r.essence.current}</span><br>` +
-      `<span class="muted">${skills || "no visible skills"}</span>`;
+      `<span class="muted">${skills || "no visible skills"}</span>` +
+      (kit.length ? `<br><span class="muted">kit: ${kit.join(", ")}</span>` : "");
   }
 
   function rosterRow(r, i) {
@@ -287,6 +302,41 @@
       `<div class="muted" style="margin-top:6px">Queue resolves top-to-bottom, one action per runner per day. Recon first pays: fresh intel = +1 die at that site.</div>`;
   }
 
+  // ── The armory: the operation's second roster ───────────────────
+  function renderArmory() {
+    const items = S.save.armory.items;
+    const crew = S.roster.map((r, i) => ({ r: r, i: i })).filter((x) => x.r.market.hired);
+    const crewOpts = crew.map((x) => `<option value="${x.i}">${x.r.identity.handle}</option>`).join("");
+    const rows = items.map((item, i) => {
+      const t = MJ.ITEM_TEMPLATES[item.templateId];
+      const isCyber = t.category === "cyberware";
+      const effect = isCyber
+        ? Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + ` · −${t.essenceCost} ess`
+        : `+${MJ.gearBonusForTier(item.tier)}d ${t.skill}`;
+      const holder = item.issuedTo ? ` — <span class="good">with ${item.issuedTo.identity.handle}</span>` : ' — <span class="muted">in storage</span>';
+      const controls = crew.length
+        ? (isCyber
+            ? `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="implant-item" data-idx="${i}">implant</button>`
+            : `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="issue-item" data-idx="${i}">issue</button>` +
+              (item.issuedTo ? ` <button class="sm" data-act="reclaim-item" data-idx="${i}">reclaim</button>` : ""))
+        : '<span class="muted">hire someone first</span>';
+      const sell = !item.issuedTo ? ` <button class="sm" data-act="sell-item" data-idx="${i}">sell ¥${Math.round(MJ.itemCost(item.templateId) * 0.4)}</button>` : "";
+      return `<div class="row">${item.label} (T${item.tier}) <span class="muted">${effect}</span>${holder}<br>${controls}${sell}</div>`;
+    }).join("") || '<span class="muted">The racks are empty — buy below, or craft at the Hub.</span>';
+    const mats = Object.entries(S.save.armory.materials || {}).filter(([, n]) => n > 0).map(([k, n]) =>
+      `<div class="row">${k.replace("resource:", "")} x${n} <button class="sm" data-act="sell-mats" data-kind="${k}">sell all</button></div>`).join("");
+    const shop = Object.keys(MJ.ITEM_TEMPLATES).map((id) => {
+      const t = MJ.ITEM_TEMPLATES[id];
+      const effect = t.category === "cyberware"
+        ? Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + `, −${t.essenceCost} ess (implant)`
+        : `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}`;
+      return `<button class="sm" data-act="buy-item" data-tpl="${id}" title="${effect}">${t.label} ¥${MJ.itemCost(id)}</button>`;
+    }).join(" ");
+    $("panel-armory").innerHTML = rows +
+      (mats ? `<div class="good" style="margin-top:8px">MATERIALS</div>${mats}` : "") +
+      `<div class="good" style="margin-top:8px">GEAR SHOP <span class="muted" style="text-transform:none;letter-spacing:0">(hover for effect)</span></div><div style="line-height:2.4">${shop}</div>`;
+  }
+
   function renderLog() {
     const el = $("panel-log");
     el.textContent = S.log.slice(-80).join("\n");
@@ -300,6 +350,7 @@
     renderContracts();
     renderRoster();
     renderMarket();
+    renderArmory();
     renderSites();
     renderDispatch();
     renderLog();
@@ -328,6 +379,18 @@
     else if (action === "unwatch") MJ.game.unwatch(S, S.roster[+el.dataset.ridx]);
     else if (action === "repeat-plan") MJ.game.repeatLastPlan(S);
     else if (action === "repeat-one") MJ.game.repeatOne(S, idx);
+    else if (action === "buy-item") MJ.game.buyGear(S, el.dataset.tpl);
+    else if (action === "sell-item") MJ.game.sellGear(S, S.save.armory.items[idx]);
+    else if (action === "reclaim-item") MJ.game.issueGear(S, S.save.armory.items[idx], null);
+    else if (action === "issue-item" || action === "implant-item") {
+      const sel = document.querySelector('.armory-sel[data-item="' + idx + '"]');
+      const runner = sel && sel.value !== "" ? S.roster[+sel.value] : null;
+      if (runner) {
+        if (action === "issue-item") MJ.game.issueGear(S, S.save.armory.items[idx], runner);
+        else MJ.game.implantGear(S, S.save.armory.items[idx], runner);
+      }
+    }
+    else if (action === "sell-mats") MJ.game.sellStock(S, el.dataset.kind);
     else if (action === "queue-up") MJ.game.moveQueued(S, idx, -1);
     else if (action === "queue-down") MJ.game.moveQueued(S, idx, 1);
     else if (action === "queue-del") MJ.game.unqueue(S, idx);

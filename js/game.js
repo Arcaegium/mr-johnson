@@ -227,6 +227,52 @@
     return { ok: true, site: site };
   }
 
+  // ── The armory: buy, sell, issue, implant ───────────────────────
+  function buyGear(session, templateId) {
+    const result = MJ.buyItem(session.save, templateId);
+    logLine(session, result.ok
+      ? "bought " + result.item.label + " (T" + result.item.tier + ") for " + result.cost
+      : "purchase refused (" + MJ.ITEM_TEMPLATES[templateId].label + ") — " + result.error);
+    return result;
+  }
+
+  function sellGear(session, item) {
+    const result = MJ.sellItem(session.save, item);
+    logLine(session, result.ok
+      ? "sold " + item.label + " for " + result.price
+      : "sale refused (" + item.label + ") — " + result.error);
+    return result;
+  }
+
+  function issueGear(session, item, runner) {
+    if (!runner) {
+      MJ.reclaimItem(item);
+      logLine(session, item.label + " reclaimed to the armory");
+      return { ok: true };
+    }
+    const result = MJ.issueItem(item, runner);
+    logLine(session, result.ok
+      ? item.label + " issued to " + runner.identity.handle
+      : "issue refused — " + result.error);
+    return result;
+  }
+
+  function implantGear(session, item, runner) {
+    const result = MJ.implantSurgery(runner, item, session.save.armory.items);
+    logLine(session, result.ok
+      ? item.label + " implanted into " + runner.identity.handle + " (essence now " + runner.essence.current + ") — it's not coming back out"
+      : "surgery refused (" + runner.identity.handle + ") — " + result.error);
+    return result;
+  }
+
+  function sellStock(session, kind) {
+    const result = MJ.sellMaterials(session.save, kind);
+    logLine(session, result.ok
+      ? "sold " + result.amount + "x " + kind.replace("resource:", "") + " for " + result.price
+      : "no " + kind.replace("resource:", "") + " to sell");
+    return result;
+  }
+
   // ── The dispatch queue ──────────────────────────────────────────
   function jobOfMission(session, mission) {
     return session.jobs.find((j) => j.missions.indexOf(mission) !== -1) || null;
@@ -286,12 +332,23 @@
       // what's actually guarding the place.
       for (const t of res.tasks || []) {
         logLine(session, t.runner
-          ? "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.loud ? ", LOUD" : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" : t.glitch ? " + glitch" : "")
+          ? "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" : t.glitch ? " + glitch" : "")
           : "    " + t.obstacle + " T" + t.tier + ": " + t.result);
       }
       if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
       if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);
-      if (res.yield) logLine(session, "  yield: " + res.yield.kind + " x" + res.yield.amount + " (no armory yet — logged only)");
+      if (res.yield) {
+        if (res.yield.item) {
+          session.save.armory.items.push(res.yield.item);
+          logLine(session, "  crafted: " + res.yield.item.label + " (T" + res.yield.item.tier + ") — in the armory");
+        } else if (res.yield.kind && res.yield.kind.indexOf("resource:") === 0) {
+          const mats = session.save.armory.materials;
+          mats[res.yield.kind] = (mats[res.yield.kind] || 0) + res.yield.amount;
+          logLine(session, "  stored: " + res.yield.kind.replace("resource:", "") + " x" + res.yield.amount + " (stock now " + mats[res.yield.kind] + ")");
+        } else {
+          logLine(session, "  yield: " + res.yield.kind + " x" + res.yield.amount);
+        }
+      }
       for (const c of res.contractEvents || []) {
         if (c.event === "contractCompleted") logLine(session, "  " + c.runner + "'s contract block is used up — back on the shelf");
       }
@@ -437,6 +494,11 @@
     makeSearchMission: makeSearchMission,
     repeatLastPlan: repeatLastPlan,
     repeatOne: repeatOne,
+    buyGear: buyGear,
+    sellGear: sellGear,
+    issueGear: issueGear,
+    implantGear: implantGear,
+    sellStock: sellStock,
     queueDispatch: queueDispatch,
     unqueue: unqueue,
     moveQueued: moveQueued,

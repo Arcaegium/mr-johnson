@@ -5,15 +5,15 @@
    version stamped from day one so future shape changes have
    something to migrate from.
 
-   Only `meta` is genuinely wired up right now. The roster/market
-   (models/market.js), job (models/job.js), and economy
-   (models/economy.js) systems all exist and are independently
-   verified, but nothing yet writes their results into `roster`,
-   `market`, or `world` below — there's no integration layer calling
-   watchRunner/generateBoard/etc. and persisting the result. The
-   armory doesn't exist at all yet. The shape is the bible's own
-   §09 spec either way, so wiring these up later populates fields
-   that already exist rather than changing the top-level schema.
+   Only `meta` is genuinely wired up to IndexedDB right now. The
+   integration layer (game.js) holds a live session — roster,
+   market, known sites, jobs, and a real armory (game.js writes
+   crafted items and harvested materials into `armory` below) —
+   but full session serialization to disk is still the flagged
+   v0.5 follow-up: site/mission object graphs need their
+   compressSite-style record forms first. The shape is the bible's
+   own §09 spec either way, so finishing persistence populates
+   fields that already exist rather than changing the schema.
 
    Usage:
      const state = MJ.defaultSave(rootSeed);
@@ -47,7 +47,7 @@
       meta: { schemaVersion: SCHEMA_VERSION, currentDay: 1, rootSeed: rootSeed },
       johnson: { money: 0, reputation: 0, hubUpgrades: [], boardCapacity: 4 },
       roster: { watchedRunners: [], contracts: [] },
-      armory: { items: [], craftQueue: [] },
+      armory: { items: [], craftQueue: [], materials: {} }, // materials: harvested stock, keyed "resource:kind"
       market: { unwatchedSlots: [] },     // seeds only — §03/§09
       world: { sitePool: [], activeJobs: [] },
     };
