@@ -85,7 +85,16 @@
   // CONTRACT_MISSIONS), so pricing is per-mission by construction:
   // freelance buys exactly one at market price, retainer buys the
   // block at a discount, permanent is the lump-sum buyout.
-  const NUYEN_PER_VALUE = 50;       // computePrice's karma-cost scale -> nuyen
+  // Playtest-recalibrated (v0 round 2): at 50, one freelance dispatch
+  // (~3-7K) cost more than most whole safe-rung jobs paid — the loop
+  // could not sustain itself at any skill level. At 12, a rookie
+  // freelance dispatch runs ~700-1700, a retainer block ~2500-6000
+  // (~500-1200/mission — planning pays), a permanent ~7-17K. Still a
+  // placeholder SHAPE, tuned against job.js's NUYEN_PER_MISSION_VALUE
+  // — the two dials must move together: a safe job must be able to
+  // out-earn the dispatches it takes at matching rung, or the game
+  // is arithmetic-dead on arrival.
+  const NUYEN_PER_VALUE = 12;       // computePrice's karma-cost scale -> nuyen
   const RETAINER_DISCOUNT = 0.7;    // "a contracted block... at a discount off current price"
   const PERMANENT_MULTIPLIER = 10;  // "a lump sum relative to current price"
 

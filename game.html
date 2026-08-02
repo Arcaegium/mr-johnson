@@ -15,26 +15,27 @@
       <div class="controls" style="margin-top:10px">
         <input type="text" id="universe-seed" placeholder="universe seed (blank = fresh entropy)" />
         <button data-act="new-game">New Game</button>
-        <button data-act="refresh-board">Refresh Board</button>
         <button data-act="expand-capacity">Expand Capacity</button>
-        <select id="discover-kind"><option value="scrap">scrap yard</option><option value="reagents">reagent grove</option></select>
-        <button data-act="discover">Discover Site</button>
         <button data-act="end-day" style="border-color: var(--accent); color: var(--accent)">End Day &raquo;</button>
       </div>
     </header>
 
+    <!-- The log IS the game's feedback channel right now — biggest,
+         first, full width (playtest ruling). -->
+    <div class="panel" style="margin-bottom:14px"><h2>Log — the street talks</h2><div id="panel-log" class="game-log log-top"></div></div>
+
     <div class="panels">
       <div>
-        <div class="panel"><h2>Job Board</h2><div id="panel-board"></div></div>
-        <div class="panel" style="margin-top:14px"><h2>Known Sites</h2><div id="panel-sites"></div></div>
+        <div class="panel"><h2>Active Contracts</h2><div id="panel-contracts"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Job Board <button class="sm" data-act="refresh-board">refresh</button></h2><div id="panel-board"></div></div>
       </div>
       <div>
         <div class="panel"><h2>Roster</h2><div id="panel-roster"></div></div>
-        <div class="panel" style="margin-top:14px"><h2>Runner Market</h2><div id="panel-market"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Runner Market <button class="sm" data-act="refresh-market">refresh</button></h2><div id="panel-market"></div></div>
       </div>
       <div>
         <div class="panel"><h2>Dispatch — today's queue</h2><div id="panel-dispatch"></div></div>
-        <div class="panel" style="margin-top:14px"><h2>Log</h2><div id="panel-log" class="game-log"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Known Sites</h2><div id="panel-sites"></div></div>
       </div>
     </div>
   </div>

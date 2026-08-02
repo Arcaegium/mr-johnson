@@ -764,13 +764,74 @@
     check(MJ.game.queueDispatch(s3, j3.missions[0], [s3.roster[0]]).ok === false, "C10: expired contract legs must refuse queuing");
     check(s3.board.every((e) => s3.day <= e.job.expiryDay), "C10: expired offers must leave the board");
 
-    // Watch capacity is the §03 cap.
+    // Split caps: watch list is wider than the crew (watch = 2x
+    // boardCapacity, hired <= boardCapacity).
     const s4 = MJ.game.newGame("itest-cap");
     const rng4 = MJ.makeRNG("itest-cap-flow");
-    for (let i = 0; i < s4.save.johnson.boardCapacity; i++) {
-      check(MJ.game.watchFromMarket(s4, 0, rng4.fork("w" + i)).ok, "C10: watch under capacity refused");
+    s4.save.johnson.money = 500000;
+    const watchCap = MJ.game.watchCapacity(s4);
+    check(watchCap > s4.save.johnson.boardCapacity, "C10: watch capacity must exceed crew capacity");
+    for (let i = 0; i < watchCap; i++) {
+      check(MJ.game.watchFromMarket(s4, 0, rng4.fork("w" + i)).ok, "C10: watch under capacity refused (i=" + i + ")");
     }
     check(MJ.game.watchFromMarket(s4, 0, rng4.fork("wx")).ok === false, "C10: watch beyond capacity must refuse");
+    for (let i = 0; i < s4.save.johnson.boardCapacity; i++) {
+      check(MJ.game.hire(s4, s4.roster[i], "freelance").ok, "C10: hire under crew cap refused (i=" + i + ")");
+    }
+    check(MJ.game.hire(s4, s4.roster[s4.save.johnson.boardCapacity], "freelance").ok === false, "C10: hire beyond crew cap must refuse");
+    check(MJ.game.hiredCount(s4) === s4.save.johnson.boardCapacity, "C10: hired count wrong after cap test");
+
+    // Queue-time double-booking refusal: one action per runner per
+    // day is enforced when the PLAN is made, not just at resolution.
+    const q1 = MJ.game.queueDispatch(s4, MJ.createCraftingMission(2), [s4.roster[0]], "craft A");
+    check(q1.ok, "C10: first queue refused");
+    const q2 = MJ.game.queueDispatch(s4, MJ.createCraftingMission(2), [s4.roster[0]], "craft B");
+    check(q2.ok === false && q2.error.indexOf("already committed") !== -1, "C10: double-booking a runner must refuse at queue time");
+    s4.queue = [];
+
+    // Market refresh: new faces, same slot count, indices advance.
+    const beforeCount = s4.market.length;
+    const beforeFaces = snap(s4.market.map((r) => r.identity.universeIndex));
+    const beforeMint = s4.runnerMintIndex;
+    MJ.game.refreshMarket(s4);
+    check(s4.market.length === beforeCount && s4.runnerMintIndex > beforeMint, "C10: market refresh must keep slot count and advance the mint");
+    check(snap(s4.market.map((r) => r.identity.universeIndex)) !== beforeFaces, "C10: market refresh left the same crowd");
+
+    // Round-4 mechanics: contract numbering, search-as-dispatch,
+    // interaction-confirmed intel, and plan repetition.
+    const s6 = MJ.game.newGame("itest-round4");
+    const rng6 = MJ.makeRNG("itest-round4-flow");
+    s6.save.johnson.money = 500000;
+    MJ.game.refreshBoard(s6, rng6.fork("b"));
+    MJ.game.acceptJob(s6, 0);
+    MJ.game.acceptJob(s6, 0);
+    check(s6.jobs[0].contractNumber === 1 && s6.jobs[1].contractNumber === 2, "C10: contracts must number by acceptance order");
+    MJ.game.watchFromMarket(s6, 0, rng6.fork("w"));
+    const searcher = s6.roster[0];
+    MJ.game.hire(s6, searcher, "freelance");
+    const knownBefore = s6.knownSites.length;
+    check(MJ.game.queueDispatch(s6, MJ.game.makeSearchMission(s6, "scrap"), [searcher], "search: scrap").ok, "C10: search queue refused");
+    MJ.game.endDay(s6, rng6.fork("d1"));
+    check(s6.knownSites.length === knownBefore + 1, "C10: search must discover and register a site");
+    check(searcher.market.hired === null, "C10: search must consume the freelance block");
+    const found = s6.knownSites[s6.knownSites.length - 1];
+    check(!!found.estimatedSecurity && found.knownMeta.source === "discovery", "C10: a discovered site must carry an estimate and provenance");
+    MJ.game.watchFromMarket(s6, 0, rng6.fork("w2"));
+    const worker = s6.roster[1];
+    MJ.game.hire(s6, worker, "permanent");
+    MJ.game.queueDispatch(s6, MJ.createResourceMission(found), [worker], "harvest");
+    const day2 = MJ.game.endDay(s6, rng6.fork("d2"));
+    if (day2[0].obstaclesFaced > 0) {
+      const lenses = Object.keys(found.intel);
+      check(lenses.length > 0, "C10: a run that faced obstacles must confirm intel by interaction");
+      check(lenses.every((l) => found.intel[l].dayTaken === 2), "C10: interaction intel must stamp the mission day");
+    }
+    const rep = MJ.game.repeatLastPlan(s6);
+    check(rep.ok === true, "C10: repeat refused outright");
+    if (MJ.isDispatchable(worker)) {
+      check(s6.queue.length === 1 && s6.queue[0].label === "harvest", "C10: repeat should requeue the harvest with the same label");
+    }
+    s6.queue = [];
 
     // Layer 3 sanity: two live (timestamped) refreshes differ.
     const s5 = MJ.game.newGame("itest-arrivals");

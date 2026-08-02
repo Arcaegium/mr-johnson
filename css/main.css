@@ -122,7 +122,9 @@ button:hover { background: var(--accent-2); color: var(--bg); }
 .panel h2 {
   font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--accent-2); margin: 0 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center;
 }
+.log-top { height: 280px; font-size: 13px; }
 .card { border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; }
 .card .head { color: var(--accent); }
 .row { padding: 6px 0; border-bottom: 1px dotted var(--line); }
@@ -142,5 +144,14 @@ select, input.sm {
 }
 .queue-item { display: flex; gap: 6px; align-items: center; padding: 4px 0; }
 .checks label { color: var(--ink); display: inline-block; margin-right: 10px; }
+.checks input[type="checkbox"] { accent-color: var(--accent-2); }
+/* An assigned runner's box keeps its checkmark but reads "turned
+   off" — filled with the panel border color, not backlit. */
+.checks input[type="checkbox"]:disabled {
+  accent-color: var(--line);
+  opacity: 1;
+  filter: none;
+}
+option.jobopt { color: #d4735e; }
 a.navlink { color: var(--accent-2); text-decoration: none; letter-spacing: 0.06em; }
 a.navlink:hover { text-decoration: underline; }

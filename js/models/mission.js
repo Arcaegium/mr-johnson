@@ -131,6 +131,28 @@
     return { kind: "resourceGathering", site: site, locationType: "site", resolved: false, karmaAward: null };
   }
 
+  // Search: the discovery legwork is itself a dispatch (user ruling
+  // — "Search / Scrap" sits beside "Recon / Astral" on the menu).
+  // The actual minting is the integration layer's business, so the
+  // mission carries an onResolve callback (game.js closes it over
+  // the session). v0: a search always pans out — a real
+  // search-quality roll is future work, flagged.
+  function createSearchMission(searchKind, onResolve) {
+    return { kind: "search", searchKind: searchKind, site: null, locationType: "streets", resolved: false, karmaAward: null, onResolve: onResolve };
+  }
+
+  function resolveSearchMission(rng, mission, runners) {
+    const karmaAward = SUPPORT_KARMA_RATE; // tiny flat legwork award
+    for (const runner of runners) MJ.growRunner(runner, karmaAward, rng);
+    mission.resolved = true;
+    mission.karmaAward = karmaAward;
+    const discovered = mission.onResolve ? mission.onResolve(rng) : null;
+    return {
+      kind: "search", success: true, karmaAward: karmaAward, tasks: [],
+      discovered: discovered ? { universeIndex: discovered.identity.universeIndex, district: discovered.identity.district } : null,
+    };
+  }
+
   // Player-initiated site discovery (§06): finding a thematically
   // appropriate spot — out in nature for reagents, a scrap yard for
   // parts. Discovered sites are real sites like any other; once
@@ -283,18 +305,31 @@
     // all-quiet success lands zero Alert — the ghost run.
     const hit = MJ.recordHit(state, { loud: anyLoud || !success, glitch: anyGlitch });
 
+    // Interaction confirms security (user ruling): a crew that comes
+    // home knows what it actually touched — success OR failure, a
+    // completed attempt is a fresh, day-stamped confirmed read on
+    // every axis it interacted with. Faced obstacles confirm their
+    // projection; working a deck (hacking) confirms matrix; a recon
+    // sweep confirms its own lens once it faced anything at all.
+    const confirmedAxes = new Set(obstacles.map((o) => o.projection));
+    if (tasks.some((t) => t.skill === "hacking")) confirmedAxes.add("matrix");
+    if (kind === "recon" && (success || obstacles.length > 0)) confirmedAxes.add(mission.lens);
+    for (const axis of confirmedAxes) {
+      if (axis !== "physical" && axis !== "astral" && axis !== "matrix") continue;
+      site.intel[axis] = {
+        snapshot: {
+          security: { physical: start.physical, astral: start.astral, matrix: start.matrix },
+          alert: state.alert,
+          obstaclesSeen: tasks.map((t) => t.obstacle),
+        },
+        dayTaken: day,
+      };
+    }
+
     let karmaAward = 0;
     if (success) {
       if (kind === "recon") {
         karmaAward = Math.max(1, Math.round(RECON_KARMA_PER_SECURITY * start[mission.lens]));
-        site.intel[mission.lens] = {
-          snapshot: {
-            security: { physical: start.physical, astral: start.astral, matrix: start.matrix },
-            alert: state.alert,
-            obstaclesSeen: tasks.map((t) => t.obstacle),
-          },
-          dayTaken: day,
-        };
       } else {
         const avg = (start.physical + start.astral + start.matrix) / 3;
         karmaAward = Math.max(1, Math.round(KARMA_PER_SECURITY * avg));
@@ -472,7 +507,9 @@
         ? resolveCraftingMission(rng, d.mission, crew)
         : kind === "medical"
           ? resolveMedicalMission(rng, d.mission, crew)
-          : resolveSiteMission(rng, d.mission, crew, day);
+          : kind === "search"
+            ? resolveSearchMission(rng, d.mission, crew)
+            : resolveSiteMission(rng, d.mission, crew, day);
       result.crew = crew.map((r) => r.identity.handle);
       result.contractEvents = contractEvents;
       results.push(result);
@@ -486,6 +523,7 @@
   MJ.createCraftingMission = createCraftingMission;
   MJ.createMedicalMission = createMedicalMission;
   MJ.createResourceMission = createResourceMission;
+  MJ.createSearchMission = createSearchMission;
   MJ.generateSecurityEstimate = generateSecurityEstimate;
   MJ.siteIntelView = siteIntelView;
   MJ.discoverResourceSite = discoverResourceSite;

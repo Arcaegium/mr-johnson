@@ -450,11 +450,22 @@
     return out;
   }
 
+  // The market's claim line. A "Specialist" claim names the SKILL
+  // the runner supposedly concentrates in — their top visible skill,
+  // which is the market's read of them (user ruling: "Specialist:
+  // Detection" on a Detection mage named the class, not a
+  // specialization). Naming the top visible skill also resolves the
+  // mismatch case for free: a hype-labeled generalist's claim still
+  // points at whatever they happen to be best at.
   function describeDiscipline(runner) {
     const c = runner.classification;
-    return c.disciplineLabel === "specialist"
-      ? `Specialist: ${c.focusLabel}`
-      : "Generalist";
+    if (c.disciplineLabel !== "specialist") return "Generalist";
+    const eff = getEffectiveSkills(runner);
+    let top = null;
+    for (const k of Object.keys(eff)) {
+      if (top === null || eff[k] > eff[top]) top = k;
+    }
+    return "Specialist (" + top + ")";
   }
 
   // ── Decker affinity (a tilt on the one archetype, §04) ────────
@@ -536,10 +547,10 @@
         // Shelf-life / Working / OutOfTown / KIA state machine (§03,
         // implemented in models/market.js). `phase` only means
         // something once state === "watched"; an unwatched runner
-        // just ticks hiddenShelfDaysRemaining down to zero and is
+        // just ticks shelfDaysRemaining down to zero and is
         // gone, no phase involved.
         phase: null, // null | "available" | "working" | "outOfTown" | "kia"
-        hiddenShelfDaysRemaining: r.int(3, 14),
+        shelfDaysRemaining: r.int(3, 14),
       },
     };
 

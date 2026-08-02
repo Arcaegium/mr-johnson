@@ -45,6 +45,19 @@
 
   const STARTING_MONEY = 25000; // placeholder stake, not calibrated
   const MARKET_SLOTS = 8;
+  // The watch list is deliberately wider than the crew (user ruling):
+  // watching is scouting the market, hiring is commitment. Both caps
+  // ride boardCapacity so the one expansion sink lifts everything —
+  // the ratio is a placeholder dial.
+  const WATCH_CAP_MULTIPLIER = 2;
+
+  function watchCapacity(session) {
+    return session.save.johnson.boardCapacity * WATCH_CAP_MULTIPLIER;
+  }
+
+  function hiredCount(session) {
+    return session.roster.filter((r) => r.market.hired).length;
+  }
 
   // Layer 4: fresh entropy, never replayable.
   function liveRNG() {
@@ -67,8 +80,10 @@
       siteMintIndex: 0,
       knownSites: [],
       jobs: [],          // accepted contracts (active, completed, failed)
+      contractCounter: 0, // contracts number by acceptance order — "Job #3"
       board: [],         // current offers [{job, siteResults}]
       queue: [],         // today's planned dispatches [{mission, runners, label}]
+      lastPlan: null,    // yesterday's queue, as replayable specs (repeatLastPlan)
       log: [],
     };
     session.save = MJ.defaultSave(session.universeSeed);
@@ -101,21 +116,30 @@
     return session.board;
   }
 
+  // New faces: the current crowd moves on, the next indices mint in.
+  function refreshMarket(session) {
+    session.market = [];
+    fillMarket(session);
+    logLine(session, "market refreshed — new faces (the old ones moved on)");
+    return session.market;
+  }
+
   function acceptJob(session, boardIndex) {
     const entry = session.board[boardIndex];
     if (!entry) return { ok: false, error: "no such offer" };
     session.board.splice(boardIndex, 1);
+    entry.job.contractNumber = ++session.contractCounter;
     session.jobs.push(entry.job);
     for (const m of entry.job.missions) {
       MJ.addKnownSite(session.knownSites, m.site, session.day, "job");
     }
-    logLine(session, "ACCEPTED: " + entry.job.hiringFaction + " contract — " + entry.job.missions.length + " leg(s), pay " + entry.job.pay + ", expires day " + entry.job.expiryDay + (entry.job.chained ? " (CHAINED)" : ""));
+    logLine(session, "ACCEPTED Job #" + entry.job.contractNumber + " — " + entry.job.hiringFaction + ", " + entry.job.missions.length + " leg(s), pay " + entry.job.pay + ", expires day " + entry.job.expiryDay + (entry.job.chained ? " (CHAINED)" : ""));
     return { ok: true, job: entry.job };
   }
 
   // ── Roster & market ─────────────────────────────────────────────
   function watchFromMarket(session, marketIndex, rngOverride) {
-    if (session.roster.length >= session.save.johnson.boardCapacity) {
+    if (session.roster.length >= watchCapacity(session)) {
       return { ok: false, error: "watch list is full — expand board capacity" };
     }
     const runner = session.market[marketIndex];
@@ -129,6 +153,11 @@
   }
 
   function hire(session, runner, tier) {
+    if (!runner.market.hired && hiredCount(session) >= session.save.johnson.boardCapacity) {
+      const result = { ok: false, error: "crew is full — release someone or expand capacity" };
+      logLine(session, "hire refused for " + runner.identity.handle + " — " + result.error);
+      return result;
+    }
     const result = MJ.hireRunnerWithCost(session.save, runner, tier);
     logLine(session, result.ok
       ? "hired " + runner.identity.handle + " (" + tier + ") for " + result.cost
@@ -157,7 +186,7 @@
     }
     runner.market.state = "unwatched";
     runner.market.phase = null;
-    runner.market.hiddenShelfDaysRemaining = (rngOverride || liveRNG()).int(3, 14);
+    runner.market.shelfDaysRemaining = (rngOverride || liveRNG()).int(3, 14);
     session.market.push(runner);
     logLine(session, "unwatched " + runner.identity.handle + " — back into the crowd");
     return { ok: true };
@@ -180,8 +209,14 @@
     return { ok: true, watched: site.knownMeta.watched };
   }
 
-  // v0: discovery is a free menu action, flagged — making it a real
-  // dispatch is future work.
+  // Search is a real dispatch (user ruling, "Search / Scrap" on the
+  // action menu): the mission carries a callback that mints and
+  // registers the find when it resolves — the runner spends their
+  // action and contract mission on the legwork.
+  function makeSearchMission(session, kind) {
+    return MJ.createSearchMission(kind, (rng) => discoverResource(session, kind, rng).site);
+  }
+
   function discoverResource(session, kind, rngOverride) {
     const orientation = kind === "reagents" ? "astral" : "physical";
     const site = MJ.mintSite(session.universeSeed, session.siteMintIndex++, { orientation: orientation });
@@ -203,6 +238,19 @@
     if (mission.resolved) return { ok: false, error: "that objective is already done" };
     const job = jobOfMission(session, mission);
     if (job && job.expired) return { ok: false, error: "that contract's window has closed" };
+    // One action per runner per period is a hard rule — refuse an
+    // impossible plan at queue time instead of silently dropping
+    // people at resolution (playtest round 3).
+    const committed = new Set();
+    for (const q of session.queue) {
+      for (const r of q.runners) committed.add(r);
+      if (q.mission.patient) committed.add(q.mission.patient);
+    }
+    const clash = runners.find((r) => committed.has(r));
+    if (clash) return { ok: false, error: clash.identity.handle + " is already committed today — one action per runner per day" };
+    if (mission.patient && committed.has(mission.patient)) {
+      return { ok: false, error: mission.patient.identity.handle + " is already committed today and can't also be on the table" };
+    }
     session.queue.push({ mission: mission, runners: runners.slice(), label: label || MJ.missionKind(mission) });
     return { ok: true };
   }
@@ -233,7 +281,16 @@
           (res.karmaAward ? " (+" + res.karmaAward + " karma each)" : "") +
           (res.noise && res.noise.ratcheted ? " — the site RATCHETED its security" : ""));
       }
+      // The full readout, roll by roll — the opponent's numbers are
+      // information too, and a failed run is still a fresh read on
+      // what's actually guarding the place.
+      for (const t of res.tasks || []) {
+        logLine(session, t.runner
+          ? "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.loud ? ", LOUD" : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" : t.glitch ? " + glitch" : "")
+          : "    " + t.obstacle + " T" + t.tier + ": " + t.result);
+      }
       if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
+      if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);
       if (res.yield) logLine(session, "  yield: " + res.yield.kind + " x" + res.yield.amount + " (no armory yet — logged only)");
       for (const c of res.contractEvents || []) {
         if (c.event === "contractCompleted") logLine(session, "  " + c.runner + "'s contract block is used up — back on the shelf");
@@ -279,8 +336,74 @@
       return true;
     });
 
+    // Keep the day's plan as replayable SPECS — the intent, never the
+    // dice (layer 4 stays fresh on every attempt, by design).
+    session.lastPlan = session.queue.map((q) => {
+      const m = q.mission;
+      return {
+        kind: MJ.missionKind(m), label: q.label, runners: q.runners.slice(),
+        mission: MJ.missionKind(m) === "jobObjective" ? m : null,
+        site: m.site || null, lens: m.lens || null,
+        itemTier: m.itemTier || null, patient: m.patient || null,
+        searchKind: m.searchKind || null,
+      };
+    });
+
     session.queue = [];
     return results;
+  }
+
+  // ── Repeat yesterday's plan: replay the INTENT against today ────
+  // Same objectives, same crews — validated against the current
+  // state (resolved legs, dead contracts, unavailable runners get
+  // skipped with a log line) and rolled on fresh dice like any
+  // other day. Recreating player decisions, never outcomes.
+  function repeatPlanEntry(session, p) {
+    const crew = p.runners.filter((r) => MJ.isDispatchable(r));
+    if (crew.length === 0) {
+      logLine(session, "repeat: skipped \"" + p.label + "\" — nobody from that crew is dispatchable");
+      return { ok: false, error: "no dispatchable crew" };
+    }
+    let mission = null;
+    if (p.kind === "jobObjective") {
+      mission = p.mission && !p.mission.resolved ? p.mission : null;
+      if (mission) {
+        const job = jobOfMission(session, mission);
+        if (job && (job.expired || job.paid)) mission = null;
+      }
+    } else if (p.kind === "recon") mission = MJ.createReconMission(p.site, p.lens);
+    else if (p.kind === "resourceGathering") mission = MJ.createResourceMission(p.site);
+    else if (p.kind === "crafting") mission = MJ.createCraftingMission(p.itemTier);
+    else if (p.kind === "medical") mission = p.patient && p.patient.wounds > 0 ? MJ.createMedicalMission(p.patient) : null;
+    else if (p.kind === "search") mission = makeSearchMission(session, p.searchKind);
+    if (!mission) {
+      logLine(session, "repeat: skipped \"" + p.label + "\" — no longer applicable");
+      return { ok: false, error: "no longer applicable" };
+    }
+    const res = queueDispatch(session, mission, crew, p.label);
+    if (!res.ok) logLine(session, "repeat: skipped \"" + p.label + "\" — " + res.error);
+    return res;
+  }
+
+  // Requeue ONE dispatch from yesterday — the repeat unit is the
+  // individual play, not the whole day, once the player runs
+  // parallel operations (user ruling).
+  function repeatOne(session, index) {
+    const p = session.lastPlan && session.lastPlan[index];
+    if (!p) return { ok: false, error: "no such play in yesterday's plan" };
+    return repeatPlanEntry(session, p);
+  }
+
+  function repeatLastPlan(session) {
+    if (!session.lastPlan || session.lastPlan.length === 0) {
+      return { ok: false, error: "no previous plan to repeat" };
+    }
+    let queued = 0;
+    for (const p of session.lastPlan) {
+      if (repeatPlanEntry(session, p).ok) queued += 1;
+    }
+    logLine(session, "repeated yesterday's plan — " + queued + " of " + session.lastPlan.length + " dispatch(es) re-queued");
+    return { ok: true, queued: queued };
   }
 
   // ── UI helper: what can be dispatched right now ─────────────────
@@ -300,6 +423,9 @@
   MJ.game = {
     newGame: newGame,
     refreshBoard: refreshBoard,
+    refreshMarket: refreshMarket,
+    watchCapacity: watchCapacity,
+    hiredCount: hiredCount,
     acceptJob: acceptJob,
     watchFromMarket: watchFromMarket,
     hire: hire,
@@ -308,6 +434,9 @@
     expandCapacity: expandCapacity,
     toggleWatchSite: toggleWatchSite,
     discoverResource: discoverResource,
+    makeSearchMission: makeSearchMission,
+    repeatLastPlan: repeatLastPlan,
+    repeatOne: repeatOne,
     queueDispatch: queueDispatch,
     unqueue: unqueue,
     moveQueued: moveQueued,

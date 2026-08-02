@@ -179,8 +179,14 @@
   // contains, which is the actual mechanism for job pay scaling
   // without bound (§06) — never any single mission's site Value,
   // which stays capped at 10 forever.
+  // Playtest-recalibrated (v0 round 2) alongside economy.js's
+  // NUYEN_PER_VALUE — see the note there; the pair is what makes a
+  // safe job coverable by a small crew's dispatch costs with margin
+  // for a failure or two, while stretch legs fund permanents.
+  const NUYEN_PER_MISSION_VALUE = 600;
+
   function estimateMissionPay(rng, value) {
-    return Math.round(value * 100 * rng.range(0.85, 1.15));
+    return Math.round(value * NUYEN_PER_MISSION_VALUE * rng.range(0.85, 1.15));
   }
 
   // ── One mission: the actual dispatch unit ───────────────────────

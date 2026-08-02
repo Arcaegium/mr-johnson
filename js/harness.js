@@ -362,7 +362,7 @@
     log("");
 
     MJ.watchRunner(runner, rng);
-    log(`watched. state:${runner.market.state} phase:${runner.market.phase} shelfDays:${runner.market.hiddenShelfDaysRemaining}`);
+    log(`watched. state:${runner.market.state} phase:${runner.market.phase} shelfDays:${runner.market.shelfDaysRemaining}`);
     log("");
 
     let day = 1;

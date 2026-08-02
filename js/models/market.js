@@ -59,7 +59,7 @@
     if (runner.market.phase === "kia") return runner;
     runner.market.state = "watched";
     runner.market.phase = "available";
-    runner.market.hiddenShelfDaysRemaining = rng.int(3, 14);
+    runner.market.shelfDaysRemaining = rng.int(3, 14);
     return runner;
   }
 
@@ -109,7 +109,7 @@
     if (hired.missionsRemaining <= 0) {
       runner.market.hired = null;
       runner.market.phase = "available";
-      runner.market.hiddenShelfDaysRemaining = rng.int(3, 14);
+      runner.market.shelfDaysRemaining = rng.int(3, 14);
       return { event: "contractCompleted" };
     }
     return { event: "consumed", missionsRemaining: hired.missionsRemaining };
@@ -119,7 +119,7 @@
     runner.market.hired = null;
     if (runner.market.phase === "kia") return runner; // terminal stays terminal
     runner.market.phase = "available";
-    runner.market.hiddenShelfDaysRemaining = rng.int(3, 14);
+    runner.market.shelfDaysRemaining = rng.int(3, 14);
     return runner;
   }
 
@@ -143,8 +143,8 @@
     }
 
     if (m.state === "unwatched") {
-      m.hiddenShelfDaysRemaining -= 1;
-      if (m.hiddenShelfDaysRemaining <= 0) {
+      m.shelfDaysRemaining -= 1;
+      if (m.shelfDaysRemaining <= 0) {
         return { event: "unwatchedExpired" }; // caller replaces this slot
       }
       return { event: "none" };
@@ -155,8 +155,8 @@
       return { event: "kia" }; // terminal — nothing changes again
     }
 
-    m.hiddenShelfDaysRemaining -= 1;
-    if (m.hiddenShelfDaysRemaining > 0) {
+    m.shelfDaysRemaining -= 1;
+    if (m.shelfDaysRemaining > 0) {
       return { event: "none" };
     }
 
@@ -166,7 +166,7 @@
         return { event: "kia" };
       }
       m.phase = rng.chance(0.5) ? "working" : "outOfTown";
-      m.hiddenShelfDaysRemaining = rng.int(2, 10);
+      m.shelfDaysRemaining = rng.int(2, 10);
       return { event: m.phase };
     }
 
@@ -174,7 +174,7 @@
     // the shelf with a fresh Available window before anything rolls
     // again.
     m.phase = "available";
-    m.hiddenShelfDaysRemaining = rng.int(3, 14);
+    m.shelfDaysRemaining = rng.int(3, 14);
     return { event: "returnedAvailable" };
   }
 
