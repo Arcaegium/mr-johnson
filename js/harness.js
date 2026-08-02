@@ -713,6 +713,94 @@
     log(`operation: money ${save.johnson.money}   reputation ${save.johnson.reputation}`);
   }
 
+  // ── P1 — the site list: known sites, watching, compression ─────
+  function fmtIntelAxis(v) {
+    return v.confirmed
+      ? `${v.confirmed.value} CONFIRMED d${v.confirmed.dayTaken}${v.confirmed.fresh ? "" : " (stale)"}`
+      : `~${v.estimated}`;
+  }
+
+  function testSiteList() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const universe = seed + "-universe";
+    const rng = MJ.makeRNG(seed + "-sitelist");
+    log("SEED: " + seed + "   universe: " + universe);
+    log("");
+
+    // Three sites enter the player's world: two via jobs, one found
+    // while looking for scrap.
+    const list = [];
+    const siteA = MJ.mintSite(universe, 0, { value: 2 });
+    const siteB = MJ.mintSite(universe, 1, { value: 3, orientation: "matrix" });
+    const siteC = MJ.mintSite(universe, 2, {});
+    for (const [s, src] of [[siteA, "job"], [siteB, "job"], [siteC, "discovery"]]) {
+      MJ.generateSecurityEstimate(rng.fork("est-" + s.identity.universeIndex), s);
+      MJ.addKnownSite(list, s, 1, src);
+    }
+    MJ.watchSite(siteB);
+    log("KNOWN SITES (day 1) — estimates only, nothing scouted yet:");
+    for (const row of MJ.siteListView(list, 1)) {
+      log(`  #${row.universeIndex} ${row.district} (${row.owningFaction})  v:${row.value} ${row.orientation}  ${row.watched ? "[WATCHED] " : ""}via ${row.source}  P:${fmtIntelAxis(row.security.physical)}  A:${fmtIntelAxis(row.security.astral)}  M:${fmtIntelAxis(row.security.matrix)}`);
+    }
+    log("");
+
+    // Recon the watched site; the list view flips estimate -> confirmed.
+    const scout = MJ.generateRunner(rng.fork("scout"), { family: "decker" });
+    MJ.watchRunner(scout, rng);
+    MJ.hireRunner(scout, "permanent");
+    let reconOk = false;
+    for (let day = 2; day <= 6 && !reconOk; day++) {
+      const r = MJ.runActionPeriod(rng, [{ mission: MJ.createReconMission(siteB, "matrix"), runners: [scout] }], day)[0];
+      if (r.success) {
+        reconOk = true;
+        log(`day ${day}: matrix recon of watched site #1 SUCCEEDS`);
+        const row = MJ.siteListView(list, day).find((x) => x.universeIndex === 1);
+        log(`  list now shows:  M:${fmtIntelAxis(row.security.matrix)}   (P/A still estimates: P:${fmtIntelAxis(row.security.physical)} A:${fmtIntelAxis(row.security.astral)})`);
+        const laterRow = MJ.siteListView(list, day + 9).find((x) => x.universeIndex === 1);
+        log(`  nine days later, unrefreshed:  M:${fmtIntelAxis(laterRow.security.matrix)}`);
+      }
+    }
+    if (!reconOk) log("(recon kept failing this seed — estimates stay estimates until it lands)");
+    log("");
+
+    // The watch feed: boards keep rolling; when a contract touches a
+    // watched site, it surfaces.
+    let feedHit = null;
+    let boardsRolled = 0;
+    for (let i = 0; i < 40 && !feedHit; i++) {
+      boardsRolled++;
+      const board = MJ.generateBoard(rng.fork("board-" + i), list, 10, 4);
+      const hits = MJ.jobsAtWatchedSites(board.map((e) => e.job), list);
+      if (hits.length > 0) feedHit = hits[0];
+    }
+    if (feedHit) {
+      log(`WATCH FEED (after ${boardsRolled} board refreshes): contract touching watched site #${feedHit.site.identity.universeIndex}!`);
+      log(`  ${feedHit.job.hiringFaction} wants ${MJ.OBJECTIVE_VERBS[feedHit.mission.objectiveVerb].label} (${feedHit.mission.payloadDomain}) there — leg ${feedHit.legIndex + 1} of ${feedHit.job.missions.length}, pay ~${feedHit.job.pay}`);
+    } else {
+      log(`WATCH FEED: no contract touched the watched site in ${boardsRolled} refreshes (reuse dice — rerun)`);
+    }
+    log("");
+
+    // Compression: the runner asymmetry, applied to sites.
+    log("COMPRESSION (§09 — the save grows with attachment, not time):");
+    const rec = MJ.compressSite(siteC);
+    log(`  site #2 (discovered, untouched): compressible -> ${rec !== null ? "YES" : "NO (bug!)"}   record: ${JSON.stringify(rec)}`);
+    const revived = JSON.stringify(MJ.reviveSite(universe, rec));
+    const original = JSON.parse(JSON.stringify(siteC));
+    if (original.securityState) original.securityState.quietDays = 0; // transient pacing, normalized on revival
+    log(`  revive round-trip byte-identical: ${revived === JSON.stringify(original) ? "YES" : "NO (bug!)"}`);
+    log(`  site #1 (watched + intel): compressible -> ${MJ.isSiteCompressible(siteB) ? "YES (bug!)" : "NO — attachment persists"}`);
+    const crew2 = MJ.generateRunner(rng.fork("hitter"), { family: "fighter" });
+    MJ.watchRunner(crew2, rng);
+    MJ.hireRunner(crew2, "permanent");
+    MJ.runActionPeriod(rng, [{ mission: MJ.createResourceMission(siteA), runners: [crew2] }], 8);
+    log(`  site #0 after taking a hit (alert ${siteA.securityState.alert}): compressible -> ${MJ.isSiteCompressible(siteA) ? "YES (bug!)" : "NO — hot sites don't compress"}`);
+    let coolDays = 0;
+    while (siteA.securityState.alert > 0 && coolDays++ < 20) MJ.advanceSiteDay(siteA.securityState);
+    log(`  after ${coolDays} quiet day(s) (alert ${siteA.securityState.alert}): compressible -> ${MJ.isSiteCompressible(siteA) ? "YES — cooled sites compress again" : "NO (still escalated — Current above Min sticks around longer)"}`);
+  }
+
   // ── P0.5/P0.6 — day clock + IndexedDB save, kept as real,
   // persistent state across button clicks (not a scripted one-shot
   // demo) — this is what "roll the day" and "save and reload" are
@@ -780,6 +868,7 @@
     document.getElementById("btn-economy").addEventListener("click", testEconomy);
     document.getElementById("btn-alert").addEventListener("click", testAlert);
     document.getElementById("btn-dispatch").addEventListener("click", testDispatch);
+    document.getElementById("btn-sitelist").addEventListener("click", testSiteList);
     document.getElementById("btn-new-game").addEventListener("click", newGame);
     document.getElementById("btn-roll-day").addEventListener("click", rollDay);
     document.getElementById("btn-reload-save").addEventListener("click", reloadSave);

@@ -630,6 +630,157 @@
     check(!(block0 === block1 && block1 === block2), "C8: the bag deals a fixed rotation — reshuffle per block is broken");
   }
 
+  // ── Class 9: site list & compression ────────────────────────────
+  // The §09 seeds+deltas promise, proven live: an untouched known
+  // site compresses to a bare record and revives byte-identical;
+  // every kind of attachment or heat blocks compression.
+  function class9_sitelist() {
+    const U = "stress-list-universe";
+    const rngE = MJ.makeRNG("stress-list");
+
+    // Round-trip across every mint-option shape, including "no
+    // options at all" (rolls must resync on revival).
+    let roundTrips = 0;
+    for (let i = 0; i < 60; i++) {
+      const opts = i % 3 === 0 ? {} : i % 3 === 1 ? { value: 1 + (i % 10) } : { value: 1 + (i % 10), orientation: MJ.ORIENTATIONS[i % 4] };
+      const site = MJ.mintSite(U, i, opts);
+      MJ.generateSecurityEstimate(rngE.fork("e" + i), site);
+      MJ.addKnownSite([], site, 3, "job");
+      const rec = MJ.compressSite(site);
+      if (!check(rec !== null, "C9: untouched minted site must be compressible (i=" + i + ")")) continue;
+      const revived = snap(MJ.reviveSite(U, rec));
+      const norm = JSON.parse(snap(site));
+      if (norm.securityState) norm.securityState.quietDays = 0; // transient cooldown pacing, normalized
+      check(revived === snap(norm), "C9: compress->revive round-trip diverged (i=" + i + ")");
+      roundTrips += 1;
+    }
+    check(roundTrips >= 60, "C9: round-trip probe incomplete (" + roundTrips + "/60)");
+
+    // Every attachment/heat gate must block compression.
+    let gi = 500;
+    function gate(label, mutate) {
+      const s = MJ.mintSite(U, gi++, {});
+      MJ.generateSecurityEstimate(rngE.fork("g" + gi), s);
+      MJ.addKnownSite([], s, 1, "job");
+      mutate(s);
+      check(!MJ.isSiteCompressible(s), "C9: " + label + " must block compression");
+    }
+    gate("watching", (s) => MJ.watchSite(s));
+    gate("a tag", (s) => s.tags.push({ tag: "x", expiryDay: 9 }));
+    gate("intel", (s) => { s.intel.astral = { snapshot: {}, dayTaken: 1 }; });
+    gate("heat (alert)", (s) => { s.securityState.alert = 2; });
+    gate("escalated posture", (s) => { const a = s.securityState.axes.physical; a.min = 1; a.current = 2; a.max = Math.max(a.max, 3); });
+    gate("grown Max", (s) => { s.securityState.everGrew = true; });
+    const pre = MJ.generateSite(MJ.makeRNG("stress-preregistry"));
+    check(!MJ.isSiteCompressible(pre), "C9: a pre-registry site (no universeIndex) must never claim compressibility");
+
+    // Cooling restores compressibility.
+    const hot = MJ.mintSite(U, 900, {});
+    MJ.generateSecurityEstimate(rngE.fork("hot"), hot);
+    MJ.addKnownSite([], hot, 1, "job");
+    hot.securityState.alert = 2;
+    check(!MJ.isSiteCompressible(hot), "C9: hot site compressed");
+    MJ.advanceSiteDay(hot.securityState);
+    MJ.advanceSiteDay(hot.securityState);
+    check(MJ.isSiteCompressible(hot), "C9: cooled site must compress again");
+
+    // The watch feed matches by mission site, and only for watched.
+    const list = [];
+    const w = MJ.addKnownSite(list, MJ.mintSite(U, 901, {}), 1, "job");
+    const other = MJ.addKnownSite(list, MJ.mintSite(U, 902, {}), 1, "job");
+    MJ.watchSite(w);
+    const fakeJobs = [
+      { hiringFaction: "X", missions: [{ site: other }, { site: w }] },
+      { hiringFaction: "Y", missions: [{ site: other }] },
+    ];
+    const hits = MJ.jobsAtWatchedSites(fakeJobs, list);
+    check(hits.length === 1 && hits[0].legIndex === 1 && hits[0].site === w, "C9: watch feed matched wrong");
+
+    // De-dupe: adding the same universe index twice keeps one entry.
+    const dupList = [];
+    MJ.addKnownSite(dupList, MJ.mintSite(U, 903, {}), 1, "job");
+    MJ.addKnownSite(dupList, MJ.mintSite(U, 903, {}), 5, "discovery");
+    check(dupList.length === 1 && dupList[0].knownMeta.dayKnown === 1, "C9: duplicate universe index must not double-list");
+  }
+
+  // ── Class 10: the integration layer (game.js) ───────────────────
+  // The session commands, driven with injected rng: deterministic
+  // when injected, expiry teeth real, capacity enforced, registry
+  // sites flowing through the board, arrivals genuinely ephemeral.
+  function class10_integration() {
+    function playScript(tag) {
+      const s = MJ.game.newGame("itest-universe");
+      const rng = MJ.makeRNG("itest-flow");
+      MJ.game.refreshBoard(s, rng.fork("board"));
+      check(s.board.length === s.save.johnson.boardCapacity, "C10: board size must equal capacity" + tag);
+      // §06's rung deal: a rookie board must always contain
+      // attemptable work — at least two all-safe-band contracts.
+      const safeJobs = s.board.filter((e) => e.job.missions.every((m) => m.site.identity.value <= 3)).length;
+      check(safeJobs >= 2, "C10: board deal must guarantee the safe rung (got " + safeJobs + ")" + tag);
+      MJ.game.watchFromMarket(s, 0, rng.fork("w0"));
+      MJ.game.watchFromMarket(s, 0, rng.fork("w1"));
+      const a = s.roster[0];
+      const b = s.roster[1];
+      MJ.game.hire(s, a, "retainer");
+      MJ.game.hire(s, b, "retainer");
+      MJ.game.acceptJob(s, 0);
+      const job = s.jobs[0];
+      check(s.knownSites.length >= 1 && s.knownSites.every((x) => x.estimatedSecurity && x.knownMeta), "C10: accepted sites must be known, with estimates" + tag);
+      check(s.knownSites.every((x) => x.identity.universeIndex !== undefined), "C10: introduced sites must come from the registry" + tag);
+      for (let d = 0; d < 14 && !MJ.isJobComplete(job) && !job.expired; d++) {
+        for (const r of [a, b]) if (!r.market.hired && MJ.isHireable(r)) MJ.game.hire(s, r, "freelance");
+        const target = job.missions.find((m) => !m.resolved && (!m.requiresMission || m.requiresMission.resolved));
+        if (target && MJ.isDispatchable(a)) {
+          check(MJ.game.queueDispatch(s, target, [a, b].filter(MJ.isDispatchable), "leg").ok, "C10: legal queue refused" + tag);
+        }
+        MJ.game.endDay(s, rng.fork("day" + d));
+      }
+      return {
+        s: s, job: job,
+        snapshot: snap({
+          day: s.day, money: s.save.johnson.money, rep: s.save.johnson.reputation,
+          roster: s.roster, known: s.knownSites.length, mint: [s.runnerMintIndex, s.siteMintIndex],
+          jobs: s.jobs.map((j) => ({ paid: !!j.paid, expired: !!j.expired, resolved: j.missions.map((m) => m.resolved) })),
+          log: s.log,
+        }),
+      };
+    }
+    const r1 = playScript(" (run 1)");
+    const r2 = playScript(" (run 2)");
+    check(r1.snapshot === r2.snapshot, "C10: identical command script + injected rng must byte-match");
+    if (r1.job.paid) check(r1.s.save.johnson.reputation >= 1, "C10: paid job without reputation");
+
+    // Expiry teeth: an untouched contract fails at its window, its
+    // legs refuse queuing forever after, and dead offers leave the board.
+    const s3 = MJ.game.newGame("itest-expiry");
+    const rng3 = MJ.makeRNG("itest-expiry-flow");
+    MJ.game.refreshBoard(s3, rng3.fork("board"));
+    MJ.game.acceptJob(s3, 0);
+    const j3 = s3.jobs[0];
+    for (let d = 0; s3.day <= j3.expiryDay + 1; d++) MJ.game.endDay(s3, rng3.fork("d" + d));
+    check(j3.expired === true && !j3.paid, "C10: an untouched contract must fail at its window, unpaid");
+    MJ.game.watchFromMarket(s3, 0, rng3.fork("w"));
+    MJ.game.hire(s3, s3.roster[0], "freelance");
+    check(MJ.game.queueDispatch(s3, j3.missions[0], [s3.roster[0]]).ok === false, "C10: expired contract legs must refuse queuing");
+    check(s3.board.every((e) => s3.day <= e.job.expiryDay), "C10: expired offers must leave the board");
+
+    // Watch capacity is the §03 cap.
+    const s4 = MJ.game.newGame("itest-cap");
+    const rng4 = MJ.makeRNG("itest-cap-flow");
+    for (let i = 0; i < s4.save.johnson.boardCapacity; i++) {
+      check(MJ.game.watchFromMarket(s4, 0, rng4.fork("w" + i)).ok, "C10: watch under capacity refused");
+    }
+    check(MJ.game.watchFromMarket(s4, 0, rng4.fork("wx")).ok === false, "C10: watch beyond capacity must refuse");
+
+    // Layer 3 sanity: two live (timestamped) refreshes differ.
+    const s5 = MJ.game.newGame("itest-arrivals");
+    MJ.game.refreshBoard(s5);
+    const b1 = snap(s5.board.map((e) => e.job.pay + "|" + e.job.hiringFaction));
+    MJ.game.refreshBoard(s5);
+    const b2 = snap(s5.board.map((e) => e.job.pay + "|" + e.job.hiringFaction));
+    check(b1 !== b2, "C10: two live board refreshes matched exactly (astronomically unlikely — check the wiring)");
+  }
+
   // ── Runner ──────────────────────────────────────────────────────
   function runStress() {
     clear();
@@ -646,6 +797,8 @@
       ["6. Aliasing safety (shared refs share on purpose only)", class6_aliasing],
       ["7. Randomized soak", class7_soak],
       ["8. Universe site registry (lazy, infinite, balanced)", class8_registry],
+      ["9. Site list & compression (seeds+deltas, proven live)", class9_sitelist],
+      ["10. Integration layer (session commands, expiry teeth)", class10_integration],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

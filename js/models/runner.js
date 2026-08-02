@@ -546,7 +546,18 @@
     return runner;
   }
 
+  // ── The universe runner registry (§09 layer 1) ─────────────────
+  // Same pattern as site.js's mintSite: runner #N of a universe is a
+  // pure function of (universeSeed, index) — lazy, infinite, and
+  // identical every time that universe asks.
+  function mintRunner(universeSeed, index, options) {
+    const runner = generateRunner(MJ.makeRNG(universeSeed).fork("runner-" + index), options);
+    runner.identity.universeIndex = index;
+    return runner;
+  }
+
   MJ.SKILLS = SKILLS;
+  MJ.mintRunner = mintRunner;
   MJ.METATYPES = METATYPES;
   MJ.FOCUSES = FOCUSES;
   MJ.focusById = focusById;

@@ -145,7 +145,13 @@
   const REUSE_RATIO = 0.4; // tuning dial, per the bible's own language
   const CHAINED_JOB_CHANCE = 0.35; // share of multi-mission contracts that are order-gated chains (placeholder)
 
-  function matchSite(rng, sitePool, tierId, orientation, excludeFaction) {
+  // siteProvider (optional): { mint(value, orientation) } — the
+  // integration layer passes one backed by the universe registry
+  // (site.js's mintSite + a saved counter), so introduced sites are
+  // universe-fixed buildings and only the CONTRACT is timestamped.
+  // Without a provider (tests, bench), sites generate off the
+  // passed rng as before.
+  function matchSite(rng, sitePool, tierId, orientation, excludeFaction, siteProvider) {
     const band = TIER_BANDS[tierId];
     let candidates = (sitePool || []).filter(
       (s) => s.identity.value >= band.min && s.identity.value <= band.max
@@ -157,10 +163,11 @@
       return { site: rng.pick(candidates), wasReused: true };
     }
     const value = rng.int(band.min, band.max);
-    let site = MJ.generateSite(rng, { value, orientation });
+    const mint = () => (siteProvider ? siteProvider.mint(value, orientation) : MJ.generateSite(rng, { value, orientation }));
+    let site = mint();
     let guard = 0;
     while (excludeFaction && site.identity.owningFaction === excludeFaction && guard++ < 10) {
-      site = MJ.generateSite(rng, { value, orientation });
+      site = mint();
     }
     return { site, wasReused: false };
   }
@@ -177,15 +184,15 @@
   }
 
   // ── One mission: the actual dispatch unit ───────────────────────
-  function generateMission(rng, sitePool, hiringFaction) {
+  function generateMission(rng, sitePool, hiringFaction, siteProvider, tierBias) {
     const familyId = rng.pick(FAMILY_IDS);
     const family = JOB_FAMILIES[familyId];
     const verbId = rng.pick(family.verbs);
     const domain = rng.pick(PAYLOAD_DOMAINS);
-    const tierId = rng.pick(TIER_IDS);
+    const tierId = tierBias || rng.pick(TIER_IDS);
     const orientation = DOMAIN_TO_ORIENTATION[domain];
 
-    const { site, wasReused } = matchSite(rng, sitePool, tierId, orientation, hiringFaction);
+    const { site, wasReused } = matchSite(rng, sitePool, tierId, orientation, hiringFaction, siteProvider);
     const tier = tierForValue(site.identity.value);
     const intendedCrew = rollIntendedCrew(rng, familyId);
 
@@ -240,7 +247,7 @@
     const missions = [];
     const siteResults = [];
     for (let i = 0; i < missionCount; i++) {
-      const { mission, site, wasReused } = generateMission(r, sitePool, hiringFaction);
+      const { mission, site, wasReused } = generateMission(r, sitePool, hiringFaction, options.siteProvider, options.tierBias);
       missions.push(mission);
       siteResults.push({ site, wasReused });
     }
@@ -289,10 +296,19 @@
   }
 
   // ── A small board: a handful of active contracts (§06: 4-8) ────
-  function generateBoard(rng, sitePool, currentDay, count) {
+  // The board is DEALT by rung (§06's safe / bread-and-butter /
+  // stretch), not rolled uniformly — the bottom rungs must always
+  // exist so a rookie operation has work it can actually attempt,
+  // and the stretch rung exists to be visibly out of reach. How
+  // this mix shifts with Reputation (rep = access) is future
+  // design, flagged in the build backlog.
+  const BOARD_RUNG_DEAL = ["safe", "safe", "breadAndButter", "stretch"];
+
+  function generateBoard(rng, sitePool, currentDay, count, options) {
     const results = [];
     for (let i = 0; i < (count || 6); i++) {
-      results.push(generateJob(rng, sitePool, currentDay));
+      const rung = BOARD_RUNG_DEAL[i % BOARD_RUNG_DEAL.length];
+      results.push(generateJob(rng, sitePool, currentDay, Object.assign({ tierBias: rung }, options || {})));
     }
     return results;
   }

@@ -105,3 +105,42 @@ button:hover { background: var(--accent-2); color: var(--bg); }
   min-height: 260px;
   color: var(--ink);
 }
+
+/* ── v0 playable shell (game.html) — still bench styling, not the
+   real hub aesthetic ─────────────────────────────────────────── */
+.game-wrap { max-width: 1400px; margin: 0 auto; padding: 20px 22px 60px; }
+.statline { color: var(--accent); letter-spacing: 0.06em; margin-top: 6px; font-size: 0.9rem; }
+.panels { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px; align-items: start; }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.panel h2 {
+  font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent-2); margin: 0 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 6px;
+}
+.card { border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; }
+.card .head { color: var(--accent); }
+.row { padding: 6px 0; border-bottom: 1px dotted var(--line); }
+.row:last-child { border-bottom: none; }
+.muted { color: var(--dim); }
+.warn { color: #d4735e; }
+.good { color: var(--accent-2); }
+.gated { color: var(--dim); font-style: italic; }
+button.sm { font-size: 11px; padding: 3px 8px; letter-spacing: 0.04em; }
+select, input.sm {
+  background: var(--bg); border: 1px solid var(--line); color: var(--ink);
+  font-family: var(--mono); font-size: 12px; padding: 4px 6px; border-radius: 3px; max-width: 100%;
+}
+.game-log {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
+  padding: 8px 10px; height: 220px; overflow-y: auto; white-space: pre-wrap; font-size: 12px; line-height: 1.5;
+}
+.queue-item { display: flex; gap: 6px; align-items: center; padding: 4px 0; }
+.checks label { color: var(--ink); display: inline-block; margin-right: 10px; }
+a.navlink { color: var(--accent-2); text-decoration: none; letter-spacing: 0.06em; }
+a.navlink:hover { text-decoration: underline; }

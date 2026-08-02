@@ -488,10 +488,32 @@
   // stay caller-supplied where a job's needs dictate them (the
   // request is part of the reveal, not the universe).
   function mintSite(universeSeed, index, options) {
+    options = options || {};
     const identity = siteIdentityFromIndex(universeSeed, index);
     const rng = MJ.makeRNG(universeSeed).fork("site-" + index);
-    const site = generateSite(rng, Object.assign({ district: identity.district, faction: identity.owningFaction }, options || {}));
+    // Only value/orientation may come from the caller (a job's needs)
+    // — district and faction are the bags' business, never overridable,
+    // or the balance guarantee dies quietly.
+    const site = generateSite(rng, {
+      district: identity.district,
+      faction: identity.owningFaction,
+      value: options.value,
+      orientation: options.orientation,
+    });
     site.identity.universeIndex = index;
+    // The exact request is part of the site's re-mintable identity:
+    // §09 compression stores THESE, not the resulting values —
+    // passing explicit values where none were requested would skip
+    // rolls and desync the layout stream on revival.
+    const mintOptions = {};
+    if (options.value !== undefined) mintOptions.value = options.value;
+    if (options.orientation !== undefined) mintOptions.orientation = options.orientation;
+    site.identity.mintOptions = mintOptions;
+    // Resting security posture is universe-fixed ("what kind of
+    // security is currently in it" is pre-determined, §09) — derive
+    // the Min/Current/Max triples from the universe, not from
+    // whichever transient stream first touches the site.
+    MJ.initSecurityState(MJ.makeRNG(universeSeed).fork("site-security-" + index), site);
     return site;
   }
 

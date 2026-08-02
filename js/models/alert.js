@@ -80,6 +80,9 @@
       alertMax: site.identity.value,
       sustainedHits: 0,
       quietDays: 0,
+      // Latched forever on the first capacity expansion — permanent
+      // history that (among other things) blocks §09 compression.
+      everGrew: false,
       axes: axes,
     };
     return site.securityState;
@@ -106,7 +109,10 @@
         }
       }
     }
-    if (anyMaxGrew) state.alertMax += 1;
+    if (anyMaxGrew) {
+      state.alertMax += 1;
+      state.everGrew = true;
+    }
     return anyMaxGrew;
   }
 

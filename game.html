@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mr. Johnson — Playable v0</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+  <div class="game-wrap">
+    <header>
+      <h1>Mr. Johnson</h1>
+      <div class="tagline">Playable v0 — the management loop, text-first and deliberately ugly. <a class="navlink" href="index.html">&larr; dev inspector</a></div>
+      <div id="statline" class="statline">No game running.</div>
+      <div class="controls" style="margin-top:10px">
+        <input type="text" id="universe-seed" placeholder="universe seed (blank = fresh entropy)" />
+        <button data-act="new-game">New Game</button>
+        <button data-act="refresh-board">Refresh Board</button>
+        <button data-act="expand-capacity">Expand Capacity</button>
+        <select id="discover-kind"><option value="scrap">scrap yard</option><option value="reagents">reagent grove</option></select>
+        <button data-act="discover">Discover Site</button>
+        <button data-act="end-day" style="border-color: var(--accent); color: var(--accent)">End Day &raquo;</button>
+      </div>
+    </header>
+
+    <div class="panels">
+      <div>
+        <div class="panel"><h2>Job Board</h2><div id="panel-board"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Known Sites</h2><div id="panel-sites"></div></div>
+      </div>
+      <div>
+        <div class="panel"><h2>Roster</h2><div id="panel-roster"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Runner Market</h2><div id="panel-market"></div></div>
+      </div>
+      <div>
+        <div class="panel"><h2>Dispatch — today's queue</h2><div id="panel-dispatch"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Log</h2><div id="panel-log" class="game-log"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modules, loaded in dependency order (no build step) -->
+  <script src="js/core/rng.js"></script>
+  <script src="js/core/clock.js"></script>
+  <script src="js/core/save.js"></script>
+  <script src="js/core/resolve.js"></script>
+  <script src="js/models/runner.js"></script>
+  <script src="js/models/site.js"></script>
+  <script src="js/models/alert.js"></script>
+  <script src="js/models/job.js"></script>
+  <script src="js/models/market.js"></script>
+  <script src="js/models/economy.js"></script>
+  <script src="js/models/mission.js"></script>
+  <script src="js/models/sitelist.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/game-ui.js"></script>
+</body>
+</html>
