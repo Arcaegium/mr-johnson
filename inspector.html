@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mr. Johnson — Dev Inspector</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Mr. Johnson</h1>
+      <div class="tagline">Phase 1 — Management Game Inspector &nbsp;·&nbsp; <a class="navlink" href="index.html">&larr; back to the game</a></div>
+      <div id="day-status" class="day-status">No save loaded.</div>
+    </header>
+
+    <div class="controls">
+      <label for="seed">seed</label>
+      <input type="text" id="seed" value="mr-johnson" />
+      <button id="btn-rng">Test RNG</button>
+      <button id="btn-runner">Generate Runner</button>
+      <button id="btn-market">Generate Market (10)</button>
+      <button id="btn-growth">Test Growth</button>
+      <button id="btn-site">Generate Site</button>
+      <button id="btn-board">Generate Job Board</button>
+      <button id="btn-resolve">Resolve Task</button>
+      <button id="btn-market-cycle">Test Market Cycle</button>
+      <button id="btn-economy">Test Economy</button>
+      <button id="btn-alert">Test Alert / Live Security</button>
+      <button id="btn-dispatch">Run Full Loop (Dispatch)</button>
+      <button id="btn-sitelist">Test Site Watch-List</button>
+      <button id="btn-stress">Stress Test (Mechanical)</button>
+    </div>
+
+    <div class="controls">
+      <button id="btn-new-game">New Game</button>
+      <button id="btn-roll-day">Roll Day</button>
+      <button id="btn-reload-save">Reload Save</button>
+    </div>
+
+    <pre id="out"></pre>
+  </div>
+
+  <!-- Modules, loaded in dependency order (no build step) -->
+  <script src="js/core/rng.js"></script>
+  <script src="js/core/clock.js"></script>
+  <script src="js/core/save.js"></script>
+  <script src="js/core/resolve.js"></script>
+  <script src="js/models/runner.js"></script>
+  <script src="js/models/site.js"></script>
+  <script src="js/models/alert.js"></script>
+  <script src="js/models/job.js"></script>
+  <script src="js/models/market.js"></script>
+  <script src="js/models/armory.js"></script>
+  <script src="js/models/economy.js"></script>
+  <script src="js/models/mission.js"></script>
+  <script src="js/models/sitelist.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/harness.js"></script>
+  <script src="js/stress.js"></script>
+</body>
+</html>

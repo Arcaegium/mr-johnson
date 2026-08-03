@@ -7,8 +7,8 @@ text-first: procedurally generated runners, sites, and contracts; a
 day-by-day dispatch loop; and systems that are meant to work in plain
 text long before anything gets polished.
 
-**[▶ Play the current build](https://arcaegium.github.io/mr-johnson/game.html)**
-· [dev inspector](https://arcaegium.github.io/mr-johnson/index.html)
+**[▶ Play the current build](https://arcaegium.com/mr-johnson/)**
+· [dev inspector](https://arcaegium.com/mr-johnson/inspector.html)
 
 No install, no accounts, no backend — it's static files and your
 browser's local storage. Saves live on the device you played on.
@@ -46,11 +46,11 @@ permanently; leave it alone and it cools back down.
 python serve.py
 ```
 
-Then open `http://localhost:8123/game.html`. (Windows: double-click
-`serve.bat`.) The server sets `Cache-Control: no-store`, so edits show up
-on reload without a cache fight.
+Then open `http://localhost:8123/`. (Windows: double-click `serve.bat`.)
+The server sets `Cache-Control: no-store`, so edits show up on reload
+without a cache fight.
 
-`index.html` is the developer inspector — per-system benches plus a
+`inspector.html` is the developer inspector — per-system benches plus a
 mechanical stress suite (~73k assertions covering determinism,
 cross-system data flow, state machines, and a randomized multi-day soak).
 Run it after any change; it's the regression gate.
@@ -58,7 +58,8 @@ Run it after any change; it's the regression gate.
 ## Layout
 
 ```
-game.html / js/game.js / js/game-ui.js   the playable shell + session layer
+index.html / js/game.js / js/game-ui.js  the playable shell + session layer
+inspector.html / js/harness.js           the dev benches
 js/models/                               runners, sites, jobs, missions,
                                          market, economy, armory, alert
 js/core/                                 rng, clock, save, task resolution

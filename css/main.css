@@ -106,7 +106,7 @@ button:hover { background: var(--accent-2); color: var(--bg); }
   color: var(--ink);
 }
 
-/* ── v0 playable shell (game.html) — still bench styling, not the
+/* ── v0 playable shell (index.html) — still bench styling, not the
    real hub aesthetic ─────────────────────────────────────────── */
 .game-wrap { max-width: 1400px; margin: 0 auto; padding: 20px 22px 60px; }
 .statline { color: var(--accent); letter-spacing: 0.06em; margin-top: 6px; font-size: 0.9rem; }

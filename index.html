@@ -3,42 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mr. Johnson — Dev Inspector</title>
+  <title>Mr. Johnson — Playable v0</title>
   <link rel="stylesheet" href="css/main.css" />
 </head>
 <body>
-  <div class="wrap">
+  <div class="game-wrap">
     <header>
       <h1>Mr. Johnson</h1>
-      <div class="tagline">Phase 1 — Management Game Inspector &nbsp;·&nbsp; <a class="navlink" href="game.html">play the v0 shell &rarr;</a></div>
-      <div id="day-status" class="day-status">No save loaded.</div>
+      <div class="tagline">Playable v0 — the management loop, text-first and deliberately ugly. <a class="navlink" href="inspector.html">&larr; dev inspector</a></div>
+      <div id="statline" class="statline">No game running.</div>
+      <div class="controls" style="margin-top:10px">
+        <input type="text" id="universe-seed" placeholder="universe seed (blank = fresh entropy)" />
+        <button data-act="new-game">New Game</button>
+        <button data-act="load-game">Continue (Load)</button>
+        <button data-act="save-game">Save</button>
+        <button data-act="expand-capacity">Expand Capacity</button>
+        <button data-act="end-day" style="border-color: var(--accent); color: var(--accent)">End Day &raquo;</button>
+      </div>
     </header>
 
-    <div class="controls">
-      <label for="seed">seed</label>
-      <input type="text" id="seed" value="mr-johnson" />
-      <button id="btn-rng">Test RNG</button>
-      <button id="btn-runner">Generate Runner</button>
-      <button id="btn-market">Generate Market (10)</button>
-      <button id="btn-growth">Test Growth</button>
-      <button id="btn-site">Generate Site</button>
-      <button id="btn-board">Generate Job Board</button>
-      <button id="btn-resolve">Resolve Task</button>
-      <button id="btn-market-cycle">Test Market Cycle</button>
-      <button id="btn-economy">Test Economy</button>
-      <button id="btn-alert">Test Alert / Live Security</button>
-      <button id="btn-dispatch">Run Full Loop (Dispatch)</button>
-      <button id="btn-sitelist">Test Site Watch-List</button>
-      <button id="btn-stress">Stress Test (Mechanical)</button>
-    </div>
+    <!-- The log IS the game's feedback channel right now — biggest,
+         first, full width (playtest ruling). -->
+    <div class="panel" style="margin-bottom:14px"><h2>Log — the street talks</h2><div id="panel-log" class="game-log log-top"></div></div>
 
-    <div class="controls">
-      <button id="btn-new-game">New Game</button>
-      <button id="btn-roll-day">Roll Day</button>
-      <button id="btn-reload-save">Reload Save</button>
+    <div class="panels">
+      <div>
+        <div class="panel"><h2>Active Contracts</h2><div id="panel-contracts"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Job Board <button class="sm" data-act="refresh-board">refresh</button></h2><div id="panel-board"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Known Sites</h2><div id="panel-sites"></div></div>
+      </div>
+      <div>
+        <div class="panel"><h2>Roster</h2><div id="panel-roster"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Runner Market <button class="sm" data-act="refresh-market">refresh</button></h2><div id="panel-market"></div></div>
+      </div>
+      <div>
+        <div class="panel"><h2>Dispatch — today's queue</h2><div id="panel-dispatch"></div></div>
+        <div class="panel" style="margin-top:14px"><h2>Armory</h2><div id="panel-armory"></div></div>
+      </div>
     </div>
-
-    <pre id="out"></pre>
   </div>
 
   <!-- Modules, loaded in dependency order (no build step) -->
@@ -56,7 +58,6 @@
   <script src="js/models/mission.js"></script>
   <script src="js/models/sitelist.js"></script>
   <script src="js/game.js"></script>
-  <script src="js/harness.js"></script>
-  <script src="js/stress.js"></script>
+  <script src="js/game-ui.js"></script>
 </body>
 </html>
