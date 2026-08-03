@@ -223,7 +223,7 @@
         ].filter(Boolean),
         onChoose: (opt, i) => {
           const c = prompt.options[i];
-          MJ.missionChoose(run, { skill: c.skill, runner: c.runner });
+          MJ.missionChoose(run, { skill: c.skill, runner: c.runner, approach: c.approach });
           step();
         },
         onAction: (id) => {

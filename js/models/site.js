@@ -150,28 +150,40 @@
         // One shot: you cannot re-smooth-talk someone who just called
         // your bluff, and adjacent guards are one audience.
         { skill: "con",      verb: "talk your way past", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
-        { skill: "stealth",  verb: "silent takedown", loud: false, threat: THREAT.THREATENING, attempts: 1 },
+        // `neutralizes` = this obstacle stops being able to see. That
+        // is the whole point of a takedown: done cleanly against the
+        // only pair of eyes in the room, there is nobody left to have
+        // an opinion. Done in front of a camera, there is.
+        { skill: "stealth",  verb: "silent takedown", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
         // Loud without being dangerous — a belligerent asshole, not
         // someone who needs shooting.
         { skill: "presence", verb: "taunt and draw them off", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
-        { skill: "firearms", verb: "fight", loud: true, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "firearms", verb: "fight", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
       ],
     },
     camera: {
       label: "Camera",
       perceives: true,
       affordances: [
-        { skill: "electronics", verb: "loop the feed", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2 },
-        { skill: "hacking",     verb: "kill it remotely", loud: false, threat: THREAT.QUESTIONABLE, attempts: 3 },
+        // A looped feed is a blind camera — it is still bolted to the
+        // wall, but it cannot witness anything after this.
+        { skill: "electronics", verb: "loop the feed", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2, neutralizes: true },
+        { skill: "hacking",     verb: "kill it remotely", loud: false, threat: THREAT.QUESTIONABLE, attempts: 3, neutralizes: true },
+        // Staying out of the arc leaves it live and watching.
         { skill: "stealth",     verb: "stay out of its arc", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
-        { skill: "firearms",    verb: "shoot it out", loud: true, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "firearms",    verb: "shoot it out", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
       ],
     },
     // Astral idiom — the same two structural roles (barrier, sentry)
     // recast in magic's terms, not a reskin of the meatspace verbs.
     ward: {
       label: "Ward",
-      perceives: true, // a ward knows when it is leaned on
+      // A ward is a barrier, not a sentry. It keeps you out; it does
+      // not form an opinion or tell anyone. Leaning on it repeatedly
+      // still escalates what the act LOOKS like — but only if
+      // something with eyes (a spirit, a guard, a camera) is there to
+      // see you doing it.
+      perceives: false,
       affordances: [
         { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
         // The ward keeps you out on its own — that safeguard is why
@@ -185,7 +197,7 @@
       label: "Spirit",
       perceives: true,
       affordances: [
-        { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
         // Two ways past a sentry, astral or otherwise: out of its
         // notice, or in plain view and unremarkable. Blowing the
         // covert one is worse than blowing the overt one — being
@@ -195,7 +207,7 @@
         { skill: "stealth",    verb: "sneak around it", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
         { skill: "assensing",  verb: "walk past without tripping it", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 3 },
         { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
-        { skill: "sorcery",    verb: "blast it down", loud: true, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "sorcery",    verb: "blast it down", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
       ],
     },
   };

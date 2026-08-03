@@ -227,15 +227,22 @@
     const path = paths.reduce((a, b) => (a.length <= b.length ? a : b));
     const roomSet = new Set(path);
     const obstacles = [];
+    // Each obstacle carries WHERE it is, because witnessing is about
+    // what else can see you from the same ground (§07). Derived
+    // straight from the layout, so stamping it on the shared instance
+    // is idempotent — the same obstacle is always in the same place.
+    const at = (rooms, list) => {
+      for (const o of list) { o.rooms = rooms; obstacles.push(o); }
+    };
     const entry = site.layout.entryPoints.find((e) => e.roomId === path[0]);
-    if (entry) obstacles.push(...entry.physicalObstacles);
+    if (entry) at([entry.roomId], entry.physicalObstacles);
     for (const edge of site.layout.edges) {
-      if (roomSet.has(edge.from) && roomSet.has(edge.to)) obstacles.push(...edge.physicalObstacles);
+      if (roomSet.has(edge.from) && roomSet.has(edge.to)) at([edge.from, edge.to], edge.physicalObstacles);
     }
     for (const room of site.layout.rooms) {
       if (!roomSet.has(room.id)) continue;
-      for (const slot of room.postSlots) obstacles.push(...slot.physicalObstacles);
-      obstacles.push(...room.astralObstacles);
+      for (const slot of room.postSlots) at([room.id], slot.physicalObstacles);
+      at([room.id], room.astralObstacles);
     }
     // Patrols and spirit zones cover a BEAT of rooms rather than
     // sitting in one, so they are only met if the route crosses
@@ -252,11 +259,13 @@
     // throughout (edges precede rooms too); making it a true
     // traversal is its own change.
     const crosses = (ids) => (ids || []).some((id) => roomSet.has(id));
+    // A patrol or a zone covers its whole circuit, so it can witness
+    // you anywhere along it — not just at one room.
     for (const patrol of site.layout.patrols || []) {
-      if (crosses(patrol.roomIds)) obstacles.push(...patrol.physicalObstacles);
+      if (crosses(patrol.roomIds)) at(patrol.roomIds, patrol.physicalObstacles);
     }
     for (const zone of site.layout.spiritZones || []) {
-      if (crosses(zone.roomIds)) obstacles.push(...zone.astralObstacles);
+      if (crosses(zone.roomIds)) at(zone.roomIds, zone.astralObstacles);
     }
     return obstacles.slice(0, MAX_ROUTE_OBSTACLES);
   }
@@ -348,6 +357,10 @@
       intelBonus: hasFreshIntel(site, day) ? INTEL_BONUS_DICE : 0,
       obstacles: kind === "recon" ? reconObstacles(site, mission.lens) : routeObstacles(site),
       index: 0, tasks: [], armorGuard: armorGuard,
+      // Held by object identity, not route index: responders splice
+      // into the middle of the route and would shift any index key.
+      // Per-run, so putting a guard down never leaks into tomorrow.
+      neutralized: new Set(),
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
       attempts: {},        // "obstacleIndex:skill" -> tries, for budgets and escalation
       discovered: {},      // "obstacleIndex:skill" -> why it will never work here
@@ -380,10 +393,30 @@
   //
   // Loud is the exception, and the only one: a gunshot is a gunshot
   // whether or not it hits.
+  // Anything else on this ground that still has eyes. A guard you
+  // already put down is not one; a camera you looped is not one; a
+  // maglock never was. Patrols and spirit zones count anywhere along
+  // their circuit, which is what makes a wide patrol route genuinely
+  // worse to work under than a stationary post.
+  function otherPerceiver(run, target) {
+    const here = target.rooms;
+    if (!here) return false;
+    return run.obstacles.some((o) =>
+      o !== target && o.perceives && !run.neutralized.has(o) &&
+      o.rooms && o.rooms.some((r) => here.indexOf(r) !== -1));
+  }
+
   function wasWitnessed(run, obstacle, affordance, succeeded) {
-    if (affordance && affordance.loud) return true;
-    if (succeeded) return false;
+    if (affordance && affordance.loud) return true; // gunfire carries regardless
+    // A clean quiet act is seen only by something OTHER than what you
+    // just handled. Take down the one guard in the room and there is
+    // nobody left to have an opinion; do it in front of a camera, or
+    // his partner, and "silent" was never on the table.
+    if (succeeded) return otherPerceiver(run, obstacle);
+    // It failed. The thing you fumbled saw it if it has eyes...
     if (obstacle.perceives) return true;
+    // ...and if it does not (a maglock, a ward), something else may.
+    if (otherPerceiver(run, obstacle)) return true;
     // Nothing here perceives — but if they are already suspicious
     // they are watching the place, not the equipment.
     const band = MJ.threatBand(run.state, run.day);
@@ -406,13 +439,24 @@
   // work the same room twice), a few tries at credentials before the
   // account locks itself. Spending the last one removes the option
   // WITHOUT an alarm — the lockout already ended the credible threat.
-  function attemptKey(index, skill) {
+  // Budgets are per AFFORDANCE, not per skill. A guard offers two
+  // different stealth plays — slip past him, or put him down quietly
+  // — and they are not the same swing: sharing a key meant trying
+  // one silently spent the other.
+  function attemptKey(index, approach) {
+    return index + "#" + approach;
+  }
+
+  // What you LEARNED, though, is about the obstacle and the skill:
+  // finding out he is sensor-equipped rules out sneaking generally,
+  // however you found it out.
+  function discoveryKey(index, skill) {
     return index + ":" + skill;
   }
 
-  function attemptsLeft(run, index, affordance) {
+  function attemptsLeft(run, index, affordance, approach) {
     const budget = affordance.attempts === undefined ? 1 : affordance.attempts;
-    return budget - (run.attempts[attemptKey(index, affordance.skill)] || 0);
+    return budget - (run.attempts[attemptKey(index, approach)] || 0);
   }
 
   // ── Responders: what an engaged axis actually sends ─────────────
@@ -438,6 +482,10 @@
       ob.responder = axis;
       spawned.push(ob);
     }
+    // They come to where the crew actually is, so they witness the
+    // same ground — a response team is the definition of more eyes.
+    const here = run.obstacles[run.index];
+    for (const o of spawned) o.rooms = (here && here.rooms) || [];
     // They arrive in front of you — next, not at the end of the route.
     run.obstacles.splice(atIndex === undefined ? run.index + 1 : atIndex, 0, ...spawned);
     return spawned;
@@ -460,16 +508,17 @@
     // runner rather than once per runner PER affordance, though —
     // this used to allocate a fresh skill map fifteen times a prompt.
     const eff = run.runners.map((r) => MJ.getEffectiveSkills(r));
-    for (const a of obstacle.affordances) {
+    for (let approach = 0; approach < obstacle.affordances.length; approach++) {
+      const a = obstacle.affordances[approach];
       // Skill-less affordances are real approaches, not filler:
       // "route around" costs a beat and needs nobody trained. These
       // used to be dropped here, which meant a crew with no magic
       // was told there was NOTHING to try against a spirit it could
       // simply have walked around.
       if (!a.skill) {
-        const leftNoSkill = attemptsLeft(run, run.index, a);
+        const leftNoSkill = attemptsLeft(run, run.index, a, approach);
         options.push({
-          skill: null, verb: a.verb, loud: !!a.loud,
+          skill: null, approach: approach, verb: a.verb, loud: !!a.loud,
           blocked: !!a.blocked, reason: a.reason || null,
           discovered: null, runner: null, pool: 0,
           attemptsLeft: leftNoSkill, noRoll: true,
@@ -487,10 +536,10 @@
         const pool = trained + MJ.gearBonusFor(runner, a.skill);
         if (!best || pool > best.pool) best = { runner: runner, pool: pool };
       }
-      const left = attemptsLeft(run, run.index, a);
-      const known = run.discovered[attemptKey(run.index, a.skill)] || null;
+      const left = attemptsLeft(run, run.index, a, approach);
+      const known = run.discovered[discoveryKey(run.index, a.skill)] || null;
       options.push({
-        skill: a.skill, verb: a.verb, loud: !!a.loud,
+        skill: a.skill, approach: approach, verb: a.verb, loud: !!a.loud,
         blocked: !!a.blocked, reason: a.reason || null,
         // What the CREW knows — a Watsonian immunity is only knowable
         // by trying it, so the UI shows `discovered`, never `blocked`.
@@ -527,14 +576,23 @@
     }
     const runner = choice.runner;
     const skill = choice.skill;
-    const affordance = obstacle.affordances.find((a) => a.skill === skill);
+    // Resolve the affordance the caller actually picked. Finding it
+    // by skill alone silently collapsed distinct approaches: choose
+    // "silent takedown" against a guard and you got "slip past
+    // unseen" instead — a different verb AND a different threat
+    // class (threatening vs. questionable). `approach` comes back
+    // from missionPrompt; the by-skill lookup stays for callers that
+    // never had a prompt in front of them.
+    const approach = typeof choice.approach === "number" ? choice.approach
+      : obstacle.affordances.findIndex((a) => a.skill === skill);
+    const affordance = obstacle.affordances[approach];
     // The no-roll approach: nobody tests anything, it just costs the
     // beat. It still counts as an act, so a normal-class route-around
     // reads as nothing while a louder one would still be seen.
     if (!skill) {
-      // Same key attemptsLeft derives from a.skill, or the budget
-      // would never tick down and "route around" would be infinite.
-      const noRollKey = attemptKey(run.index, skill);
+      // Same key attemptsLeft derives from, or the budget would
+      // never tick down and "route around" would be infinite.
+      const noRollKey = attemptKey(run.index, approach);
       run.attempts[noRollKey] = (run.attempts[noRollKey] || 0) + 1;
       const task = { obstacle: obstacle.label, tier: obstacle.tier, result: affordance ? affordance.verb : "went around" };
       // Nothing was rolled, so nothing was fumbled — a no-roll
@@ -587,13 +645,21 @@
         }
       }
     }
+    // Anything that removes a set of eyes has to do so BEFORE the
+    // witness check, or the thing you just took down gets a vote.
+    if (outcome.success && affordance && affordance.neutralizes) {
+      run.neutralized.add(obstacle);
+    }
     // What did that reveal, and did anything see it?
-    const key = attemptKey(run.index, skill);
+    const key = attemptKey(run.index, approach);
     run.attempts[key] = (run.attempts[key] || 0) + 1;
     // A blocked affordance is discovered by trying it — you learn the
     // box is air-gapped by reaching for a signal that isn't there.
+    // Filed against the SKILL: what you found out is that this
+    // approach does not work on this thing, not that this one verb
+    // does not.
     if (outcome.ok === false && affordance && affordance.blocked) {
-      run.discovered[key] = affordance.reason || "doesn't work here";
+      run.discovered[discoveryKey(run.index, skill)] = affordance.reason || "doesn't work here";
     }
     let read = null;
     let tipped = false;
@@ -658,10 +724,15 @@
     if (!obstacle) return 0;
     const eff = run.runners.map((r) => MJ.getEffectiveSkills(r));
     let n = 0;
-    for (const a of obstacle.affordances) {
-      if (!a.skill) continue;
-      if (run.discovered[attemptKey(run.index, a.skill)]) continue;
-      if (attemptsLeft(run, run.index, a) <= 0) continue;
+    for (let approach = 0; approach < obstacle.affordances.length; approach++) {
+      const a = obstacle.affordances[approach];
+      if (attemptsLeft(run, run.index, a, approach) <= 0) continue;
+      // A skill-less approach needs nobody trained and nothing
+      // known — it counts. Skipping it here while missionPrompt
+      // offered it meant a crew could be declared out of options
+      // with "route around" still sitting on the screen.
+      if (!a.skill) { n += 1; continue; }
+      if (run.discovered[discoveryKey(run.index, a.skill)]) continue;
       if (eff.some((e) => (e[a.skill] || 0) > 0)) n += 1;
     }
     return n;
@@ -695,7 +766,7 @@
         else if (best.loud && !o.loud) best = o;
         else if (best.loud === o.loud && o.pool > best.pool) best = o;
       }
-      missionChoose(run, best ? { skill: best.skill, runner: best.runner } : null);
+      missionChoose(run, best ? { skill: best.skill, runner: best.runner, approach: best.approach } : null);
     }
     return run;
   }
