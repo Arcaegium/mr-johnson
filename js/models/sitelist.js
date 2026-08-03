@@ -116,7 +116,7 @@
     if (Object.keys(site.intel || {}).length > 0) return false;
     const st = site.securityState;
     if (st) {
-      if (st.alert !== 0) return false;  // hot sites don't compress
+      if (st.alert) return false;        // mid-incident sites don't compress
       if (st.everGrew) return false;     // permanent history is history
       for (const axis of AXES) {
         if (st.axes[axis].current !== st.axes[axis].min) return false; // still escalated

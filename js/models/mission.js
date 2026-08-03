@@ -251,6 +251,8 @@
   // posture — softening lowers the risk, never the books.
   const SUPPRESSION_PER_SUCCESS = 1;
   const SUPPRESSION_CAP = 3;
+  const EXCEPTIONAL_MARGIN = 3;      // hits beyond threshold that read as "thoroughly bamboozled"
+  const ALERT_POINTS_PER_BEAT = 3;   // ~3-4 beats buys them one escalation step
 
   function suppressionAxisFor(kind, mission) {
     if (kind === "recon") return mission.lens === "matrix" ? "physical" : mission.lens;
@@ -339,7 +341,34 @@
       obstacles: kind === "recon" ? reconObstacles(site, mission.lens) : routeObstacles(site),
       index: 0, tasks: [], armorGuard: armorGuard,
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
+      attempts: {},        // "obstacleIndex:skill" -> tries, for budgets and escalation
+      engagedAlert: false, // did this run force a real response
     };
+  }
+
+  // ── Witnessing (§09) ────────────────────────────────────────────
+  // An act only reveals anything if something perceived it. The
+  // obstacle you are touching decides that below questionable; once
+  // the site reads you as questionable it is watching you generally,
+  // which is how a camera catches you working a lock it isn't part
+  // of. Loud is always witnessed — not because loud means dangerous
+  // (a taunt is neither), but because it is heard.
+  function wasWitnessed(run, obstacle, affordance) {
+    if (affordance && affordance.loud) return true;
+    if (obstacle.perceives) return true;
+    const band = MJ.threatBand(run.state, run.day);
+    return band === "questionable" || band === "threatening";
+  }
+
+  // Repetition past a safeguard escalates the read: the ward keeps
+  // you out on its own, so a first press is merely offputting —
+  // leaning on it again is a person with a purpose.
+  function threatClassFor(affordance, tries) {
+    if (!affordance || !affordance.threat) return MJ.THREAT.NORMAL;
+    if (affordance.escalates && tries > 1 && affordance.threat === MJ.THREAT.AWKWARD) {
+      return MJ.THREAT.QUESTIONABLE;
+    }
+    return affordance.threat;
   }
 
   function missionDone(run) {
@@ -433,6 +462,32 @@
       }
     }
     if (!outcome.success) run.failed = true;
+
+    // What did that reveal, and did anything see it?
+    const key = run.index + ":" + skill;
+    run.attempts[key] = (run.attempts[key] || 0) + 1;
+    let read = null;
+    let tipped = false;
+    if (wasWitnessed(run, obstacle, affordance)) {
+      const cls = threatClassFor(affordance, run.attempts[key]);
+      if (cls !== MJ.THREAT.NORMAL) {
+        const applied = MJ.witnessAct(run.state, run.day, cls);
+        read = { threatClass: cls, band: applied.band };
+        tipped = applied.tipped;
+        if (applied.band === "threatening") run.engagedAlert = true;
+      }
+    }
+    // Exceptional success buys headroom back — the thoroughly
+    // bamboozled guard who decides you are fine, actually.
+    if (outcome.success && outcome.margin >= EXCEPTIONAL_MARGIN && !tipped) {
+      MJ.grantHeadroom(run.state, run.day, 1);
+    }
+    // While they are actively responding, every beat you survive
+    // buys them the next one.
+    if (MJ.alertEngaged(run.state)) {
+      MJ.addAlertPointsAll(run.state, ALERT_POINTS_PER_BEAT);
+    }
+
     const task = {
       obstacle: obstacle.label, tier: obstacle.tier,
       runner: runner.identity.handle, skill: skill, pool: outcome.poolSize,
@@ -440,6 +495,7 @@
       success: outcome.success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch,
       boosted: boostLabel, guarded: guarded,
       rejected: outcome.ok === false ? outcome.error : null,
+      read: read, tipped: tipped,
     };
     run.tasks.push(task);
     run.index += 1;
@@ -487,7 +543,13 @@
     // Placeholder noise model: the site hears any loud approach, or
     // a failure of any kind; glitches add noise on top. A clean,
     // all-quiet success lands zero Alert — the ghost run.
-    const hit = MJ.recordHit(state, { loud: anyLoud || !success, glitch: anyGlitch });
+    // The incident settles: wherever the response ended up becomes
+    // the site's new standing posture. Trip them and pull out and
+    // nothing ratchets — Alert never rose above where it started.
+    const incident = run.engagedAlert
+      ? MJ.settleIncident(state)
+      : { ratcheted: false, maxGrew: false };
+    const band = MJ.threatBand(state, day);
 
     // Interaction confirms security (user ruling): a crew that comes
     // home knows what it actually touched — success OR failure, a
@@ -503,7 +565,7 @@
       site.intel[axis] = {
         snapshot: {
           security: { physical: start.physical, astral: start.astral, matrix: start.matrix },
-          alert: state.alert,
+          band: band,
           obstaclesSeen: tasks.map((t) => t.obstacle),
         },
         dayTaken: day,
@@ -530,8 +592,9 @@
     const result = {
       kind: kind, success: success, karmaAward: karmaAward,
       obstaclesFaced: obstacles.length, tasks: tasks,
-      noise: hit, intelBonusApplied: run.intelBonus > 0,
+      intelBonusApplied: run.intelBonus > 0,
       suppression: suppression, aborted: run.aborted,
+      threatBand: band, incident: incident, forcedResponse: run.engagedAlert,
     };
     if (success && kind === "resourceGathering") {
       // Draw from the site's own probability chart (§09: the loot

@@ -119,54 +119,76 @@
   // is never eligible for immunity. The quiet options are also what
   // keeps Attention low (§08) — this is the same "get past without
   // being noticed" shape meatspace already has, not new content.
+  // ── Threat classes (§09 "Threat read") ─────────────────────────
+  // What an act reveals about your intent IF something witnesses it
+  // — intrinsic to the act, not to whether it worked. `escalates`
+  // marks approaches whose class rises on repetition, because the
+  // obstacle's own safeguard handled the first try: a ward keeps
+  // dual-natured beings out, a guard tells a bad liar to get lost,
+  // an account locks itself. Persisting past a safeguard is what
+  // turns a curiosity into someone with a purpose.
+  const THREAT = { NORMAL: "normal", AWKWARD: "awkward", QUESTIONABLE: "questionable", THREATENING: "threatening" };
+
   const OBSTACLE_TEMPLATES = {
     // Meatspace idiom
     maglock: {
       label: "Maglock door",
+      perceives: false, // a lock forms no opinions
       affordances: [
-        { skill: "electronics", verb: "pick the lock", loud: false },
-        { skill: "larceny",     verb: "pick the lock", loud: false },
-        { skill: "hacking",     verb: "unlock it remotely", loud: false },
-        { skill: "con",         verb: "lift the key off a guard", loud: false },
-        { skill: "demolitions", verb: "breach it", loud: true },
+        { skill: "electronics", verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2 },
+        { skill: "larceny",     verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2 },
+        { skill: "hacking",     verb: "unlock it remotely", loud: false, threat: THREAT.QUESTIONABLE, attempts: 3 },
+        { skill: "con",         verb: "lift the key off a guard", loud: false, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "demolitions", verb: "breach it", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
     },
     guard: {
       label: "Guard",
+      perceives: true,
       affordances: [
-        { skill: "stealth",  verb: "slip past unseen", loud: false },
-        { skill: "con",      verb: "talk your way past", loud: false },
-        { skill: "stealth",  verb: "silent takedown", loud: false },
-        { skill: "presence", verb: "taunt and draw them off", loud: false },
-        { skill: "firearms", verb: "fight", loud: true },
+        { skill: "stealth",  verb: "slip past unseen", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
+        // One shot: you cannot re-smooth-talk someone who just called
+        // your bluff, and adjacent guards are one audience.
+        { skill: "con",      verb: "talk your way past", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
+        { skill: "stealth",  verb: "silent takedown", loud: false, threat: THREAT.THREATENING, attempts: 1 },
+        // Loud without being dangerous — a belligerent asshole, not
+        // someone who needs shooting.
+        { skill: "presence", verb: "taunt and draw them off", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
+        { skill: "firearms", verb: "fight", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
     },
     camera: {
       label: "Camera",
+      perceives: true,
       affordances: [
-        { skill: "electronics", verb: "loop the feed", loud: false },
-        { skill: "hacking",     verb: "kill it remotely", loud: false },
-        { skill: "stealth",     verb: "stay out of its arc", loud: false },
-        { skill: "firearms",    verb: "shoot it out", loud: true },
+        { skill: "electronics", verb: "loop the feed", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2 },
+        { skill: "hacking",     verb: "kill it remotely", loud: false, threat: THREAT.QUESTIONABLE, attempts: 3 },
+        { skill: "stealth",     verb: "stay out of its arc", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
+        { skill: "firearms",    verb: "shoot it out", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
     },
     // Astral idiom — the same two structural roles (barrier, sentry)
     // recast in magic's terms, not a reskin of the meatspace verbs.
     ward: {
       label: "Ward",
+      perceives: true, // a ward knows when it is leaned on
       affordances: [
-        { skill: null,         verb: "route around", loud: false },
-        { skill: "assensing",  verb: "pick it slowly", loud: false },
-        { skill: "sorcery",    verb: "break it", loud: true },
+        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
+        // The ward keeps you out on its own — that safeguard is why
+        // a first press is merely offputting, and why leaning on it
+        // again is not.
+        { skill: "assensing",  verb: "pick it slowly", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 3 },
+        { skill: "sorcery",    verb: "break it", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
     },
     spirit: {
       label: "Spirit",
+      perceives: true,
       affordances: [
-        { skill: "conjuring",  verb: "banish it", loud: false },
-        { skill: "assensing",  verb: "read it and slip past unnoticed", loud: false },
-        { skill: null,         verb: "route around", loud: false },
-        { skill: "sorcery",    verb: "blast it down", loud: true },
+        { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "assensing",  verb: "read it and slip past unnoticed", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 3 },
+        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
+        { skill: "sorcery",    verb: "blast it down", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
     },
   };
@@ -232,7 +254,10 @@
       }
     }
 
-    return { type: typeId, label: template.label, tier, projection, affordances };
+    // `perceives` rides the instance: a guard, camera, ward, or
+    // spirit can form an opinion about what you just tried; a
+    // maglock cannot, and neither can an air-gapped box.
+    return { type: typeId, label: template.label, tier, projection, perceives: !!template.perceives, affordances };
   }
 
   // ── Room / obstacle graph (physical) ────────────────────────────
@@ -758,6 +783,7 @@
     return paths;
   }
 
+  MJ.THREAT = THREAT;
   MJ.DISTRICTS = DISTRICTS;
   MJ.WILD_DISTRICTS = WILD_DISTRICTS;
   MJ.SITE_DISTRICTS = SITE_DISTRICTS;

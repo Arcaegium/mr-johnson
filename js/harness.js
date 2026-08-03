@@ -453,101 +453,105 @@
     log(`hireable guard: attempted to hire a KIA runner with plenty of nuyen  →  ${kiaHire.ok ? "SUCCEEDED (bug!)" : "correctly rejected"}   money unchanged: ${save.johnson.money}`);
   }
 
-  // ── P1 — live security: Min/Current/Max triples + the Alert pool
-  function fmtSecState(state) {
+  // ── P1 — live security: the band, the read, and the response ────
+  function fmtSecState(state, day) {
     const ax = MJ.SECURITY_AXES.map((axis) => {
       const a = state.axes[axis];
-      return `${axis[0].toUpperCase()}:${a.min}/${a.current}/${a.max}`;
+      const lvl = MJ.alertEngaged(state) ? "/alert " + MJ.alertLevel(state, axis) : "";
+      return `${axis[0].toUpperCase()}:${a.min}/${a.current}/${a.max}${lvl}`;
     }).join("  ");
-    return `alert:${state.alert}/${state.alertMax}  ${ax}`;
+    return `read:${MJ.threatBand(state, day)}  ${ax}`;
   }
 
   function testAlert() {
     clear();
     const seed = document.getElementById("seed").value || "mr-johnson";
-    const rng = MJ.makeRNG(seed);
     log("SEED: " + seed);
     log("");
 
-    const site = MJ.generateSite(rng.fork("alert-site"));
-    const state = MJ.initSecurityState(rng.fork("alert-init"), site);
-    log(`site: ${site.identity.district} district (${site.identity.owningFaction})   value:${site.identity.value}  orientation:${site.identity.orientation}`);
-    log(`triples are Min/Current/Max per axis; Current starts at rest (=Min)`);
-    log(`  ${fmtSecState(state)}`);
+    const site = MJ.mintSite(seed + "-alert-u", 0, { value: 6, orientation: "physical" });
+    const st = site.securityState;
+    log(`site: ${site.identity.district} (${site.identity.owningFaction})  "${site.identity.name}"`);
+    log(`the band is Min/Current/Max per axis; Current is "how much room for bullshit today"`);
+    log(`  ${fmtSecState(st, 1)}`);
     log("");
 
-    // Phase A — sustained loud pressure: 12 days, 2 loud hits/day.
-    log("PHASE A — hammer it: 2 loud hits/day for 12 days");
-    for (let day = 1; day <= 12; day++) {
-      const events = [];
-      for (let h = 0; h < 2; h++) {
-        const r = MJ.recordHit(state, { loud: true });
-        if (r.ratcheted) events.push(r.maxGrew ? "RATCHET+MAX-GROWTH" : "RATCHET");
-      }
-      MJ.advanceSiteDay(state);
-      log(`  day ${String(day).padStart(2)}: ${fmtSecState(state)}${events.length ? "   << " + events.join(", ") : ""}`);
+    log("PHASE A — three awkward acts (a bad liar working the front desk)");
+    for (let i = 1; i <= 3; i++) {
+      const r = MJ.witnessAct(st, 1, MJ.THREAT.AWKWARD);
+      log(`  awkward #${i}: read is now ${r.band}${r.tipped ? "  << RESPONSE ENGAGED" : ""}`);
+    }
+    log(`  nothing mechanical has happened yet — response engaged: ${MJ.alertEngaged(st)}`);
+    log("");
+
+    log("PHASE B — one more questionable act while already questionable");
+    const tip = MJ.witnessAct(st, 1, MJ.THREAT.QUESTIONABLE);
+    log(`  read: ${tip.band}${tip.tipped ? "  << RESPONSE ENGAGED" : ""}`);
+    log(`  ${fmtSecState(st, 1)}`);
+    log(`  each axis answers at its OWN Current — never below today's posture, never above what it can field`);
+    log("");
+
+    log("PHASE C — surviving what they send buys them the next wave");
+    for (let beat = 1; beat <= 12; beat++) {
+      MJ.addAlertPointsAll(st, 3);
+      if (beat % 4 === 0) log(`  after ${beat} beats: ${fmtSecState(st, 1)}`);
     }
     log("");
 
-    // Phase B — full quiet: Alert bleeds, Current cools to Min, Max holds.
-    log("PHASE B — go quiet: 15 days, no hits");
-    const maxesBefore = MJ.SECURITY_AXES.map((x) => state.axes[x].max).join(",");
-    for (let day = 13; day <= 27; day++) {
-      MJ.advanceSiteDay(state);
-      log(`  day ${String(day).padStart(2)}: ${fmtSecState(state)}`);
-    }
-    const maxesAfter = MJ.SECURITY_AXES.map((x) => state.axes[x].max).join(",");
-    log(`  maxes held through the cooldown: ${maxesBefore} -> ${maxesAfter}   ${maxesBefore === maxesAfter ? "OK" : "BUG: Max decreased"}`);
+    log("PHASE D — the incident settles: where the response ended IS the new posture");
+    const before = MJ.SECURITY_AXES.map((a) => st.axes[a].current).join(",");
+    const settled = MJ.settleIncident(st);
+    log(`  Current ${before} -> ${MJ.SECURITY_AXES.map((a) => st.axes[a].current).join(",")}   ratcheted:${settled.ratcheted}  maxGrew:${settled.maxGrew}`);
     log("");
 
-    // Phase C — ghost runs: quiet no-glitch hits must never ratchet,
-    // AND must not interrupt Current's cooldown — the site can't
-    // respond to (or stay tense about) what it never noticed.
-    log("PHASE C — 10 more days, one ghost run (quiet, no glitch) per day");
-    const currentsBefore = MJ.SECURITY_AXES.map((x) => state.axes[x].current);
-    let ghostRatchets = 0;
-    for (let day = 28; day <= 37; day++) {
-      if (MJ.recordHit(state, {}).ratcheted) ghostRatchets += 1;
-      MJ.advanceSiteDay(state);
-      log(`  day ${String(day).padStart(2)}: ${fmtSecState(state)}`);
-    }
-    const cooledDuringGhosts = MJ.SECURITY_AXES.some(
-      (x, i) => state.axes[x].current < currentsBefore[i] || state.axes[x].current === state.axes[x].min
-    );
-    log(`  ratchets:${ghostRatchets} ${ghostRatchets === 0 ? "(OK)" : "(BUG)"}   cooldown continued under daily ghost runs: ${cooledDuringGhosts ? "OK" : "BUG — ghosts froze the cooldown"}`);
+    log("PHASE E — trip them and withdraw at once: nothing should ratchet");
+    const site2 = MJ.mintSite(seed + "-alert-u2", 1, { value: 6 });
+    const st2 = site2.securityState;
+    const pre = MJ.SECURITY_AXES.map((a) => st2.axes[a].current).join(",");
+    MJ.witnessAct(st2, 1, MJ.THREAT.THREATENING);
+    const s2 = MJ.settleIncident(st2);
+    log(`  Current ${pre} -> ${MJ.SECURITY_AXES.map((a) => st2.axes[a].current).join(",")}   ratcheted:${s2.ratcheted} ${s2.ratcheted ? "(BUG)" : "(OK — Alert never rose above where it started)"}`);
     log("");
 
-    // Invariant sweep: many sites, many days of random activity.
+    log("PHASE F — quiet days cool Current back toward Min; the read resets nightly");
+    for (let d = 0; d < 12; d++) {
+      MJ.advanceSiteDay(st);
+      if (d % 4 === 3) log(`  day +${d + 1}: ${fmtSecState(st, 100 + d)}`);
+    }
+    log("");
+
     log("INVARIANT SWEEP — 300 sites x 60 days of random activity");
-    log("  checks, every single step: min <= current <= max, 0 <= alert <= alertMax, max never decreases");
+    log("  every step: min <= current <= max, max never decreases, alert level within [current, max]");
     const sweepRng = MJ.makeRNG(seed + "-alert-sweep");
-    let failures = 0;
-    let totalRatchets = 0;
-    let totalMaxGrowths = 0;
+    let failures = 0, ratchets = 0, tips = 0;
+    const CLASSES = [MJ.THREAT.AWKWARD, MJ.THREAT.QUESTIONABLE, MJ.THREAT.THREATENING];
     for (let s = 0; s < 300; s++) {
-      const sw = MJ.generateSite(sweepRng.fork("site-" + s));
-      const st = MJ.initSecurityState(sweepRng.fork("init-" + s), sw);
+      const sw = MJ.mintSite(seed + "-sweep", s, {});
+      const sst = sw.securityState;
       const prevMax = {};
-      for (const axis of MJ.SECURITY_AXES) prevMax[axis] = st.axes[axis].max;
-      let prevAlertMax = st.alertMax;
-      for (let day = 0; day < 60; day++) {
-        const hits = sweepRng.int(0, 3);
-        for (let h = 0; h < hits; h++) {
-          const r = MJ.recordHit(st, { loud: sweepRng.chance(0.5), glitch: sweepRng.chance(0.2) });
-          if (r.ratcheted) totalRatchets += 1;
-          if (r.maxGrew) totalMaxGrowths += 1;
+      for (const axis of MJ.SECURITY_AXES) prevMax[axis] = sst.axes[axis].max;
+      for (let day = 1; day <= 60; day++) {
+        const acts = sweepRng.int(0, 3);
+        for (let a = 0; a < acts; a++) {
+          if (MJ.witnessAct(sst, day, sweepRng.pick(CLASSES)).tipped) tips++;
         }
-        MJ.advanceSiteDay(st);
-        if (st.alert < 0 || st.alert > st.alertMax || st.alertMax < prevAlertMax) failures += 1;
-        prevAlertMax = st.alertMax;
+        if (MJ.alertEngaged(sst)) {
+          for (let b = 0; b < sweepRng.int(0, 4); b++) MJ.addAlertPointsAll(sst, 3);
+          for (const axis of MJ.SECURITY_AXES) {
+            const lvl = MJ.alertLevel(sst, axis);
+            if (lvl < sst.axes[axis].current || lvl > sst.axes[axis].max) failures++;
+          }
+          if (MJ.settleIncident(sst).ratcheted) ratchets++;
+        }
+        MJ.advanceSiteDay(sst);
         for (const axis of MJ.SECURITY_AXES) {
-          const a = st.axes[axis];
-          if (a.min > a.current || a.current > a.max || a.max < prevMax[axis] || a.min < 1) failures += 1;
-          prevMax[axis] = a.max;
+          const ax = sst.axes[axis];
+          if (ax.min > ax.current || ax.current > ax.max || ax.max < prevMax[axis] || ax.min < 1) failures++;
+          prevMax[axis] = ax.max;
         }
       }
     }
-    log(`  ratchet events: ${totalRatchets}   max-growth events: ${totalMaxGrowths}   invariant failures: ${failures} ${failures === 0 ? "(OK)" : "(BUG)"}`);
+    log(`  tips to threatening: ${tips}   ratchet events: ${ratchets}   invariant failures: ${failures} ${failures === 0 ? "(OK)" : "(BUG)"}`);
   }
 
   // ── P1 — the full loop: job -> recon -> strike -> pay -> growth ─

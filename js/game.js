@@ -397,6 +397,14 @@
           ? "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : "")
           : "    " + t.obstacle + " T" + t.tier + ": " + t.result);
       }
+      if (res.threatBand && res.threatBand !== "normal") {
+        logLine(session, "  the site reads you as " + res.threatBand.toUpperCase() +
+          (res.forcedResponse ? " — they are responding in force" : ""));
+      }
+      if (res.incident && res.incident.ratcheted) {
+        logLine(session, "  they held what they escalated to — the site's standing posture is higher now" +
+          (res.incident.maxGrew ? ", and they have approved more budget" : ""));
+      }
       if (res.suppression) logLine(session, "  softened: the site's " + res.suppression.axis + " grid is degraded for the rest of the day (+" + res.suppression.level + "d vs " + res.suppression.axis + " obstacles)");
       if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
       if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);

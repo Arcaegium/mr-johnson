@@ -135,14 +135,23 @@
       const r = makeRoster(rngN.fork("rr" + i), 1)[0];
       MJ.watchRunner(r, rngN);
       MJ.hireRunner(r, "permanent");
-      const before = site.securityState.alert;
-      const cap = site.securityState.alertMax;
+      const startCurrent = MJ.SECURITY_AXES.map((a) => site.securityState.axes[a].current).join(",");
       const res = MJ.runActionPeriod(rngN, [{ mission: MJ.createResourceMission(site), runners: [r] }], 1)[0];
       if (res.error) continue;
       noiseChecked += 1;
-      check(site.securityState.alert === Math.min(cap, before + res.noise.noise), "C2: noise->alert mismatch (site " + i + ")");
+      // The read is the gate: nothing ratchets unless the run
+      // actually forced a response, and a response never leaves
+      // Current below where it started.
+      const endCurrent = MJ.SECURITY_AXES.map((a) => site.securityState.axes[a].current).join(",");
+      if (!res.forcedResponse) {
+        check(endCurrent === startCurrent, "C2: a run that never read as threatening must not ratchet (site " + i + ")");
+      }
+      for (const axis of MJ.SECURITY_AXES) {
+        const ax = site.securityState.axes[axis];
+        check(ax.min <= ax.current && ax.current <= ax.max, "C2: band violated after a run (site " + i + ")");
+      }
     }
-    check(noiseChecked > 30, "C2: noise probe barely ran (" + noiseChecked + ")");
+    check(noiseChecked > 30, "C2: mission probe barely ran (" + noiseChecked + ")");
 
     // Recon -> intel: stamped today, own axis only, estimates untouched.
     let intelProved = false;
@@ -204,40 +213,41 @@
 
   // ── Class 3: timing / same-day communication ────────────────────
   function class3_timing() {
-    // A ratchet fired by an earlier mission in the queue must raise a
-    // later mission's karma (start-of-mission Current snapshot).
+    // An incident that ratcheted Current must raise a later
+    // mission's karma at that site — karma reads the posture at the
+    // START of the mission, so the crew that walks in after the
+    // fight is credited for the harder building. (Under the retired
+    // noise model this probe primed alert points; the trigger is now
+    // a settled threatening incident, which is the only thing that
+    // moves Current.)
     let proved = false;
     for (let i = 0; i < 200 && !proved; i++) {
-      const build = () => {
+      const build = (forceIncident) => {
         const rng = MJ.makeRNG("stress-queue-" + i);
-        const site = MJ.generateSite(rng.fork("s"), { value: 2, orientation: "physical" });
+        const site = MJ.mintSite("stress-queue-u", i, { value: 4, orientation: "physical" });
         MJ.generateSecurityEstimate(rng.fork("e"), site);
+        if (forceIncident) {
+          // Someone tripped them earlier and the response held.
+          MJ.witnessAct(site.securityState, 1, MJ.THREAT.THREATENING);
+          MJ.addAlertPointsAll(site.securityState, 30);
+          MJ.settleIncident(site.securityState);
+        }
         const good = makeRoster(rng.fork("g"), 1, ["fighter"])[0];
         MJ.growRunner(good, 300, rng.fork("gr"));
         MJ.watchRunner(good, rng);
         MJ.hireRunner(good, "permanent");
-        const bad = makeRoster(rng.fork("b"), 1, ["mage"])[0];
-        for (const k of Object.keys(bad.skills)) bad.skills[k] = 0; // guaranteed stall
-        MJ.watchRunner(bad, rng);
-        MJ.hireRunner(bad, "permanent");
-        return { rng, site, good, bad };
+        return { rng: MJ.makeRNG("stress-queue-dice-" + i), site, good };
       };
-      const A = build();
-      const B = build();
-      B.site.securityState.alert = 3;      // pre-loaded pressure so B's
-      B.site.securityState.sustainedHits = 2; // first noisy hit ratchets
-      const run = (X) => MJ.runActionPeriod(X.rng, [
-        { mission: MJ.createResourceMission(X.site), runners: [X.bad] },
-        { mission: MJ.createResourceMission(X.site), runners: [X.good] },
-      ], 1);
+      const A = build(false);
+      const B = build(true);
+      const run = (X) => MJ.runActionPeriod(X.rng, [{ mission: MJ.createResourceMission(X.site), runners: [X.good] }], 1)[0];
       const ra = run(A);
       const rb = run(B);
-      if (!(rb[0].noise && rb[0].noise.ratcheted)) continue;
-      if (!(ra[1].success && rb[1].success)) continue;
-      check(rb[1].karmaAward >= ra[1].karmaAward, "C3: added same-day pressure must never lower a later mission's karma");
-      if (rb[1].karmaAward > ra[1].karmaAward) proved = true;
+      if (!(ra.success && rb.success)) continue;
+      check(rb.karmaAward >= ra.karmaAward, "C3: a ratcheted site must never pay a later mission LESS karma");
+      if (rb.karmaAward > ra.karmaAward) proved = true;
     }
-    check(proved, "C3: never observed a same-day ratchet raising a later mission's karma (visibility broken?)");
+    check(proved, "C3: never observed a ratchet raising a later mission's karma (visibility broken?)");
 
     // Same-day gate opening (confirmed design): prerequisite resolved
     // earlier in the period opens the gated leg immediately — with a
@@ -497,7 +507,7 @@
     const site3 = MJ.generateSite(r3.fork("s"));
     MJ.generateSecurityEstimate(r3.fork("e"), site3);
     const stateRef = site3.securityState;
-    stateRef.alert = 4;
+    stateRef.daysSinceThreat = 4;
     stateRef.axes.physical.max += 2;
     stateRef.axes.physical.current = stateRef.axes.physical.max;
     const runner3 = makeRoster(r3.fork("r"), 1)[0];
@@ -621,10 +631,16 @@
             const pm = prevMax.get(site);
             if (pm) ok(a.max >= pm[axis], day, "Max decreased (" + axis + ")");
           }
-          ok(st.alert >= 0 && st.alert <= st.alertMax, day, "alert out of bounds");
-          const pm = prevMax.get(site);
-          if (pm) ok(st.alertMax >= pm.alertMax, day, "alertMax decreased");
-          prevMax.set(site, { physical: st.axes.physical.max, astral: st.axes.astral.max, matrix: st.axes.matrix.max, alertMax: st.alertMax });
+          // Alert, when engaged, must sit inside its axis's band —
+          // never below today's posture, never above what they can field.
+          if (MJ.alertEngaged(st)) {
+            for (const axis of AXES) {
+              const lvl = MJ.alertLevel(st, axis);
+              ok(lvl >= st.axes[axis].current && lvl <= st.axes[axis].max, day, "alert level outside [current, max] (" + axis + ")");
+            }
+          }
+          ok(["normal", "awkward", "questionable", "threatening"].indexOf(MJ.threatBand(st, day)) !== -1, day, "illegal threat band");
+          prevMax.set(site, { physical: st.axes.physical.max, astral: st.axes.astral.max, matrix: st.axes.matrix.max });
           ok(snap(site.estimatedSecurity) === estSnap.get(site), day, "a handed estimate mutated");
           for (const lens of Object.keys(site.intel || {})) {
             ok(site.intel[lens].dayTaken <= day, day, "intel stamped in the future");
@@ -791,7 +807,7 @@
     gate("watching", (s) => MJ.watchSite(s));
     gate("a tag", (s) => s.tags.push({ tag: "x", expiryDay: 9 }));
     gate("intel", (s) => { s.intel.astral = { snapshot: {}, dayTaken: 1 }; });
-    gate("heat (alert)", (s) => { s.securityState.alert = 2; });
+    gate("a live incident", (s) => { MJ.witnessAct(s.securityState, 1, MJ.THREAT.THREATENING); });
     gate("escalated posture", (s) => { const a = s.securityState.axes.physical; a.min = 1; a.current = 2; a.max = Math.max(a.max, 3); });
     gate("grown Max", (s) => { s.securityState.everGrew = true; });
     const pre = MJ.generateSite(MJ.makeRNG("stress-preregistry"));
@@ -801,11 +817,10 @@
     const hot = MJ.mintSite(U, 900, {});
     MJ.generateSecurityEstimate(rngE.fork("hot"), hot);
     MJ.addKnownSite([], hot, 1, "job");
-    hot.securityState.alert = 2;
-    check(!MJ.isSiteCompressible(hot), "C9: hot site compressed");
+    MJ.witnessAct(hot.securityState, 1, MJ.THREAT.THREATENING);
+    check(!MJ.isSiteCompressible(hot), "C9: a site mid-incident compressed");
     MJ.advanceSiteDay(hot.securityState);
-    MJ.advanceSiteDay(hot.securityState);
-    check(MJ.isSiteCompressible(hot), "C9: cooled site must compress again");
+    check(MJ.isSiteCompressible(hot), "C9: once the night resets it, it must compress again");
 
     // The watch feed matches by mission site, and only for watched.
     const list = [];
