@@ -282,7 +282,7 @@
 
   function renderSites() {
     const prevLookup = $("site-lookup") ? $("site-lookup").value : "";
-    const lookup = `<div style="margin-bottom:8px"><input type="text" class="sm" id="site-lookup" placeholder="call in by key: Boldly-Crimson-Quiet-Bicycle-0417" value="${prevLookup.replace(/"/g, "")}" style="min-width:270px" /> <button class="sm" data-act="discover-name">look up</button></div>`;
+    const lookup = `<div style="margin-bottom:8px"><input type="text" class="sm" id="site-lookup" placeholder="call in by key: Boldly-Crimson-Quiet-Bicycle-0417" value="${prevLookup.replace(/"/g, "")}" /> <button class="sm" data-act="discover-name">look up</button></div>`;
     if (S.knownSites.length === 0) { $("panel-sites").innerHTML = lookup + '<span class="muted">No known sites — accept a job, search, or call one in by name.</span>'; return; }
     $("panel-sites").innerHTML = lookup + MJ.siteListView(S.knownSites, S.day).map((row, i) => {
       const site = S.knownSites[i];
