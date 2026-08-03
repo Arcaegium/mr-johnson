@@ -386,6 +386,22 @@
       render();
       return;
     }
+    if (action === "load-game") {
+      MJ.game.loadSession().then((loaded) => {
+        if (loaded) {
+          S = loaded;
+          wipeChecks = true;
+        } else {
+          $("statline").textContent = "No save found — start a New Game.";
+        }
+        render();
+      });
+      return;
+    }
+    if (action === "save-game") {
+      if (S) MJ.game.saveSession(S).then(() => render());
+      return;
+    }
     if (!S) { $("statline").textContent = "Start a New Game first."; return; }
     const idx = el && el.dataset.idx !== undefined ? +el.dataset.idx : -1;
     if (action === "refresh-board") MJ.game.refreshBoard(S);

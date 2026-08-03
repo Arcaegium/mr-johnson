@@ -470,6 +470,12 @@
     });
 
     session.queue = [];
+
+    // Every day-spend is an autosave point (§09) — but only LIVE
+    // days: an injected rng means a test/replay is driving, and the
+    // suite must never clobber the player's save slot.
+    if (!rngOverride) saveSession(session);
+
     return results;
   }
 
@@ -526,6 +532,173 @@
     return { ok: true, queued: queued };
   }
 
+  // ── Persistence: seeds + deltas, for real (§09) ─────────────────
+  // Sites serialize as name + deltas (the name is the complete
+  // seed); runners are plain records once gear refs become ids;
+  // missions point at sites by name and prerequisites by index.
+  // Dice never serialize — layer 4 is fresh entropy by design.
+  // The day-planning queue and lastPlan are transient and drop.
+  function serializeSession(session) {
+    const rosterIndex = (r) => session.roster.indexOf(r);
+    const siteRecord = (site) => ({
+      siteName: site.identity.name,
+      universeIndex: site.identity.universeIndex,
+      tags: site.tags,
+      intel: site.intel,
+      estimatedSecurity: site.estimatedSecurity || null,
+      knownMeta: site.knownMeta || null,
+      securityState: site.securityState || null,
+    });
+    const missionRecord = (m, all) => ({
+      siteName: m.site ? m.site.identity.name : null,
+      siteEstimate: m.site ? m.site.estimatedSecurity || null : null,
+      targetFaction: m.targetFaction, hiringFaction: m.hiringFaction,
+      locationType: m.locationType, objectiveVerb: m.objectiveVerb,
+      payloadDomain: m.payloadDomain, family: m.family, tier: m.tier,
+      intendedCrew: m.intendedCrew, payContribution: m.payContribution,
+      resolved: m.resolved, karmaAward: m.karmaAward,
+      requiresIndex: m.requiresMission ? all.indexOf(m.requiresMission) : -1,
+    });
+    const jobRecord = (job) => ({
+      hiringFaction: job.hiringFaction, pay: job.pay,
+      daysPerMission: job.daysPerMission, rushMultiplier: job.rushMultiplier,
+      chained: !!job.chained, successCriteria: job.successCriteria,
+      expiryDay: job.expiryDay, contractNumber: job.contractNumber || null,
+      paid: !!job.paid, expired: !!job.expired,
+      missions: job.missions.map((m) => missionRecord(m, job.missions)),
+    });
+    const runnerRecord = (r) => {
+      const copy = Object.assign({}, r);
+      delete copy.gear; // rebuilt from item records on load
+      return JSON.parse(JSON.stringify(copy));
+    };
+    return {
+      schemaVersion: MJ.SCHEMA_VERSION,
+      universeSeed: session.universeSeed,
+      day: session.day,
+      contractCounter: session.contractCounter,
+      runnerMintIndex: session.runnerMintIndex,
+      siteMintIndex: session.siteMintIndex,
+      johnson: JSON.parse(JSON.stringify(session.save.johnson)),
+      materials: JSON.parse(JSON.stringify(session.save.armory.materials || {})),
+      items: session.save.armory.items.map((it) => ({
+        id: it.id, templateId: it.templateId, label: it.label, tier: it.tier,
+        issuedToRoster: it.issuedTo ? rosterIndex(it.issuedTo) : -1,
+      })),
+      roster: session.roster.map(runnerRecord),
+      market: session.market.map(runnerRecord),
+      knownSites: session.knownSites.map(siteRecord),
+      jobs: session.jobs.map(jobRecord),
+      board: session.board.map((e) => jobRecord(e.job)),
+      log: session.log.slice(-200),
+    };
+  }
+
+  function deserializeSession(record) {
+    const session = {
+      universeSeed: record.universeSeed,
+      day: record.day,
+      save: MJ.defaultSave(record.universeSeed),
+      roster: record.roster,
+      market: record.market,
+      runnerMintIndex: record.runnerMintIndex,
+      siteMintIndex: record.siteMintIndex,
+      contractCounter: record.contractCounter,
+      knownSites: [],
+      jobs: [],
+      board: [],
+      queue: [],
+      lastPlan: null, // transient — repeat resumes after the next played day
+      log: record.log || [],
+    };
+    session.save.johnson = record.johnson;
+    session.save.armory.materials = record.materials || {};
+    // JSON can't carry Infinity — it lands as null. The only fields
+    // that legitimately hold it get restored here.
+    const fixRunner = (r) => {
+      if (r.market && r.market.hired && r.market.hired.missionsRemaining === null) {
+        r.market.hired.missionsRemaining = Infinity;
+      }
+    };
+    session.roster.forEach(fixRunner);
+    session.market.forEach(fixRunner);
+    // Sites: mint from the name, then lay the saved deltas back on.
+    const siteByName = new Map();
+    const reviveSite = (siteName, estimate) => {
+      if (siteByName.has(siteName)) return siteByName.get(siteName);
+      const site = MJ.mintSiteByName(siteName);
+      if (estimate) site.estimatedSecurity = estimate;
+      siteByName.set(siteName, site);
+      return site;
+    };
+    for (const rec of record.knownSites) {
+      const site = reviveSite(rec.siteName, rec.estimatedSecurity);
+      if (rec.universeIndex !== undefined && rec.universeIndex !== null) site.identity.universeIndex = rec.universeIndex;
+      site.tags = (rec.tags || []).map((t) => (t.expiryDay === null ? Object.assign({}, t, { expiryDay: Infinity }) : t));
+      site.intel = rec.intel || {};
+      if (rec.knownMeta) site.knownMeta = rec.knownMeta;
+      if (rec.securityState) site.securityState = rec.securityState;
+      session.knownSites.push(site);
+    }
+    const reviveJob = (jr) => {
+      const job = {
+        hiringFaction: jr.hiringFaction, pay: jr.pay,
+        daysPerMission: jr.daysPerMission, rushMultiplier: jr.rushMultiplier,
+        chained: jr.chained, successCriteria: jr.successCriteria,
+        expiryDay: jr.expiryDay, contractNumber: jr.contractNumber,
+        paid: jr.paid, expired: jr.expired,
+        staticFacts: [], dynamicFacts: [],
+        missions: jr.missions.map((mr) => ({
+          site: mr.siteName ? reviveSite(mr.siteName, mr.siteEstimate) : null,
+          targetFaction: mr.targetFaction, hiringFaction: mr.hiringFaction,
+          locationType: mr.locationType, objectiveVerb: mr.objectiveVerb,
+          payloadDomain: mr.payloadDomain, family: mr.family, tier: mr.tier,
+          intendedCrew: mr.intendedCrew, payContribution: mr.payContribution,
+          resolved: mr.resolved, karmaAward: mr.karmaAward,
+          requiresMission: null,
+        })),
+      };
+      jr.missions.forEach((mr, i) => {
+        if (mr.requiresIndex >= 0) job.missions[i].requiresMission = job.missions[mr.requiresIndex];
+      });
+      return job;
+    };
+    session.jobs = record.jobs.map(reviveJob);
+    session.board = record.board.map((jr) => ({ job: reviveJob(jr), siteResults: [] }));
+    // Items: rebuild the two-way gear refs.
+    session.save.armory.items = record.items.map((ir) => {
+      const item = { id: ir.id, templateId: ir.templateId, label: ir.label, tier: ir.tier, issuedTo: null };
+      if (ir.issuedToRoster >= 0 && session.roster[ir.issuedToRoster]) {
+        const holder = session.roster[ir.issuedToRoster];
+        item.issuedTo = holder;
+        holder.gear = holder.gear || [];
+        holder.gear.push(item);
+      }
+      return item;
+    });
+    return session;
+  }
+
+  function saveSession(session) {
+    const record = serializeSession(session);
+    // Log synchronously — async confirmation lines would interleave
+    // nondeterministically with later commands' log lines.
+    logLine(session, "saved (day " + session.day + ")");
+    return MJ.saveGame(record).then(() => ({ ok: true })).catch((e) => {
+      logLine(session, "save WRITE FAILED — " + e);
+      return { ok: false, error: String(e) };
+    });
+  }
+
+  function loadSession() {
+    return MJ.loadGame().then((record) => {
+      if (!record || !record.universeSeed) return null;
+      const session = deserializeSession(record);
+      logLine(session, "loaded — day " + session.day + ", universe \"" + session.universeSeed + "\"");
+      return session;
+    });
+  }
+
   // ── UI helper: what can be dispatched right now ─────────────────
   function availableJobObjectives(session) {
     const out = [];
@@ -570,6 +743,10 @@
     moveQueued: moveQueued,
     endDay: endDay,
     availableJobObjectives: availableJobObjectives,
+    serializeSession: serializeSession,
+    deserializeSession: deserializeSession,
+    saveSession: saveSession,
+    loadSession: loadSession,
     liveRNG: liveRNG,
   };
 })();

@@ -886,6 +886,40 @@
     }
     s6.queue = [];
 
+    // Save/load: serialize -> deserialize must rebuild the exact
+    // situation — scalars, deltas, and every object relationship
+    // (gear two-way refs, mission->site identity, chain gates).
+    s6.save.johnson.money = 77777;
+    const gearBuy = MJ.buyItem(s6.save, "smartgun");
+    MJ.issueItem(gearBuy.item, worker);
+    const rec = MJ.game.serializeSession(s6);
+    check(typeof JSON.stringify(rec) === "string", "C10: session record must be JSON-safe (no cycles)");
+    const s6b = MJ.game.deserializeSession(JSON.parse(JSON.stringify(rec)));
+    check(s6b.day === s6.day && s6b.save.johnson.money === s6.save.johnson.money && s6b.contractCounter === s6.contractCounter, "C10: scalars must survive the round-trip");
+    check(s6b.roster.length === s6.roster.length && s6b.roster[1].karma === s6.roster[1].karma, "C10: runners must survive with their karma");
+    check(s6b.knownSites.length === s6.knownSites.length && s6b.knownSites.every((s, i) => s.identity.name === s6.knownSites[i].identity.name), "C10: sites must revive by name in order");
+    check(snap(s6b.knownSites[0].securityState) === snap(s6.knownSites[0].securityState), "C10: security deltas must survive");
+    const loadedItem = s6b.save.armory.items.find((it) => it.templateId === "smartgun");
+    check(!!loadedItem && loadedItem.issuedTo === s6b.roster[1] && s6b.roster[1].gear.indexOf(loadedItem) !== -1, "C10: gear two-way refs must rebuild");
+    check(s6b.roster[1].market.hired.missionsRemaining === Infinity, "C10: a permanent contract must survive JSON (Infinity round-trip)");
+    const loadedFound = s6b.knownSites.find((s) => s.identity.name === found.identity.name);
+    check(!!loadedFound && loadedFound.tags.some((t) => String(t.tag).indexOf("resource:") === 0 && t.expiryDay === Infinity), "C10: resource tags must survive JSON (Infinity round-trip)");
+    for (const job of s6b.jobs) {
+      for (const m of job.missions) {
+        if (m.site && m.site.identity.name) {
+          const known = s6b.knownSites.find((s) => s.identity.name === m.site.identity.name);
+          if (known) check(m.site === known, "C10: mission sites must relink to the SAME known-site objects");
+        }
+        if (m.requiresMission) check(job.missions.indexOf(m.requiresMission) !== -1, "C10: chain gates must relink to siblings");
+      }
+    }
+    // The loaded session must be playable: run a day on it.
+    if (MJ.isDispatchable(s6b.roster[1])) {
+      MJ.game.queueDispatch(s6b, MJ.createCraftingMission(2), [s6b.roster[1]], "post-load craft");
+    }
+    MJ.game.endDay(s6b, rng6.fork("post-load"));
+    check(s6b.day === s6.day + 1, "C10: a loaded session must keep playing");
+
     // Layer 3 sanity: two live (timestamped) refreshes differ.
     const s5 = MJ.game.newGame("itest-arrivals");
     MJ.game.refreshBoard(s5);
