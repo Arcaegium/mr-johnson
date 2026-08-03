@@ -151,6 +151,9 @@
   // only cools toward Min after sustained full calm — and Max never
   // moves here at all.
   function advanceSiteDay(state) {
+    // The night resets what the crew switched off — suppression
+    // (mission.js's same-day tenderizing) never survives a day tick.
+    state.suppression = null;
     state.alert = Math.max(0, state.alert - ALERT_DECAY_PER_DAY);
     if (state.alert > 0) return;
 

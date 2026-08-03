@@ -266,6 +266,76 @@
     }
     check(gateProved, "C3: same-day gate probe never met its conditions");
 
+    // Suppression: same-day softening — earned on success, applied
+    // to matching-projection rolls, karma-neutral, gone overnight.
+    {
+      // Mechanics unit checks: stack, cap, day-scoping, night reset.
+      const sSite = MJ.mintSite("stress-supp-u", 0, { value: 2, orientation: "physical" });
+      check(MJ.applySuppression(sSite, "physical", 7) === 1, "C3: suppression must start at 1");
+      for (let i = 0; i < 5; i++) MJ.applySuppression(sSite, "physical", 7);
+      check(MJ.suppressionBonus(sSite, "physical", 7) === 3, "C3: suppression must cap at 3");
+      check(MJ.suppressionBonus(sSite, "astral", 7) === 0, "C3: suppression must be per-axis");
+      check(MJ.suppressionBonus(sSite, "physical", 8) === 0, "C3: suppression must be day-scoped");
+      MJ.applySuppression(sSite, "astral", 9);
+      check(MJ.suppressionBonus(sSite, "physical", 9) === 0 && MJ.suppressionBonus(sSite, "astral", 9) === 1, "C3: a new day's suppression starts fresh");
+      MJ.advanceSiteDay(sSite.securityState);
+      check(!sSite.securityState.suppression, "C3: the night must reset suppression");
+
+      // Paired runs: same site, same dice forks — the suppressed run's
+      // physical-obstacle pools must read exactly +2, others +0, and
+      // karma must not move when both succeed.
+      let proved = false;
+      for (let i = 0; i < 30 && !proved; i++) {
+        const build = (withSupp) => {
+          const rng = MJ.makeRNG("stress-supp-run-" + i);
+          const site = MJ.mintSite("stress-supp-u2", i, { value: 2, orientation: "physical" });
+          MJ.generateSecurityEstimate(rng.fork("e"), site);
+          if (withSupp) site.securityState.suppression = { physical: 2, astral: 0, day: 4 };
+          const r = makeRoster(rng.fork("r"), 1, ["fighter"])[0];
+          MJ.growRunner(r, 200, rng.fork("g"));
+          MJ.watchRunner(r, rng);
+          MJ.hireRunner(r, "permanent");
+          return MJ.runActionPeriod(rng.fork("run"), [{ mission: MJ.createResourceMission(site), runners: [r] }], 4)[0];
+        };
+        const a = build(false);
+        const b = build(true);
+        if (!a.tasks.length || a.tasks.length !== b.tasks.length) continue;
+        let sawPlus2 = false;
+        let bad = false;
+        for (let k = 0; k < a.tasks.length; k++) {
+          if (a.tasks[k].pool === undefined || b.tasks[k].pool === undefined) continue;
+          const d = b.tasks[k].pool - a.tasks[k].pool;
+          if (d === 2) sawPlus2 = true;
+          else if (d !== 0) bad = true;
+        }
+        if (!sawPlus2) continue; // route had no physical obstacles this mint — try another
+        check(!bad, "C3: suppression must add exactly its level, only to matching obstacles (i=" + i + ")");
+        if (a.success && b.success) {
+          check(a.karmaAward === b.karmaAward, "C3: suppression must be karma-neutral");
+        }
+        proved = true;
+      }
+      check(proved, "C3: suppression paired-run probe never met its conditions");
+
+      // Earning + axis mapping: a successful MATRIX recon softens the
+      // PHYSICAL grid (the cameras it looped).
+      let earned = false;
+      for (let i = 0; i < 100 && !earned; i++) {
+        const rng = MJ.makeRNG("stress-supp-earn-" + i);
+        const site = MJ.mintSite("stress-supp-u3", i, { value: 3 });
+        MJ.generateSecurityEstimate(rng.fork("e"), site);
+        const r = makeRoster(rng.fork("r"), 1, ["decker"])[0];
+        MJ.watchRunner(r, rng);
+        MJ.hireRunner(r, "permanent");
+        const res = MJ.runActionPeriod(rng.fork("run"), [{ mission: MJ.createReconMission(site, "matrix"), runners: [r] }], 6)[0];
+        if (!res.success) continue;
+        earned = true;
+        check(res.suppression && res.suppression.axis === "physical", "C3: matrix recon must suppress the physical grid");
+        check(MJ.suppressionBonus(site, "physical", 6) >= 1, "C3: earned suppression must be live on the site");
+      }
+      check(earned, "C3: suppression earning probe never succeeded");
+    }
+
     // Acted-set: one action per runner per period, across roles.
     const rngA = MJ.makeRNG("stress-acted");
     const pair = makeRoster(rngA, 2, ["decker", "fighter"]);

@@ -84,6 +84,12 @@
       dayKnown: site.knownMeta ? site.knownMeta.dayKnown : null,
       source: site.knownMeta ? site.knownMeta.source : null,
       security: MJ.siteIntelView(site, day),
+      suppression: (() => {
+        const s = site.securityState && site.securityState.suppression;
+        return s && s.day === day && ((s.physical || 0) + (s.astral || 0) > 0)
+          ? { physical: s.physical || 0, astral: s.astral || 0 }
+          : null;
+      })(),
       tags: site.tags.map((t) => t.tag),
     }));
   }

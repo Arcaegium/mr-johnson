@@ -289,6 +289,7 @@
       return `<div class="row">${row.universeIndex !== null ? "#" + row.universeIndex + " " : ""}<b>${row.district}</b> (${row.owningFaction}) v:${row.value} ${row.orientation} <span class="muted">via ${row.source} d${row.dayKnown}</span>${targetMarks(site)}<br>` +
         (row.name ? `<span class="ink">"${row.name}"</span>${row.theme ? ` <span class="muted">· ${row.theme}</span>` : ""}<br>` : "") +
         `P:${fmtAxis(row.security.physical)} A:${fmtAxis(row.security.astral)} M:${fmtAxis(row.security.matrix)}` +
+        (row.suppression ? ` <span class="warn">softened today${row.suppression.physical ? " P+" + row.suppression.physical : ""}${row.suppression.astral ? " A+" + row.suppression.astral : ""}</span>` : "") +
         (row.tags.length ? ` <span class="muted">[${row.tags.join(", ")}]</span>` : "") + `</div>`;
     }).join("");
   }

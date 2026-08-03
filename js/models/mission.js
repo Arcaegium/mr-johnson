@@ -237,6 +237,42 @@
     return pool.slice(0, RECON_SAMPLE);
   }
 
+  // ── Suppression: tenderizing that lasts the rest of the day ─────
+  // Every successful site mission leaves its mark on the defenses
+  // it beat — a looped camera, a cracked ward — as per-axis
+  // suppression granting bonus dice against MATCHING-projection
+  // obstacles for later missions at that site the SAME DAY. Stacks
+  // to a cap, vanishes overnight (alert.js clears it). Earned axis:
+  // recon suppresses its lens (a MATRIX sweep suppresses the
+  // PHYSICAL grid — it's the cameras and maglocks it looped);
+  // astral work cracks astral; physical strikes and data payloads
+  // degrade the physical grid. Applied AFTER a mission resolves, so
+  // nothing self-benefits. Karma stays keyed to the unsuppressed
+  // posture — softening lowers the risk, never the books.
+  const SUPPRESSION_PER_SUCCESS = 1;
+  const SUPPRESSION_CAP = 3;
+
+  function suppressionAxisFor(kind, mission) {
+    if (kind === "recon") return mission.lens === "matrix" ? "physical" : mission.lens;
+    if (mission.payloadDomain === "astral") return "astral";
+    return "physical";
+  }
+
+  function suppressionBonus(site, projection, day) {
+    const s = site.securityState && site.securityState.suppression;
+    if (!s || s.day !== day) return 0;
+    return s[projection] || 0;
+  }
+
+  function applySuppression(site, axis, day) {
+    const st = site.securityState;
+    if (!st.suppression || st.suppression.day !== day) {
+      st.suppression = { physical: 0, astral: 0, day: day };
+    }
+    st.suppression[axis] = Math.min(SUPPRESSION_CAP, (st.suppression[axis] || 0) + SUPPRESSION_PER_SUCCESS);
+    return st.suppression[axis];
+  }
+
   function hasFreshIntel(site, day) {
     return Object.values(site.intel || {}).some(
       (x) => day >= x.dayTaken && day - x.dayTaken <= INTEL_FRESH_DAYS
@@ -311,7 +347,8 @@
         MJ.consumeItem(boostItem);
       }
       const outcome = MJ.resolveTask(rng, approach.runner, obstacle, approach.skill, {
-        bonusDice: bonusDice + MJ.gearBonusFor(approach.runner, approach.skill) + boostDice,
+        bonusDice: bonusDice + MJ.gearBonusFor(approach.runner, approach.skill) + boostDice +
+          suppressionBonus(site, obstacle.projection, day),
       });
       if (approach.loud) anyLoud = true;
       if (outcome.glitch) anyGlitch = true;
@@ -370,6 +407,7 @@
     }
 
     let karmaAward = 0;
+    let suppression = null;
     if (success) {
       if (kind === "recon") {
         karmaAward = Math.max(1, Math.round(RECON_KARMA_PER_SECURITY * start[mission.lens]));
@@ -380,12 +418,16 @@
       for (const runner of runners) MJ.growRunner(runner, karmaAward, rng);
       mission.resolved = true;
       mission.karmaAward = karmaAward;
+      // The win softens the target for the rest of the day.
+      const axis = suppressionAxisFor(kind, mission);
+      suppression = { axis: axis, level: applySuppression(site, axis, day) };
     }
 
     const result = {
       kind: kind, success: success, karmaAward: karmaAward,
       obstaclesFaced: obstacles.length, tasks: tasks,
       noise: hit, intelBonusApplied: bonusDice > 0,
+      suppression: suppression,
     };
     if (success && kind === "resourceGathering") {
       // Draw from the site's own probability chart (§09: the loot
@@ -587,6 +629,8 @@
   MJ.createSearchMission = createSearchMission;
   MJ.generateSecurityEstimate = generateSecurityEstimate;
   MJ.siteIntelView = siteIntelView;
+  MJ.suppressionBonus = suppressionBonus;
+  MJ.applySuppression = applySuppression;
   MJ.discoverResourceSite = discoverResourceSite;
   MJ.missionKind = missionKind;
   MJ.runActionPeriod = runActionPeriod;
