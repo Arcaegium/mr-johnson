@@ -133,7 +133,7 @@
   // must be affordable from job pay at matching rung.
   const ITEM_COST_SCALE = 150;
   const ITEM_RESALE_RATIO = 0.4;
-  const MATERIAL_PRICES = { "resource:scrap": 150, "resource:reagents": 250 };
+  const MATERIAL_PRICES = { "resource:scrap": 150, "resource:reagents": 250, "resource:data": 400 };
 
   function itemCost(templateId) {
     const t = MJ.ITEM_TEMPLATES[templateId];

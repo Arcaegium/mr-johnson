@@ -622,21 +622,42 @@
       check(owners.size >= Math.min(F, 4), "C8: district " + district + " is owned by too few factions (" + owners.size + ") — pairing has locked");
     }
 
-    // Site names: Adverb-Adjective-Noun-NNN, deterministic per
-    // index — and THE NAME IS THE SEED: the same name mints the
-    // same building in any universe (only district/owner are
-    // universe-local, and their picks come after all content rolls
-    // so overriding them never desyncs the layout).
-    const nm = MJ.siteNameFromIndex(U, 5);
-    check(/^[A-Z][a-z]+-[A-Z][a-z]+-[A-Z][a-z]+-\d{3}$/.test(nm), "C8: site name format broken: " + nm);
-    check(nm === MJ.siteNameFromIndex(U, 5), "C8: site name must be deterministic per index");
-    const contentOf = (s) => snap({ v: s.identity.value, o: s.identity.orientation, sec: s.security, st: s.securityState, layout: s.layout, pop: s.population });
-    const viaUniverse = MJ.mintSite(U, 5, { value: 4 });
-    const viaName = MJ.mintSiteByName(nm, { value: 4 });
-    check(viaUniverse.identity.name === nm, "C8: minted site must carry its name");
-    check(contentOf(viaUniverse) === contentOf(viaName), "C8: the name must be the seed — same name, same building, any universe");
-    check(contentOf(viaName) === contentOf(MJ.mintSiteByName(nm, { value: 4 })), "C8: mintSiteByName must be deterministic");
-    check(contentOf(viaName) !== contentOf(MJ.mintSiteByName(MJ.siteNameFromIndex(U, 6), { value: 4 })), "C8: different names must differ");
+    // Site names: Adverb-Color-Adjective-Noun-#### — the name is
+    // the COMPLETE seed, and its words ENCODE the qualities: the
+    // governor selects what it needs and constructs the name that
+    // means it; decoding the same name anywhere reproduces the
+    // whole site — identity, theme, security posture, loot chart.
+    const nmSite = MJ.mintSite(U, 5, { value: 4, orientation: "matrix" });
+    const nm = nmSite.identity.name;
+    check(/^[A-Za-z]+-[A-Za-z]+-[A-Za-z]+-[A-Za-z]+-\d{4}$/.test(nm), "C8: site name format broken: " + nm);
+    check(MJ.mintSite(U, 5, { value: 4, orientation: "matrix" }).identity.name === nm, "C8: dealt name must be deterministic per slot");
+    const q = MJ.decodeSiteName(nm);
+    check(q && q.value === 4 && q.orientation === "matrix", "C8: requested qualities must be encoded in the name");
+    const contentOf = (s) => snap({
+      d: s.identity.district, own: s.identity.owningFaction, v: s.identity.value,
+      o: s.identity.orientation, theme: s.identity.theme,
+      sec: s.security, st: s.securityState, layout: s.layout, pop: s.population, loot: s.lootTable,
+    });
+    check(contentOf(nmSite) === contentOf(MJ.mintSiteByName(nm)), "C8: the name must be the complete seed — identical anywhere, identity included");
+    check(MJ.mintSiteByName(nm) !== null && contentOf(MJ.mintSiteByName(nm)) === contentOf(MJ.mintSiteByName(nm)), "C8: mintSiteByName must be deterministic");
+    check(MJ.decodeSiteName("Not-A-Real-Site-0001") === null, "C8: off-grammar words must not decode");
+    // Encode/decode round-trips the whole quality space, including
+    // Unowned owners and the wilderness districts.
+    const rngRT = MJ.makeRNG("stress-name-rt");
+    for (let i = 0; i < 100; i++) {
+      const want = {
+        district: rngRT.pick(MJ.SITE_DISTRICTS),
+        owner: rngRT.pick(MJ.OWNERS),
+        value: rngRT.int(1, 10),
+        orientation: rngRT.pick(MJ.ORIENTATIONS),
+      };
+      const got = MJ.decodeSiteName(MJ.encodeSiteName(want, rngRT.fork("e" + i)));
+      check(got && got.district === want.district && got.owner === want.owner && got.value === want.value && got.orientation === want.orientation,
+        "C8: encode/decode round-trip failed (i=" + i + ")");
+    }
+    const wild = MJ.mintSiteByName(MJ.encodeSiteName({ district: "Salish Wilds", owner: "Unowned", value: 2, orientation: "astral" }, rngRT.fork("wild")));
+    check(wild.identity.district === "Salish Wilds" && wild.identity.owningFaction === "Unowned", "C8: wilderness/Unowned sites must mint from their names");
+    check(!!wild.identity.theme && !!wild.lootTable && wild.lootTable.entries.length === 3, "C8: theme and loot chart must ride the name");
 
     // Runner handles: the universe deals base names from a bag —
     // within one full block, every base appears exactly once (no

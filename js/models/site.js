@@ -62,9 +62,18 @@
 (function () {
   window.MJ = window.MJ || {};
 
-  // ── Flavor: district & owning faction ──────────────────────────
+  // ── Flavor: districts & owners ─────────────────────────────────
+  // FACTIONS are the seven CLIENTS/OWNERS with agendas — the only
+  // parties who hire. Site OWNERSHIP is wider: a site can also be
+  // Unowned (squatters, ferals, nobody's ledger). And the sprawl
+  // has edges: the wilderness districts (the elf-touched forests
+  // outside the metroplex) exist mostly for resource sites and
+  // whatever the player calls in.
   const DISTRICTS = ["Downtown", "Redmond Barrens", "Bellevue", "Renton", "Tacoma", "Everett", "Puyallup"];
+  const WILD_DISTRICTS = ["Salish Wilds", "Snoqualmie Forest"];
+  const SITE_DISTRICTS = DISTRICTS.concat(WILD_DISTRICTS); // 9 — the full encodable space
   const FACTIONS = ["Ares", "Renraku", "Mitsuhama", "Yakuza", "Ork Underground", "Independent", "Ancients"];
+  const OWNERS = FACTIONS.concat(["Unowned"]); // 8 — the full encodable space
 
   // ── Value & Orientation: what a site IS, before any security ────
   // exists at all (§06/§09). Value is how big a deal the target is;
@@ -412,6 +421,39 @@
     };
   }
 
+  // ── Visual theme & loot: what a place LOOKS like and coughs up ──
+  // Both derive from the site's own stream — a named site's theme
+  // and probability chart are as canonical as its walls.
+  const URBAN_THEMES = [
+    "corporate tower", "warehouse complex", "research annex", "nightclub",
+    "street clinic", "tenement block", "datacenter", "shipping depot",
+    "temple", "arcology floor", "parking structure", "media studio",
+  ];
+  const WILD_THEMES = [
+    "reagent grove", "cavern system", "pre-Awakening ruin",
+    "squatter encampment", "forest shrine", "crash site",
+  ];
+
+  function generateLootTable(rng, value, orientation) {
+    // The probability chart of what can be found here: harvest draws
+    // from it (and future loot systems will too). Orientation leans
+    // the weights, value scales the amounts and the odds of an
+    // actual item turning up.
+    const weights = {
+      "resource:scrap": orientation === "physical" ? 5 : orientation === "balanced" ? 3 : 2,
+      "resource:reagents": orientation === "astral" ? 5 : orientation === "balanced" ? 3 : 1,
+      "resource:data": orientation === "matrix" ? 5 : orientation === "balanced" ? 3 : 1,
+    };
+    return {
+      entries: Object.keys(weights).map((kind) => ({
+        kind: kind,
+        weight: weights[kind],
+        amountMax: 1 + Math.ceil(value / 3) + rng.int(0, 1),
+      })),
+      itemDropChance: Math.min(0.35, 0.05 + value * 0.02),
+    };
+  }
+
   // ── Top-level generator ──────────────────────────────────────────
   function generateSite(rng, options) {
     options = options || {};
@@ -422,17 +464,23 @@
     const security = deriveSecurity(r, value, orientation);
     const layout = generateLayout(r, security);
     const population = generatePopulation(r, security);
+    const district = options.district || r.pick(DISTRICTS);
+    const isWild = WILD_DISTRICTS.indexOf(district) !== -1;
+    const theme = r.pick(isWild ? WILD_THEMES : URBAN_THEMES);
+    const lootTable = generateLootTable(r, value, orientation);
 
     return {
       identity: {
-        district: options.district || r.pick(DISTRICTS),
+        district: district,
         owningFaction: options.faction || r.pick(FACTIONS),
         value: value,             // 1-10 — what the job board matches a job slot's tier against
         orientation: orientation, // "physical" | "astral" | "matrix" | "balanced"
+        theme: theme,             // what the place LOOKS like — canonical per name
       },
       security: security,
       layout: layout,
       population: population,
+      lootTable: lootTable,       // the probability chart of what's findable here
       // Persistence is deltas only (§09) — reserved here so the
       // record shape doesn't change later, but stays empty until the
       // player actually scouts or a job leaves a mark. Layout itself
@@ -482,14 +530,22 @@
     };
   }
 
-  // ── Site names: Adverb-Adjective-Noun-NNN ───────────────────────
-  // The what3words idea, weaponized: every site gets a unique
-  // human-memorable name — and the NAME IS THE SEED. A site's
-  // content (value roll, layout, obstacles, resting security)
-  // derives from the name string alone, so
-  // "Beautifully-Quiet-Bicycle-123" is the same building in every
-  // universe that ever names it — only district and owner are
-  // universe-local (the bags above). 64^3 x 1000 ≈ 262M names.
+  // ── Site names: Adverb-Color-Adjective-Noun-#### ────────────────
+  // The what3words idea, fully weaponized: the NAME IS THE COMPLETE
+  // SEED, and the name's structure ENCODES the site's qualities —
+  // so when the universe randomly needs "a safe-band physical site
+  // in Tacoma owned by Mitsuhama," it selects those qualities and
+  // CONSTRUCTS the name that means them (no search, no override,
+  // no algorithm guessing). Decoding the same name in any universe
+  // reproduces the same site, qualities and all:
+  //   Color     -> owner        (16 colors / 8 owners, 2 each)
+  //   Adjective -> district     (64 adjectives / 9 districts)
+  //   Noun      -> value x orientation (64 nouns / 40 combos)
+  //   Adverb + 4 digits -> pure uniquifier (64 x 10,000 per combo)
+  // ~4.2 billion names. Veterans can learn to read addresses —
+  // that's street knowledge, and everything encoded is information
+  // the UI already shows on known sites. Theme and loot need no
+  // encoding budget: they derive from the name hash.
   const NAME_ADVERBS = [
     "Absurdly", "Almost", "Awfully", "Badly", "Barely", "Blindly",
     "Boldly", "Briskly", "Broadly", "Calmly", "Carefully", "Cheaply",
@@ -530,10 +586,50 @@
     "Trumpet", "Tunnel", "Turbine", "Walnut", "Windmill",
   ];
 
-  function siteNameFromIndex(universeSeed, index) {
-    const rng = MJ.makeRNG(universeSeed).fork("site-name-" + index);
-    const num = String(rng.int(0, 999)).padStart(3, "0");
-    return rng.pick(NAME_ADVERBS) + "-" + rng.pick(NAME_ADJECTIVES) + "-" + rng.pick(NAME_NOUNS) + "-" + num;
+  const NAME_COLORS = [
+    "Amber", "Azure", "Cobalt", "Coral", "Crimson", "Emerald",
+    "Indigo", "Ivory", "Jade", "Obsidian", "Onyx", "Saffron",
+    "Scarlet", "Teal", "Umber", "Violet",
+  ];
+
+  // ── The encoding tables (stable by index — never reorder) ──────
+  // adjective i -> district i % 9; color i -> owner i % 8;
+  // noun i -> combo i % 40, combo = (value-1) + 10 * orientationIdx.
+  function wordsFor(pool, groupCount, groupIndex) {
+    const out = [];
+    for (let i = 0; i < pool.length; i++) {
+      if (i % groupCount === groupIndex) out.push(pool[i]);
+    }
+    return out;
+  }
+
+  function encodeSiteName(qualities, rng) {
+    const districtIdx = SITE_DISTRICTS.indexOf(qualities.district);
+    const ownerIdx = OWNERS.indexOf(qualities.owner);
+    const orientationIdx = ORIENTATIONS.indexOf(qualities.orientation);
+    const combo = (qualities.value - 1) + 10 * orientationIdx;
+    const adjective = rng.pick(wordsFor(NAME_ADJECTIVES, 9, districtIdx));
+    const color = rng.pick(wordsFor(NAME_COLORS, 8, ownerIdx));
+    const noun = rng.pick(wordsFor(NAME_NOUNS, 40, combo));
+    const adverb = rng.pick(NAME_ADVERBS);
+    const num = String(rng.int(0, 9999)).padStart(4, "0");
+    return adverb + "-" + color + "-" + adjective + "-" + noun + "-" + num;
+  }
+
+  function decodeSiteName(name) {
+    const parts = String(name).split("-");
+    if (parts.length !== 5 || !/^\d{4}$/.test(parts[4])) return null;
+    const colorIdx = NAME_COLORS.indexOf(parts[1]);
+    const adjIdx = NAME_ADJECTIVES.indexOf(parts[2]);
+    const nounIdx = NAME_NOUNS.indexOf(parts[3]);
+    if (NAME_ADVERBS.indexOf(parts[0]) === -1 || colorIdx === -1 || adjIdx === -1 || nounIdx === -1) return null;
+    const combo = nounIdx % 40;
+    return {
+      district: SITE_DISTRICTS[adjIdx % 9],
+      owner: OWNERS[colorIdx % 8],
+      value: (combo % 10) + 1,
+      orientation: ORIENTATIONS[Math.floor(combo / 10)],
+    };
   }
 
   // Mint the universe's site #index. Layout, population, and
@@ -541,44 +637,52 @@
   // same index, same universe, same site, forever. value/orientation
   // stay caller-supplied where a job's needs dictate them (the
   // request is part of the reveal, not the universe).
-  // Core mint: content derives from the NAME string — the name is
-  // the seed. district/faction overrides come last in generateSite's
-  // stream, so overriding them (universe bags) never desyncs the
-  // layout: the same name yields the same building everywhere.
-  function mintSiteNamed(name, options, identityOverride) {
-    options = options || {};
+  // ── The one true mint: a name, nothing else ─────────────────────
+  // Decode the qualities the name encodes, inject them, and let the
+  // name-hashed stream generate everything else. No options, no
+  // overrides — the same name is the same site, everywhere, always.
+  // Returns null for a name that isn't in the grammar.
+  function mintSiteByName(name) {
+    const q = decodeSiteName(name);
+    if (!q) return null;
     const rng = MJ.makeRNG("site|" + name);
     const site = generateSite(rng, {
-      district: identityOverride ? identityOverride.district : undefined,
-      faction: identityOverride ? identityOverride.owningFaction : undefined,
-      value: options.value,
-      orientation: options.orientation,
+      district: q.district,
+      faction: q.owner,
+      value: q.value,
+      orientation: q.orientation,
     });
     site.identity.name = name;
-    const mintOptions = {};
-    if (options.value !== undefined) mintOptions.value = options.value;
-    if (options.orientation !== undefined) mintOptions.orientation = options.orientation;
-    site.identity.mintOptions = mintOptions;
     // Resting security posture rides the name too — the same
     // building is the same nut to crack in every universe.
     MJ.initSecurityState(MJ.makeRNG("site-security|" + name), site);
     return site;
   }
 
-  function mintSite(universeSeed, index, options) {
-    // The universe decides WHICH names its indices draw and who owns
-    // the building locally; the name decides everything else.
-    const name = siteNameFromIndex(universeSeed, index);
-    const site = mintSiteNamed(name, options, siteIdentityFromIndex(universeSeed, index));
+  // The universe's deal: the governor SELECTS the qualities this
+  // slot actually needs (bags for balance, the job's band and
+  // orientation as requirements), CONSTRUCTS the name that encodes
+  // them (uniquifier + word choices from the universe's own
+  // stream), and mints it. Selection, never modification — and the
+  // dealt site is its full canonical self in every other universe.
+  // req: { value?, orientation?, district?, owner?, excludeOwner? }
+  function mintSite(universeSeed, index, req) {
+    req = req || {};
+    const rng = MJ.makeRNG(universeSeed).fork("site-name-" + index);
+    let owner = req.owner || siteIdentityFromIndex(universeSeed, index).owningFaction;
+    if (req.excludeOwner && owner === req.excludeOwner) {
+      owner = FACTIONS[(FACTIONS.indexOf(owner) + 1) % FACTIONS.length];
+    }
+    const qualities = {
+      district: req.district || siteIdentityFromIndex(universeSeed, index).district,
+      owner: owner,
+      value: req.value !== undefined ? req.value : rng.int(1, 10),
+      orientation: req.orientation || rng.pick(ORIENTATIONS),
+    };
+    const name = encodeSiteName(qualities, rng);
+    const site = mintSiteByName(name);
     site.identity.universeIndex = index;
     return site;
-  }
-
-  // Cross-universe recreation: hand any name (with the same mint
-  // options) to get that exact building — district and faction roll
-  // from the name itself since no universe is supplying them.
-  function mintSiteByName(name, options) {
-    return mintSiteNamed(name, options, null);
   }
 
   // ── Every obstacle instance on a site, any slot, any projection ─
@@ -655,7 +759,10 @@
   }
 
   MJ.DISTRICTS = DISTRICTS;
+  MJ.WILD_DISTRICTS = WILD_DISTRICTS;
+  MJ.SITE_DISTRICTS = SITE_DISTRICTS;
   MJ.FACTIONS = FACTIONS;
+  MJ.OWNERS = OWNERS;
   MJ.ORIENTATIONS = ORIENTATIONS;
   MJ.OBSTACLE_TEMPLATES = OBSTACLE_TEMPLATES;
   MJ.rollValue = rollValue;
@@ -663,7 +770,8 @@
   MJ.deriveSecurity = deriveSecurity;
   MJ.generateSite = generateSite;
   MJ.siteIdentityFromIndex = siteIdentityFromIndex;
-  MJ.siteNameFromIndex = siteNameFromIndex;
+  MJ.encodeSiteName = encodeSiteName;
+  MJ.decodeSiteName = decodeSiteName;
   MJ.mintSite = mintSite;
   MJ.mintSiteByName = mintSiteByName;
   MJ.allObstacles = allObstacles;

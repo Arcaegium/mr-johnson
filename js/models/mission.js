@@ -388,9 +388,21 @@
       noise: hit, intelBonusApplied: bonusDice > 0,
     };
     if (success && kind === "resourceGathering") {
-      // Yield goes nowhere yet — no armory to receive it (flagged).
-      const kindTag = (site.tags.find((t) => String(t.tag).startsWith("resource:")) || {}).tag;
-      result.yield = { kind: kindTag || "resource:generic", amount: 1 + Math.max(0, Math.round(start.astral / 3)) };
+      // Draw from the site's own probability chart (§09: the loot
+      // table is as canonical as the walls — same name, same odds).
+      const table = site.lootTable;
+      if (table) {
+        const entry = rng.weighted(table.entries.map((e) => ({ item: e, weight: e.weight })));
+        result.yield = { kind: entry.kind, amount: rng.int(1, entry.amountMax) };
+        if (rng.chance(table.itemDropChance)) {
+          const pool = Object.keys(MJ.ITEM_TEMPLATES).filter((id) =>
+            ["weapon", "gear", "consumable", "program", "focus"].indexOf(MJ.ITEM_TEMPLATES[id].category) !== -1);
+          result.bonusItem = MJ.makeItem(rng.pick(pool));
+        }
+      } else {
+        const kindTag = (site.tags.find((t) => String(t.tag).startsWith("resource:")) || {}).tag;
+        result.yield = { kind: kindTag || "resource:generic", amount: 1 + Math.max(0, Math.round(start.astral / 3)) };
+      }
     }
     return result;
   }

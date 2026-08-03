@@ -50,7 +50,9 @@
   // ── Known-site management ───────────────────────────────────────
   function addKnownSite(list, site, day, source) {
     const existing = list.find(
-      (s) => s === site || (s.identity.universeIndex !== undefined && s.identity.universeIndex === site.identity.universeIndex)
+      (s) => s === site ||
+        (s.identity.universeIndex !== undefined && s.identity.universeIndex === site.identity.universeIndex) ||
+        (s.identity.name && s.identity.name === site.identity.name)
     );
     if (existing) return existing;
     site.knownMeta = { dayKnown: day, source: source || "job", watched: false };
@@ -73,6 +75,7 @@
     return list.map((site) => ({
       universeIndex: site.identity.universeIndex !== undefined ? site.identity.universeIndex : null,
       name: site.identity.name || null,
+      theme: site.identity.theme || null,
       district: site.identity.district,
       owningFaction: site.identity.owningFaction,
       value: site.identity.value,
@@ -99,7 +102,9 @@
 
   // ── Compression: the runner asymmetry, applied to sites ─────────
   function isSiteCompressible(site) {
-    if (site.identity.universeIndex === undefined) return false; // pre-registry site — nothing to re-mint from
+    // The name alone recreates any minted site (it's the complete
+    // seed); a bench site without one has nothing to re-mint from.
+    if (!site.identity.name) return false;
     if (site.knownMeta && site.knownMeta.watched) return false;
     if (site.tags.length > 0) return false;
     if (Object.keys(site.intel || {}).length > 0) return false;
@@ -117,18 +122,18 @@
   function compressSite(site) {
     if (!isSiteCompressible(site)) return null;
     return {
-      universeIndex: site.identity.universeIndex,
-      mintOptions: Object.assign({}, site.identity.mintOptions),
-      // The handed estimate is reveal-layer data (rolled off a
-      // transient stream at hand-off) — it can't be re-derived from
-      // the universe, so it rides the record.
+      // The name IS the complete seed — the record is just the name
+      // plus what the reveal layer handed the player.
+      siteName: site.identity.name,
+      universeIndex: site.identity.universeIndex, // provenance only
       estimatedSecurity: site.estimatedSecurity ? Object.assign({}, site.estimatedSecurity) : null,
       knownMeta: site.knownMeta ? Object.assign({}, site.knownMeta) : null,
     };
   }
 
   function reviveSite(universeSeed, record) {
-    const site = MJ.mintSite(universeSeed, record.universeIndex, record.mintOptions);
+    const site = MJ.mintSiteByName(record.siteName);
+    if (record.universeIndex !== undefined) site.identity.universeIndex = record.universeIndex;
     if (record.estimatedSecurity) site.estimatedSecurity = Object.assign({}, record.estimatedSecurity);
     if (record.knownMeta) site.knownMeta = Object.assign({}, record.knownMeta);
     return site;

@@ -35,7 +35,8 @@
 
   // ── The dispatch builder: Location -> Action (user spec) ────────
   function siteTag(site) {
-    return `#${site.identity.universeIndex} ${site.identity.district} (${site.identity.owningFaction})`;
+    const idx = site.identity.universeIndex !== undefined ? `#${site.identity.universeIndex} ` : "";
+    return `${idx}${site.identity.district} (${site.identity.owningFaction})`;
   }
 
   function siteHasOpenJob(site) {
@@ -247,11 +248,13 @@
   }
 
   function renderSites() {
-    if (S.knownSites.length === 0) { $("panel-sites").innerHTML = '<span class="muted">No known sites — accept a job or search for one.</span>'; return; }
-    $("panel-sites").innerHTML = MJ.siteListView(S.knownSites, S.day).map((row, i) => {
+    const prevLookup = $("site-lookup") ? $("site-lookup").value : "";
+    const lookup = `<div style="margin-bottom:8px"><input type="text" class="sm" id="site-lookup" placeholder="call in by key: Boldly-Crimson-Quiet-Bicycle-0417" value="${prevLookup.replace(/"/g, "")}" style="min-width:270px" /> <button class="sm" data-act="discover-name">look up</button></div>`;
+    if (S.knownSites.length === 0) { $("panel-sites").innerHTML = lookup + '<span class="muted">No known sites — accept a job, search, or call one in by name.</span>'; return; }
+    $("panel-sites").innerHTML = lookup + MJ.siteListView(S.knownSites, S.day).map((row, i) => {
       const site = S.knownSites[i];
-      return `<div class="row">#${row.universeIndex} <b>${row.district}</b> (${row.owningFaction}) v:${row.value} ${row.orientation} <span class="muted">via ${row.source} d${row.dayKnown}</span>${targetMarks(site)}<br>` +
-        (row.name ? `<span class="good">"${row.name}"</span><br>` : "") +
+      return `<div class="row">${row.universeIndex !== null ? "#" + row.universeIndex + " " : ""}<b>${row.district}</b> (${row.owningFaction}) v:${row.value} ${row.orientation} <span class="muted">via ${row.source} d${row.dayKnown}</span>${targetMarks(site)}<br>` +
+        (row.name ? `<span class="good">"${row.name}"</span>${row.theme ? ` <span class="muted">· ${row.theme}</span>` : ""}<br>` : "") +
         `P:${fmtAxis(row.security.physical)} A:${fmtAxis(row.security.astral)} M:${fmtAxis(row.security.matrix)}` +
         (row.tags.length ? ` <span class="muted">[${row.tags.join(", ")}]</span>` : "") + `</div>`;
     }).join("");
@@ -409,6 +412,10 @@
       }
     }
     else if (action === "sell-mats") MJ.game.sellStock(S, el.dataset.kind);
+    else if (action === "discover-name") {
+      const box = $("site-lookup");
+      if (box && box.value.trim()) MJ.game.discoverByName(S, box.value);
+    }
     else if (action === "queue-up") MJ.game.moveQueued(S, idx, -1);
     else if (action === "queue-down") MJ.game.moveQueued(S, idx, 1);
     else if (action === "queue-del") MJ.game.unqueue(S, idx);

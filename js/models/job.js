@@ -163,7 +163,7 @@
       return { site: rng.pick(candidates), wasReused: true };
     }
     const value = rng.int(band.min, band.max);
-    const mint = () => (siteProvider ? siteProvider.mint(value, orientation) : MJ.generateSite(rng, { value, orientation }));
+    const mint = () => (siteProvider ? siteProvider.mint(value, orientation, excludeFaction) : MJ.generateSite(rng, { value, orientation }));
     let site = mint();
     let guard = 0;
     while (excludeFaction && site.identity.owningFaction === excludeFaction && guard++ < 10) {

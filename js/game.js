@@ -101,8 +101,8 @@
 
   function siteProviderFor(session) {
     return {
-      mint: (value, orientation) =>
-        MJ.mintSite(session.universeSeed, session.siteMintIndex++, { value: value, orientation: orientation }),
+      mint: (value, orientation, excludeOwner) =>
+        MJ.mintSite(session.universeSeed, session.siteMintIndex++, { value: value, orientation: orientation, excludeOwner: excludeOwner }),
     };
   }
 
@@ -209,6 +209,46 @@
     return { ok: true, watched: site.knownMeta.watched };
   }
 
+  // Call in a site by its key name ("Boldly-Modest-Falcon-250") —
+  // cross-universe knowledge made playable: the name is the seed,
+  // so the same building answers in every universe. Called-in sites
+  // arrive with their CANONICAL identity (district/owner rolled
+  // from the name) — the balance bags only govern what the
+  // universe deals randomly; a deliberate player choice carries no
+  // such duty (user ruling). v0: a free lookup, not a dispatch.
+  function canonicalSiteName(raw) {
+    const parts = String(raw).trim().split("-").filter((p) => p.length);
+    if (parts.length !== 5) return null;
+    if (!/^\d{4}$/.test(parts[4])) return null;
+    for (let i = 0; i < 4; i++) {
+      if (!/^[A-Za-z]+$/.test(parts[i])) return null;
+      parts[i] = parts[i].charAt(0).toUpperCase() + parts[i].slice(1).toLowerCase();
+    }
+    return parts.join("-");
+  }
+
+  function discoverByName(session, rawName, rngOverride) {
+    const name = canonicalSiteName(rawName);
+    if (!name) {
+      logLine(session, "\"" + rawName + "\" isn't a site key (Adverb-Color-Adjective-Noun-####)");
+      return { ok: false, error: "bad site key format" };
+    }
+    const existing = session.knownSites.find((s) => s.identity.name === name);
+    if (existing) {
+      logLine(session, name + " is already on the list");
+      return { ok: true, site: existing, alreadyKnown: true };
+    }
+    const site = MJ.mintSiteByName(name);
+    if (!site) {
+      logLine(session, "no place answers to \"" + name + "\" — those words aren't in the atlas");
+      return { ok: false, error: "words not in the grammar" };
+    }
+    MJ.generateSecurityEstimate(rngOverride || liveRNG(), site);
+    MJ.addKnownSite(session.knownSites, site, session.day, "called-in");
+    logLine(session, "called in \"" + name + "\" — " + site.identity.theme + ", " + site.identity.district + " (" + site.identity.owningFaction + "), the word checks out");
+    return { ok: true, site: site };
+  }
+
   // Search is a real dispatch (user ruling, "Search / Scrap" on the
   // action menu): the mission carries a callback that mints and
   // registers the find when it resolves — the runner spends their
@@ -218,12 +258,18 @@
   }
 
   function discoverResource(session, kind, rngOverride) {
-    const orientation = kind === "reagents" ? "astral" : "physical";
-    const site = MJ.mintSite(session.universeSeed, session.siteMintIndex++, { orientation: orientation });
+    const rng = rngOverride || liveRNG();
+    // Found places live at the sprawl's edges: wilderness districts,
+    // owned by nobody.
+    const site = MJ.mintSite(session.universeSeed, session.siteMintIndex++, {
+      orientation: kind === "reagents" ? "astral" : "physical",
+      district: rng.pick(MJ.WILD_DISTRICTS),
+      owner: "Unowned",
+    });
     site.tags.push({ tag: "resource:" + kind, expiryDay: Infinity });
-    MJ.generateSecurityEstimate(rngOverride || liveRNG(), site);
+    MJ.generateSecurityEstimate(rng, site);
     MJ.addKnownSite(session.knownSites, site, session.day, "discovery");
-    logLine(session, "discovered a " + kind + " site: #" + site.identity.universeIndex + " in " + site.identity.district);
+    logLine(session, "discovered a " + kind + " site: \"" + site.identity.name + "\" — " + site.identity.theme + ", " + site.identity.district);
     return { ok: true, site: site };
   }
 
@@ -345,6 +391,10 @@
       }
       if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
       if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);
+      if (res.bonusItem) {
+        session.save.armory.items.push(res.bonusItem);
+        logLine(session, "  scavenged: " + res.bonusItem.label + " (T" + res.bonusItem.tier + ") — in the armory");
+      }
       if (res.yield) {
         if (res.yield.item) {
           session.save.armory.items.push(res.yield.item);
@@ -504,6 +554,8 @@
     expandCapacity: expandCapacity,
     toggleWatchSite: toggleWatchSite,
     discoverResource: discoverResource,
+    discoverByName: discoverByName,
+    canonicalSiteName: canonicalSiteName,
     makeSearchMission: makeSearchMission,
     repeatLastPlan: repeatLastPlan,
     repeatOne: repeatOne,
