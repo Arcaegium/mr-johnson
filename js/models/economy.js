@@ -123,7 +123,40 @@
       return { ok: false, cost, error: "can't afford it" };
     }
     MJ.hireRunner(runner, tier);
+    runner.market.hired.pricePaid = cost;
     return { ok: true, cost };
+  }
+
+  // ── Contract upgrades: pro-rata credit, today's price ───────────
+  // Upgrading (freelance->retainer->permanent) credits the unused
+  // share of what was paid, against the NEW tier at TODAY's price —
+  // so a runner who leveled up since signing costs more to lock in,
+  // but the player never eats the remaining block (user ruling).
+  const TIER_ORDER = ["freelance", "retainer", "permanent"];
+
+  function upgradeCredit(runner) {
+    const hired = runner.market.hired;
+    if (!hired || !hired.pricePaid || !hired.blockSize) return 0;
+    if (hired.missionsRemaining === Infinity) return 0;
+    return Math.round(hired.pricePaid * (hired.missionsRemaining / hired.blockSize));
+  }
+
+  function upgradeCost(runner, newTier) {
+    return Math.max(0, hireCost(runner, newTier) - upgradeCredit(runner));
+  }
+
+  function upgradeContractWithCost(save, runner, newTier) {
+    const hired = runner.market.hired;
+    if (!hired) return { ok: false, error: "not under contract — hire instead" };
+    if (runner.market.phase === "kia") return { ok: false, error: "they're gone" };
+    if (TIER_ORDER.indexOf(newTier) <= TIER_ORDER.indexOf(hired.tier)) {
+      return { ok: false, error: "that's not an upgrade" };
+    }
+    const cost = upgradeCost(runner, newTier);
+    if (!spend(save, cost)) return { ok: false, cost: cost, error: "can't afford it" };
+    MJ.hireRunner(runner, newTier);
+    runner.market.hired.pricePaid = hireCost(runner, newTier); // full list value — future credits price off the real contract
+    return { ok: true, cost: cost };
   }
 
   // ── Gear: buy, resell, and material sales (armory is live) ──────
@@ -191,6 +224,9 @@
   MJ.collectJobPay = collectJobPay;
   MJ.hireCost = hireCost;
   MJ.hireRunnerWithCost = hireRunnerWithCost;
+  MJ.upgradeCredit = upgradeCredit;
+  MJ.upgradeCost = upgradeCost;
+  MJ.upgradeContractWithCost = upgradeContractWithCost;
   MJ.itemCost = itemCost;
   MJ.buyItem = buyItem;
   MJ.sellItem = sellItem;

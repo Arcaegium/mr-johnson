@@ -39,14 +39,34 @@
     return `${idx}${site.identity.district} (${site.identity.owningFaction})`;
   }
 
+  // The full leg line, board and contracts alike (user ruling: the
+  // leg itself reads in teal, the location's NAME in white; no
+  // information is lost moving from the board to an active job).
+  function legLineFull(job, m, k, withStatus) {
+    const v = MJ.siteIntelView(m.site, S.day);
+    const gated = m.requiresMission && !m.requiresMission.resolved
+      ? ` <span class="gated">[gated by leg ${job.missions.indexOf(m.requiresMission) + 1}]</span>` : "";
+    const status = !withStatus ? "" : m.resolved ? ' — <span class="ink">✓ done</span>'
+      : (m.requiresMission && !m.requiresMission.resolved) ? "" : ' — <span class="warn">open</span>';
+    return `<div class="good">leg ${k + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain}) @ ${siteTag(m.site)}${gated}${status}<br>` +
+      (m.site.identity.name ? `&nbsp;&nbsp;<span class="ink">"${m.site.identity.name}"</span>${m.site.identity.theme ? ` <span class="muted">· ${m.site.identity.theme}</span>` : ""}<br>` : "") +
+      `&nbsp;&nbsp;<span class="muted">est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</span></div>`;
+  }
+
   function siteHasOpenJob(site) {
     return S.jobs.some((j) => !j.paid && !j.expired && j.missions.some((m) => !m.resolved && m.site === site));
   }
 
-  function locationOptions() {
+  // Three-stage builder (user spec): choose the ACTIVITY (Craft /
+  // Medicae / Search / a known site), then the discipline or action,
+  // then — for crafting — the item within that discipline. Programs
+  // and spells with player-tuned creation variables are a future
+  // category of their own (flagged).
+  function activityOptions() {
     const opts = [
-      { v: "hub", label: "The Hub — craft & Medicae" },
-      { v: "streets", label: "The Streets — search for sites" },
+      { v: "craft", label: "Craft" },
+      { v: "medicae", label: "Medicae" },
+      { v: "search", label: "Search" },
     ];
     S.knownSites.forEach((site, i) => {
       opts.push({ v: "site:" + i, label: siteTag(site), job: siteHasOpenJob(site) });
@@ -54,22 +74,29 @@
     return opts;
   }
 
-  function actionOptions(locValue) {
+  function craftDisciplines() {
+    const skills = [];
+    for (const id of Object.keys(MJ.ITEM_TEMPLATES)) {
+      const t = MJ.ITEM_TEMPLATES[id];
+      if (t.category === "cyberware" || !t.craftSkill) continue;
+      if (skills.indexOf(t.craftSkill) === -1) skills.push(t.craftSkill);
+    }
+    return skills;
+  }
+
+  function actionOptions(activity) {
     const acts = [];
-    if (locValue === "hub") {
-      for (const id of Object.keys(MJ.ITEM_TEMPLATES)) {
-        const t = MJ.ITEM_TEMPLATES[id];
-        if (t.category === "cyberware") continue; // buy-only in v1
-        acts.push({ v: "craft:" + id, label: `Craft — ${t.label} (T${t.tier}, ${t.craftSkill})` });
-      }
+    if (activity === "craft") {
+      for (const skill of craftDisciplines()) acts.push({ v: skill, label: skill });
+    } else if (activity === "medicae") {
       S.roster.forEach((r, i) => {
-        if (r.wounds > 0 && r.market.hired) acts.push({ v: "treat:" + i, label: `Medicae — treat ${r.identity.handle} (${r.wounds} wound${r.wounds > 1 ? "s" : ""})` });
+        if (r.wounds > 0 && r.market.hired) acts.push({ v: "treat:" + i, label: `treat ${r.identity.handle} (${r.wounds} wound${r.wounds > 1 ? "s" : ""})` });
       });
-    } else if (locValue === "streets") {
-      acts.push({ v: "search:scrap", label: "Search — scrap yard" });
-      acts.push({ v: "search:reagents", label: "Search — reagent grove" });
+    } else if (activity === "search") {
+      acts.push({ v: "search:scrap", label: "scrap yard" });
+      acts.push({ v: "search:reagents", label: "reagent grove" });
     } else {
-      const site = S.knownSites[+locValue.split(":")[1]];
+      const site = S.knownSites[+activity.split(":")[1]];
       S.jobs.forEach((job, jI) => {
         if (job.paid || job.expired) return;
         job.missions.forEach((m, k) => {
@@ -88,26 +115,36 @@
     return acts;
   }
 
+  function itemOptions(activity, action) {
+    if (activity !== "craft" || !action) return [];
+    return Object.keys(MJ.ITEM_TEMPLATES)
+      .filter((id) => {
+        const t = MJ.ITEM_TEMPLATES[id];
+        return t.category !== "cyberware" && t.craftSkill === action;
+      })
+      .map((id) => ({ v: id, label: `${MJ.ITEM_TEMPLATES[id].label} (T${MJ.ITEM_TEMPLATES[id].tier})` }));
+  }
+
   function buildFromSelectors() {
-    const loc = $("site-select") ? $("site-select").value : null;
+    const activity = $("site-select") ? $("site-select").value : null;
     const act = $("action-select") ? $("action-select").value : null;
-    if (!loc || !act) return null;
-    if (loc === "hub") {
-      if (act.indexOf("craft:") === 0) {
-        const tpl = act.split(":")[1];
-        return { mission: MJ.createCraftingMission(tpl), label: "craft " + MJ.ITEM_TEMPLATES[tpl].label };
-      }
-      if (act.indexOf("treat:") === 0) {
-        const p = S.roster[+act.split(":")[1]];
-        return { mission: MJ.createMedicalMission(p), label: "treat " + p.identity.handle };
-      }
-      return null;
+    if (!activity || !act) return null;
+    if (activity === "craft") {
+      const itemSel = $("item-select");
+      const tpl = itemSel ? itemSel.value : null;
+      if (!tpl || !MJ.ITEM_TEMPLATES[tpl]) return null;
+      return { mission: MJ.createCraftingMission(tpl), label: "craft " + MJ.ITEM_TEMPLATES[tpl].label };
     }
-    if (loc === "streets" && act.indexOf("search:") === 0) {
+    if (activity === "medicae") {
+      if (act.indexOf("treat:") !== 0) return null;
+      const p = S.roster[+act.split(":")[1]];
+      return { mission: MJ.createMedicalMission(p), label: "treat " + p.identity.handle };
+    }
+    if (activity === "search") {
       const kind = act.split(":")[1];
       return { mission: MJ.game.makeSearchMission(S, kind), label: "search: " + kind };
     }
-    const site = S.knownSites[+loc.split(":")[1]];
+    const site = S.knownSites[+activity.split(":")[1]];
     if (!site) return null;
     if (act.indexOf("run:") === 0) {
       const parts = act.split(":");
@@ -135,13 +172,7 @@
     if (S.board.length === 0) { $("panel-board").innerHTML = '<span class="muted">No offers — refresh the board.</span>'; return; }
     $("panel-board").innerHTML = S.board.map((entry, i) => {
       const job = entry.job;
-      const legs = job.missions.map((m, k) => {
-        const v = MJ.siteIntelView(m.site, S.day);
-        const gated = m.requiresMission ? ` <span class="gated">[gated by leg ${job.missions.indexOf(m.requiresMission) + 1}]</span>` : "";
-        return `<div class="muted">leg ${k + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain}) @ ${siteTag(m.site)}${gated}<br>` +
-          (m.site.identity.name ? `&nbsp;&nbsp;<span class="good">"${m.site.identity.name}"</span><br>` : "") +
-          `&nbsp;&nbsp;est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</div>`;
-      }).join("");
+      const legs = job.missions.map((m, k) => legLineFull(job, m, k)).join("");
       return `<div class="card"><div class="head">${job.hiringFaction} — ¥${job.pay} <span class="muted">(rush x${job.rushMultiplier.toFixed(2)}, ${job.daysPerMission}d/leg, expires day ${job.expiryDay})</span>${job.chained ? ' <span class="warn">CHAINED</span>' : ""}</div>${legs}<button class="sm" data-act="accept" data-idx="${i}">Accept</button></div>`;
     }).join("");
   }
@@ -173,7 +204,7 @@
       ...(r.gear || []).map((g) => g.label + " T" + g.tier),
       ...(r.implants || []).map((im) => "⟨" + im.label + "⟩"),
     ];
-    return `<b>${r.identity.handle}</b> — <span class="good">${trade}</span> <span class="muted">· ${MJ.describeDiscipline(r)} · ${r.identity.metatypeLabel}, ${c.origin}${c.deckerAffinity ? " · " + c.deckerAffinity : ""}</span><br>` +
+    return `<b>${r.identity.handle}</b> — <span class="good">${trade}</span> <span class="muted">· ${MJ.describeDiscipline(r)} · ${r.identity.metatypeLabel}, ${c.origin}${c.deckerAffinity ? " · affinity: " + c.deckerAffinity : ""}</span><br>` +
       `<span class="muted">B${a.body} A${a.agility} W${a.willpower} I${a.intelligence} C${a.charisma}${a.magic ? " M" + a.magic : ""} · ess ${a.magic || c.origin === "cyber" ? r.essence.current + "/" + r.essence.max : r.essence.current}</span><br>` +
       `<span class="muted">${skills || "no visible skills"}</span>` +
       (kit.length ? `<br><span class="muted">kit: ${kit.join(", ")}</span>` : "");
@@ -186,7 +217,15 @@
         btns.push(`<button class="sm" data-act="hire" data-ridx="${i}" data-tier="${t}">${t} ¥${MJ.hireCost(r, t)}</button>`);
       }
     }
-    if (r.market.hired) btns.push(`<button class="sm" data-act="release" data-ridx="${i}">release</button>`);
+    if (r.market.hired) {
+      // Upgrades credit the unused block against today's price.
+      for (const t of ["retainer", "permanent"]) {
+        if (["freelance", "retainer", "permanent"].indexOf(t) > ["freelance", "retainer", "permanent"].indexOf(r.market.hired.tier)) {
+          btns.push(`<button class="sm" data-act="upgrade" data-ridx="${i}" data-tier="${t}">upgrade→${t} ¥${MJ.upgradeCost(r, t)}</button>`);
+        }
+      }
+      btns.push(`<button class="sm" data-act="release" data-ridx="${i}">release</button>`);
+    }
     else btns.push(`<button class="sm" data-act="unwatch" data-ridx="${i}">${r.market.phase === "kia" ? "strike from list" : "unwatch"}</button>`);
     return `<div class="row">${runnerCard(r)}<br>` +
       `<span class="muted">karma ${r.karma}  wounds ${r.wounds}  </span>${fmtContract(r)}<br>${btns.join(" ")}</div>`;
@@ -209,16 +248,10 @@
   function renderContracts() {
     const active = S.jobs.filter((j) => !j.paid && !j.expired);
     const done = S.jobs.filter((j) => j.paid || j.expired);
-    const legLine = (job, m, k) => {
-      const status = m.resolved ? '<span class="good">✓ done</span>'
-        : (m.requiresMission && !m.requiresMission.resolved) ? `<span class="gated">gated by leg ${job.missions.indexOf(m.requiresMission) + 1}</span>`
-        : '<span class="warn">open</span>';
-      return `<div class="muted">leg ${k + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain}) @ ${siteTag(m.site)} — ${status}</div>`;
-    };
     const activeHtml = active.map((job) => {
       const daysLeft = job.expiryDay - S.day;
-      return `<div class="card"><div class="head">Job #${job.contractNumber} — ${job.hiringFaction} — ¥${job.pay} <span class="${daysLeft <= 1 ? "warn" : "muted"}">(expires day ${job.expiryDay} — ${daysLeft} day${daysLeft === 1 ? "" : "s"} left)</span>${job.chained ? ' <span class="warn">CHAINED</span>' : ""}</div>` +
-        job.missions.map((m, k) => legLine(job, m, k)).join("") + `</div>`;
+      return `<div class="card"><div class="head">Job #${job.contractNumber} — ${job.hiringFaction} — ¥${job.pay} <span class="muted">(rush x${job.rushMultiplier.toFixed(2)}, ${job.daysPerMission}d/leg)</span> <span class="${daysLeft <= 1 ? "warn" : "muted"}">(expires day ${job.expiryDay} — ${daysLeft} day${daysLeft === 1 ? "" : "s"} left)</span>${job.chained ? ' <span class="warn">CHAINED</span>' : ""}</div>` +
+        job.missions.map((m, k) => legLineFull(job, m, k, true)).join("") + `</div>`;
     }).join("");
     const doneHtml = done.map((job) =>
       `<div class="muted">${job.paid ? '<span class="good">✓</span> Job #' + job.contractNumber + " — " + job.hiringFaction + " paid ¥" + job.pay : '<span class="warn">✗</span> Job #' + job.contractNumber + " — " + job.hiringFaction + " — window closed unfinished"}</div>`
@@ -254,7 +287,7 @@
     $("panel-sites").innerHTML = lookup + MJ.siteListView(S.knownSites, S.day).map((row, i) => {
       const site = S.knownSites[i];
       return `<div class="row">${row.universeIndex !== null ? "#" + row.universeIndex + " " : ""}<b>${row.district}</b> (${row.owningFaction}) v:${row.value} ${row.orientation} <span class="muted">via ${row.source} d${row.dayKnown}</span>${targetMarks(site)}<br>` +
-        (row.name ? `<span class="good">"${row.name}"</span>${row.theme ? ` <span class="muted">· ${row.theme}</span>` : ""}<br>` : "") +
+        (row.name ? `<span class="ink">"${row.name}"</span>${row.theme ? ` <span class="muted">· ${row.theme}</span>` : ""}<br>` : "") +
         `P:${fmtAxis(row.security.physical)} A:${fmtAxis(row.security.astral)} M:${fmtAxis(row.security.matrix)}` +
         (row.tags.length ? ` <span class="muted">[${row.tags.join(", ")}]</span>` : "") + `</div>`;
     }).join("");
@@ -263,12 +296,13 @@
   function renderDispatch() {
     const prevLoc = $("site-select") ? $("site-select").value : null;
     const prevAct = $("action-select") ? $("action-select").value : null;
+    const prevItem = $("item-select") ? $("item-select").value : null;
     const prevCrew = wipeChecks
       ? new Set()
       : new Set(Array.from(document.querySelectorAll(".crew-check:checked")).map((c) => c.dataset.ridx));
     wipeChecks = false;
 
-    const locs = locationOptions();
+    const locs = activityOptions();
     const locSel = prevLoc && locs.some((o) => o.v === prevLoc) ? prevLoc : locs[0].v;
     const locHtml = locs.map((o) =>
       `<option value="${o.v}"${o.v === locSel ? " selected" : ""}${o.job ? ' class="jobopt"' : ""}>${o.job ? "⚑ " : ""}${o.label}</option>`).join("");
@@ -278,6 +312,11 @@
     const actSel = prevAct && usable.some((a) => a.v === prevAct) ? prevAct : (usable[0] || {}).v;
     const actHtml = acts.map((a) =>
       `<option value="${a.v}"${a.v === actSel ? " selected" : ""}${a.disabled ? " disabled" : ""}>${a.label}</option>`).join("");
+
+    const items = itemOptions(locSel, actSel);
+    const itemSel = prevItem && items.some((o) => o.v === prevItem) ? prevItem : (items[0] || {}).v;
+    const itemHtml = items.map((o) =>
+      `<option value="${o.v}"${o.v === itemSel ? " selected" : ""}>${o.label}</option>`).join("");
 
     const committed = new Set();
     for (const q of S.queue) {
@@ -301,6 +340,7 @@
     $("panel-dispatch").innerHTML =
       `<div><select id="site-select">${locHtml}</select></div>` +
       `<div style="margin-top:6px"><select id="action-select">${actHtml || "<option disabled>nothing to do here</option>"}</select></div>` +
+      (items.length ? `<div style="margin-top:6px"><select id="item-select">${itemHtml}</select></div>` : "") +
       `<div class="checks" style="margin:8px 0">${checks || '<span class="muted">no dispatchable runners — hire someone (a dispatch is what a contract buys)</span>'}</div>` +
       `<button class="sm" data-act="queue-add">Add to Queue</button>` +
       `<div style="margin-top:10px">${queue || '<span class="muted">Queue is empty — End Day will just tick the world.</span>'}</div>` +
@@ -345,12 +385,16 @@
     const mats = Object.entries(S.save.armory.materials || {}).filter(([, n]) => n > 0).map(([k, n]) =>
       `<div class="row">${k.replace("resource:", "")} x${n} <button class="sm" data-act="sell-mats" data-kind="${k}">sell all</button></div>`).join("");
     const CATEGORY_ORDER = ["weapon", "armor", "deck", "program", "drone", "focus", "gear", "consumable", "formula", "cyberware"];
+    // Collapsible category groups (user: the flat list ate the page;
+    // real tabs are a later UI pass).
     const shop = CATEGORY_ORDER.map((cat) => {
-      const btns = Object.keys(MJ.ITEM_TEMPLATES).filter((id) => MJ.ITEM_TEMPLATES[id].category === cat).map((id) => {
+      const ids = Object.keys(MJ.ITEM_TEMPLATES).filter((id) => MJ.ITEM_TEMPLATES[id].category === cat);
+      if (!ids.length) return "";
+      const btns = ids.map((id) => {
         const t = MJ.ITEM_TEMPLATES[id];
         return `<button class="sm" data-act="buy-item" data-tpl="${id}" title="${itemEffectText(t)}">${t.label} ¥${MJ.itemCost(id)}</button>`;
       }).join(" ");
-      return btns ? `<div class="muted" style="margin-top:4px">${cat.toUpperCase()}</div><div style="line-height:2.4">${btns}</div>` : "";
+      return `<details class="shopcat"><summary>${cat.toUpperCase()} (${ids.length})</summary><div style="line-height:2.4">${btns}</div></details>`;
     }).join("");
     $("panel-armory").innerHTML = rows +
       (mats ? `<div class="good" style="margin-top:8px">MATERIALS</div>${mats}` : "") +
@@ -411,6 +455,7 @@
     else if (action === "accept") MJ.game.acceptJob(S, idx);
     else if (action === "watch-market") MJ.game.watchFromMarket(S, idx);
     else if (action === "hire") MJ.game.hire(S, S.roster[+el.dataset.ridx], el.dataset.tier);
+    else if (action === "upgrade") MJ.game.upgrade(S, S.roster[+el.dataset.ridx], el.dataset.tier);
     else if (action === "release") MJ.game.release(S, S.roster[+el.dataset.ridx]);
     else if (action === "unwatch") MJ.game.unwatch(S, S.roster[+el.dataset.ridx]);
     else if (action === "repeat-plan") MJ.game.repeatLastPlan(S);
@@ -450,9 +495,10 @@
     if (el) act(el.dataset.act, el);
   });
 
-  // Changing the location re-derives the action list for it.
+  // Changing the activity re-derives the action list; changing the
+  // craft discipline re-derives the item list.
   document.addEventListener("change", (e) => {
-    if (e.target && e.target.id === "site-select") render();
+    if (e.target && (e.target.id === "site-select" || e.target.id === "action-select")) render();
   });
 
   window.addEventListener("DOMContentLoaded", render);

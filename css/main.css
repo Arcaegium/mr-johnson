@@ -130,6 +130,9 @@ button:hover { background: var(--accent-2); color: var(--bg); }
 .row { padding: 6px 0; border-bottom: 1px dotted var(--line); }
 .row:last-child { border-bottom: none; }
 .muted { color: var(--dim); }
+.ink { color: var(--ink); }
+details.shopcat summary { cursor: pointer; color: var(--dim); letter-spacing: 0.06em; padding: 3px 0; }
+details.shopcat[open] summary { color: var(--accent-2); }
 .warn { color: #d4735e; }
 .good { color: var(--accent-2); }
 .gated { color: var(--dim); font-style: italic; }

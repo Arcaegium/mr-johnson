@@ -1059,6 +1059,24 @@
     save.armory.items.push(formula2);
     check(MJ.teachFormula(mage, formula2, save.armory.items).ok === false, "C11: re-learning the same formula must refuse");
 
+    // Contract upgrades: pro-rata credit against today's price.
+    const up = MJ.generateRunner(rng.fork("upgr"), { family: "face" });
+    MJ.watchRunner(up, rng);
+    save.johnson.money = 200000;
+    const hireRes = MJ.hireRunnerWithCost(save, up, "retainer");
+    check(up.market.hired.pricePaid === hireRes.cost && up.market.hired.blockSize === 5, "C11: signing must stamp price and block");
+    MJ.consumeContractMission(up, rng); // 4 of 5 left
+    const credit = MJ.upgradeCredit(up);
+    check(credit === Math.round(hireRes.cost * 4 / 5), "C11: upgrade credit must be pro-rata of the price paid");
+    const expectedUp = Math.max(0, MJ.hireCost(up, "permanent") - credit);
+    const m4 = save.johnson.money;
+    const upRes = MJ.upgradeContractWithCost(save, up, "permanent");
+    check(upRes.ok && upRes.cost === expectedUp && save.johnson.money === m4 - expectedUp, "C11: upgrade must charge today's price minus the credit");
+    check(up.market.hired.tier === "permanent" && up.market.hired.missionsRemaining === Infinity, "C11: upgrade must install the new contract");
+    check(MJ.upgradeContractWithCost(save, up, "retainer").ok === false, "C11: downgrades must refuse");
+    const unhiredR = MJ.generateRunner(rng.fork("unhired"), {});
+    check(MJ.upgradeContractWithCost(save, unhiredR, "retainer").ok === false, "C11: upgrading the uncontracted must refuse");
+
     // Materials: exact sale, stock zeroed.
     save.armory.materials["resource:scrap"] = 3;
     const m2 = save.johnson.money;

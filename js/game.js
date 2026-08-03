@@ -165,6 +165,14 @@
     return result;
   }
 
+  function upgrade(session, runner, newTier) {
+    const result = MJ.upgradeContractWithCost(session.save, runner, newTier);
+    logLine(session, result.ok
+      ? "upgraded " + runner.identity.handle + " to " + newTier + " for " + result.cost + " (unused block credited)"
+      : "upgrade refused for " + runner.identity.handle + " — " + result.error);
+    return result;
+  }
+
   function release(session, runner, rngOverride) {
     MJ.releaseRunner(runner, rngOverride || liveRNG());
     logLine(session, "released " + runner.identity.handle + " from contract");
@@ -616,8 +624,9 @@
     // JSON can't carry Infinity — it lands as null. The only fields
     // that legitimately hold it get restored here.
     const fixRunner = (r) => {
-      if (r.market && r.market.hired && r.market.hired.missionsRemaining === null) {
-        r.market.hired.missionsRemaining = Infinity;
+      if (r.market && r.market.hired) {
+        if (r.market.hired.missionsRemaining === null) r.market.hired.missionsRemaining = Infinity;
+        if (r.market.hired.blockSize === null) r.market.hired.blockSize = Infinity;
       }
     };
     session.roster.forEach(fixRunner);
@@ -722,6 +731,7 @@
     acceptJob: acceptJob,
     watchFromMarket: watchFromMarket,
     hire: hire,
+    upgrade: upgrade,
     release: release,
     unwatch: unwatch,
     expandCapacity: expandCapacity,

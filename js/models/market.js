@@ -88,6 +88,8 @@
     runner.market.hired = {
       tier: tier,
       missionsRemaining: CONTRACT_MISSIONS[tier],
+      blockSize: CONTRACT_MISSIONS[tier], // for pro-rata upgrade credit
+      pricePaid: null,                    // stamped by economy.js at signing
     };
     runner.market.phase = null; // suppressed while under contract
     return runner;
