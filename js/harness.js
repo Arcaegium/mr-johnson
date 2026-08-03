@@ -566,7 +566,8 @@
     }
     if (r.error) lines.push(`      (${r.error})`);
     if (r.patient) lines.push(`      patient: ${r.patient} — wounds now ${r.woundsNow}`);
-    if (r.noise) lines.push(`      noise:${r.noise.noise}${r.noise.ratcheted ? "  << RATCHET" + (r.noise.maxGrew ? "+MAXGROW" : "") : ""}`);
+    if (r.threatBand && r.threatBand !== "normal") lines.push(`      read:${r.threatBand}${r.forcedResponse ? " — responding in force" : ""}`);
+    if (r.incident && r.incident.ratcheted) lines.push(`      << RATCHET${r.incident.maxGrew ? "+MAXGROW" : ""}`);
     if (r.yield) lines.push(`      yield: ${r.yield.kind} x${r.yield.amount}`);
     for (const c of r.contractEvents || []) {
       if (c.event === "contractCompleted") lines.push(`      contract: ${c.runner} — block used up, back on the market`);

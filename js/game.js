@@ -387,7 +387,7 @@
       } else {
         logLine(session, (q ? q.label : res.kind) + " [" + crew + "]: " + (res.success ? "SUCCESS" : "failed") +
           (res.karmaAward ? " (+" + res.karmaAward + " karma each)" : "") +
-          (res.noise && res.noise.ratcheted ? " — the site RATCHETED its security" : ""));
+          "");
       }
       // The full readout, roll by roll — the opponent's numbers are
       // information too, and a failed run is still a fresh read on
@@ -404,6 +404,9 @@
         if (t.responders && t.responders.length) {
           logLine(session, "      RESPONSE: " + t.responders.join(", ") + " — they are coming");
         }
+      }
+      if (res.walkedIntoResponse) {
+        logLine(session, "  they were still up from earlier — " + res.walkedIntoResponse.join(", ") + " waiting at the door");
       }
       if (res.threatBand && res.threatBand !== "normal") {
         logLine(session, "  the site reads you as " + res.threatBand.toUpperCase() +

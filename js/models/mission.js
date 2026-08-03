@@ -15,9 +15,10 @@
        the same thing as a mission").
      - One action period = one day = one action per runner. The
        player queues dispatches; they resolve IN QUEUE ORDER, so an
-       earlier mission's effects (fresh intel, a hotter Alert) are
-       real for later missions the same day. Security ratings don't
-       move within a day of their own accord — but Alert does.
+       earlier mission's effects (fresh intel, suppression, and the
+       site's threat read) are real for later missions the same day.
+       The read and the response both reset overnight; a ratcheted
+       Current does not.
      - Karma is per mission, per participating runner, on success —
        keyed to the security values at the START of the mission
        (live Current, models/alert.js): escalation a crew calls
@@ -56,14 +57,24 @@
        case where sites enter the world without a job introducing
        them.
 
-   V1 resolution is deliberately shallow (approved scope): walk
-   the shortest entry->objective route, pick the crew's best
-   usable approach per obstacle (quiet preferred over loud at any
-   pool size), one resolveTask roll each; the mission succeeds if
-   every obstacle is overcome. Placeholders, flagged:
-     - Noise model: the site hears a hit if any loud affordance
-       was used OR the mission failed; glitches add noise. A clean
-       all-quiet success is a ghost run (zero Alert).
+   Resolution walks the shortest entry->objective route as a
+   STEPPER (beginMission / missionPrompt / missionChoose /
+   missionAbort / finishMission) so a human can stand in the middle
+   of it. Quick resolve is that same loop driven by an auto-chooser
+   rather than a player, which is what keeps one code path.
+
+   A failed approach is not a failed obstacle: the guard who told
+   you to get lost is exactly as sneak-past-able as before, so the
+   crew stays on the challenge and picks another way. Only
+   exhausting every approach stops them. Attempt budgets and
+   Watsonian immunities are what make that finite — and immunities
+   are DISCOVERED by trying, never disclosed up front.
+
+   Consequence flows through the §09 threat read, not through
+   noise: an act's threat class is intrinsic to the act, applies
+   only if something witnessed it, and tipping to threatening
+   engages the site's response (which spawns responders in front of
+   the crew at each axis's alert level). Placeholders, flagged:
      - Wounds: a critical glitch wounds the runner who rolled it.
      - Karma formulas (KARMA_PER_SECURITY etc.), the intel bonus
        size, route/recon sample caps, crafting tier: all shape-
@@ -281,38 +292,14 @@
     );
   }
 
-  // ── Approach selection: the crew's best usable option ───────────
-  // Quiet beats loud at ANY pool size (ghost runs are the ideal
-  // outcome); among equals, the biggest dice pool wins. Returns
-  // null when nobody in the crew can use any affordance at all —
-  // every option blocked or untrained across the whole crew.
-  function pickApproach(runners, obstacle) {
-    let best = null;
-    for (const a of obstacle.affordances) {
-      if (!a.skill || a.blocked) continue;
-      for (const runner of runners) {
-        const trained = MJ.getEffectiveSkills(runner)[a.skill] || 0;
-        if (trained <= 0) continue;
-        // Issued gear counts toward who's actually best equipped for
-        // this — the smartgun can flip which approach the crew takes.
-        const pool = trained + MJ.gearBonusFor(runner, a.skill);
-        const cand = { runner: runner, skill: a.skill, loud: a.loud, pool: pool };
-        if (!best) best = cand;
-        else if (best.loud && !cand.loud) best = cand;
-        else if (best.loud === cand.loud && cand.pool > best.pool) best = cand;
-      }
-    }
-    return best;
-  }
-
   // ── The mission stepper ─────────────────────────────────────────
   // Resolution is a state machine so a human can stand in the middle
   // of it: beginMission sets the table, missionPrompt describes the
   // challenge in front of the crew, missionChoose takes one decision
   // and rolls it, finishMission settles the consequences. Quick
   // resolve (resolveSiteMission, below) is just this loop driven by
-  // pickApproach instead of a player — which is what keeps the
-  // stress suite's soak on exactly the same path it always ran.
+  // an auto-chooser instead of a player — one code path, so the
+  // soak exercises exactly what a human would drive.
   //
   // RNG DISCIPLINE, load-bearing: dice are only ever consumed by
   // resolveTask (per obstacle, in order) and growRunner (per runner,
@@ -333,7 +320,7 @@
     // Armor: reusable wound guards, refreshed per mission.
     const armorGuard = new Map();
     for (const r of runners) armorGuard.set(r, MJ.woundGuardFor(r));
-    return {
+    const run = {
       rng: rng,
       mission: mission, runners: runners, day: day, site: site, kind: kind,
       state: state, start: start,
@@ -345,6 +332,15 @@
       discovered: {},      // "obstacleIndex:skill" -> why it will never work here
       engagedAlert: false, // did this run force a real response
     };
+    // Walking into a building that is ALREADY responding — an
+    // earlier crew tipped them this morning and the site never
+    // stood down. They are waiting in the doorway, not politely
+    // further along the route.
+    if (MJ.alertEngaged(site.securityState)) {
+      run.engagedAlert = true;
+      run.walkedIntoResponse = spawnResponders(run, 0).map((o) => o.label + " T" + o.tier);
+    }
+    return run;
   }
 
   // ── Witnessing (§09) ────────────────────────────────────────────
@@ -398,7 +394,7 @@
     matrix: ["maglock", "camera"],
   };
 
-  function spawnResponders(run) {
+  function spawnResponders(run, atIndex) {
     const spawned = [];
     for (const axis of MJ.SECURITY_AXES) {
       const tier = MJ.alertLevel(run.state, axis);
@@ -410,7 +406,7 @@
       spawned.push(ob);
     }
     // They arrive in front of you — next, not at the end of the route.
-    run.obstacles.splice(run.index + 1, 0, ...spawned);
+    run.obstacles.splice(atIndex === undefined ? run.index + 1 : atIndex, 0, ...spawned);
     return spawned;
   }
 
@@ -426,11 +422,17 @@
     if (missionDone(run)) return null;
     const obstacle = run.obstacles[run.index];
     const options = [];
+    // Effective skills are recomputed per prompt, not cached on the
+    // run: a critical glitch mid-mission changes them. Once per
+    // runner rather than once per runner PER affordance, though —
+    // this used to allocate a fresh skill map fifteen times a prompt.
+    const eff = run.runners.map((r) => MJ.getEffectiveSkills(r));
     for (const a of obstacle.affordances) {
       if (!a.skill) continue;
       let best = null;
-      for (const runner of run.runners) {
-        const trained = MJ.getEffectiveSkills(runner)[a.skill] || 0;
+      for (let ri = 0; ri < run.runners.length; ri++) {
+        const runner = run.runners[ri];
+        const trained = eff[ri][a.skill] || 0;
         if (trained <= 0) continue;
         // Ranked by effective pool, so the toolkit-holder naturally
         // wins ties against an equally-skilled bare-handed runner.
@@ -575,13 +577,13 @@
   function remainingApproaches(run) {
     const obstacle = run.obstacles[run.index];
     if (!obstacle) return 0;
+    const eff = run.runners.map((r) => MJ.getEffectiveSkills(r));
     let n = 0;
     for (const a of obstacle.affordances) {
       if (!a.skill) continue;
       if (run.discovered[attemptKey(run.index, a.skill)]) continue;
       if (attemptsLeft(run, run.index, a) <= 0) continue;
-      const usable = run.runners.some((r) => (MJ.getEffectiveSkills(r)[a.skill] || 0) > 0);
-      if (usable) n += 1;
+      if (eff.some((e) => (e[a.skill] || 0) > 0)) n += 1;
     }
     return n;
   }
@@ -685,10 +687,15 @@
 
     const result = {
       kind: kind, success: success, karmaAward: karmaAward,
-      obstaclesFaced: obstacles.length, tasks: tasks,
+      // How far the crew actually got — not how long the route grew.
+      // Responders splice in ahead of them, so obstacles.length
+      // counts things they may never have reached, and withdrawing
+      // stops the count where they stopped.
+      obstaclesFaced: run.index, tasks: tasks,
       intelBonusApplied: run.intelBonus > 0,
       suppression: suppression, aborted: run.aborted,
       threatBand: band, incident: incident, forcedResponse: run.engagedAlert,
+      walkedIntoResponse: run.walkedIntoResponse || null,
     };
     if (success && kind === "resourceGathering") {
       // Draw from the site's own probability chart (§09: the loot
@@ -893,14 +900,13 @@
   MJ.suppressionBonus = suppressionBonus;
   MJ.applySuppression = applySuppression;
   // The stepper — interactive resolution drives these directly;
-  // resolveSiteMission drives them with pickApproach.
+  // resolveSiteMission drives them with its own auto-chooser.
   MJ.beginMission = beginMission;
   MJ.missionPrompt = missionPrompt;
   MJ.missionChoose = missionChoose;
   MJ.missionAbort = missionAbort;
   MJ.missionDone = missionDone;
   MJ.finishMission = finishMission;
-  MJ.pickApproach = pickApproach;
   MJ.discoverResourceSite = discoverResourceSite;
   MJ.missionKind = missionKind;
   MJ.runActionPeriod = runActionPeriod;

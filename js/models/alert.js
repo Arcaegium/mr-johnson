@@ -168,15 +168,26 @@
   function addAlertPoints(state, axis, points) {
     if (!state.alert) return 0;
     const ceiling = state.axes[axis].max * POINTS_PER_LEVEL;
-    const before = state.alert[axis];
-    state.alert[axis] = Math.min(ceiling, before + points);
-    if (state.alert[axis] >= ceiling && before >= ceiling) state.pinnedBeats += 1;
+    state.alert[axis] = Math.min(ceiling, state.alert[axis] + points);
     return alertLevel(state, axis);
   }
 
+  // Everything they own is already committed and you are still coming.
+  function allAxesPinned(state) {
+    if (!state.alert) return false;
+    return AXES.every((axis) => state.alert[axis] >= state.axes[axis].max * POINTS_PER_LEVEL);
+  }
+
   function addAlertPointsAll(state, points) {
+    if (!state.alert) return {};
+    // A pinned beat counts ONCE per beat, not once per axis — the
+    // budget meeting is about the site being tapped out, and
+    // counting it three times made Max grow roughly three times
+    // faster than the dial says.
+    const pinnedBefore = allAxesPinned(state);
     const levels = {};
     for (const axis of AXES) levels[axis] = addAlertPoints(state, axis, points);
+    if (pinnedBefore && allAxesPinned(state)) state.pinnedBeats += 1;
     return levels;
   }
 
@@ -251,6 +262,7 @@
   MJ.engageAlert = engageAlert;
   MJ.alertLevel = alertLevel;
   MJ.alertEngaged = alertEngaged;
+  MJ.allAxesPinned = allAxesPinned;
   MJ.addAlertPoints = addAlertPoints;
   MJ.addAlertPointsAll = addAlertPointsAll;
   MJ.settleIncident = settleIncident;

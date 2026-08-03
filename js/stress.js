@@ -232,10 +232,14 @@
         const site = MJ.mintSite("stress-queue-u", i, { value: 4, orientation: "physical" });
         MJ.generateSecurityEstimate(rng.fork("e"), site);
         if (forceIncident) {
-          // Someone tripped them earlier and the response held.
+          // Someone tripped them YESTERDAY and the response held.
+          // The night has to pass: the ratchet persists, the active
+          // response does not — otherwise this crew would be walking
+          // into responders rather than into a merely harder site.
           MJ.witnessAct(site.securityState, 1, MJ.THREAT.THREATENING);
           MJ.addAlertPointsAll(site.securityState, 30);
           MJ.settleIncident(site.securityState);
+          MJ.advanceSiteDay(site.securityState);
         }
         const good = makeRoster(rng.fork("g"), 1, ["fighter"])[0];
         MJ.growRunner(good, 300, rng.fork("gr"));
@@ -245,7 +249,7 @@
       };
       const A = build(false);
       const B = build(true);
-      const run = (X) => MJ.runActionPeriod(X.rng, [{ mission: MJ.createResourceMission(X.site), runners: [X.good] }], 1)[0];
+      const run = (X) => MJ.runActionPeriod(X.rng, [{ mission: MJ.createResourceMission(X.site), runners: [X.good] }], 2)[0];
       const ra = run(A);
       const rb = run(B);
       if (!(ra.success && rb.success)) continue;
