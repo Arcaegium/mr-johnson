@@ -118,6 +118,16 @@
   MJ.fmt = { esc: esc, nm: nm, num: num, ok: ok, no: no };
 
   // ── Layer 2: the mission, played ────────────────────────────────
+  // Mirrors game.js's readNote — said only when something moved.
+  function readNote(read) {
+    if (!read) return "";
+    if (read.changed) return " — " + no("suspicion raised to " + read.band);
+    if (read.band === "threatening") return ""; // nothing left to raise
+    if (read.awkward) return ' — <span class="w-warn">noted</span><span class="dimmed"> (' +
+      read.awkward + " odd moment" + (read.awkward === 1 ? "" : "s") + " here today)</span>";
+    return "";
+  }
+
   function describeTask(t) {
     if (!t.runner) return '<span class="dimmed">' + esc(t.obstacle) + " " + num("T" + t.tier) + " — " + esc(t.result) + "</span>";
     if (t.rejected) return nm(t.runner) + " tried " + esc(t.skill) + " on " + nm(t.obstacle) + " — " + no(t.rejected);
@@ -125,7 +135,12 @@
     return nm(t.runner) + " (" + bits + ") vs " + nm(t.obstacle) + " " + num("T" + t.tier) + " — " +
       num(t.hits) + " hits: " + (t.success ? ok("through") : no("MISSED")) +
       (t.criticalGlitch ? " " + no("CRITICAL GLITCH") + (t.guarded ? ' <span class="dimmed">(absorbed by ' + esc(t.guarded) + ")</span>" : "") :
-        t.glitch ? " " + no("glitch") : "");
+        t.glitch ? " " + no("glitch") : "") +
+      // Why the read moved, on the line that moved it. After the
+      // fact, so it is information the attempt bought.
+      readNote(t.read) +
+      (t.responders && t.responders.length
+        ? "<br>" + no("&nbsp;&nbsp;RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
   }
 
   // Everything the crew can see about where they are standing.

@@ -127,7 +127,11 @@
     }
     const tipped = read.band === "threatening" && before !== "threatening";
     if (tipped) engageAlert(state, day);
-    return { band: read.band, tipped: tipped };
+    // `before` and `awkward` are for the readout: an act that banked
+    // an odd moment without moving the band still happened, and the
+    // player should be able to see it coming rather than watch the
+    // band jump from normal to questionable with no warning.
+    return { band: read.band, before: before, tipped: tipped, awkward: read.awkward };
   }
 
   // Exceptional success buys headroom back — the thoroughly

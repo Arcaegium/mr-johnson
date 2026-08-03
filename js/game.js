@@ -403,6 +403,18 @@
     return entry.result;
   }
 
+  // What that act did to the site's read of you, said only when
+  // there is something to say: the band moved, or an odd moment got
+  // banked toward moving it. Once they already read you as
+  // threatening, "suspicion raised" is just noise.
+  function readNote(read) {
+    if (!read) return "";
+    if (read.changed) return " — suspicion raised to " + read.band;
+    if (read.band === "threatening") return ""; // nothing left to raise
+    if (read.awkward) return " — noted (" + read.awkward + " odd moment" + (read.awkward === 1 ? "" : "s") + " here today)";
+    return "";
+  }
+
   function logResult(session, label, res) {
     const crew = (res.crew || []).join(", ");
     if (res.error) {
@@ -421,7 +433,7 @@
         // Found out the hard way — that's what the attempt bought.
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " tried " + t.skill + " — " + t.rejected);
       } else {
-        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : ""));
+        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : "") + readNote(t.read));
       }
       if (t.responders && t.responders.length) {
         logLine(session, "      RESPONSE: " + t.responders.join(", ") + " — they are coming");

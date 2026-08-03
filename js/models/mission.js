@@ -371,9 +371,21 @@
   // which is how a camera catches you working a lock it isn't part
   // of. Loud is always witnessed — not because loud means dangerous
   // (a taunt is neither), but because it is heard.
-  function wasWitnessed(run, obstacle, affordance) {
+  // A quiet action only registers if it FAILED. Switch a camera off
+  // properly and it has nothing left to report; read a spirit
+  // correctly and it never knew you were there. Security reacts to
+  // the fumble, not the deed — so a clean quiet approach is silence,
+  // and an affordance's threat class is the price of getting it
+  // WRONG, not the cost of doing it.
+  //
+  // Loud is the exception, and the only one: a gunshot is a gunshot
+  // whether or not it hits.
+  function wasWitnessed(run, obstacle, affordance, succeeded) {
     if (affordance && affordance.loud) return true;
+    if (succeeded) return false;
     if (obstacle.perceives) return true;
+    // Nothing here perceives — but if they are already suspicious
+    // they are watching the place, not the equipment.
     const band = MJ.threatBand(run.state, run.day);
     return band === "questionable" || band === "threatening";
   }
@@ -525,7 +537,9 @@
       const noRollKey = attemptKey(run.index, skill);
       run.attempts[noRollKey] = (run.attempts[noRollKey] || 0) + 1;
       const task = { obstacle: obstacle.label, tier: obstacle.tier, result: affordance ? affordance.verb : "went around" };
-      if (wasWitnessed(run, obstacle, affordance)) {
+      // Nothing was rolled, so nothing was fumbled — a no-roll
+      // approach can only be seen by being loud.
+      if (wasWitnessed(run, obstacle, affordance, true)) {
         const cls = threatClassFor(affordance, run.attempts[noRollKey]);
         if (cls !== MJ.THREAT.NORMAL) {
           const applied = MJ.witnessAct(run.state, run.day, cls);
@@ -583,11 +597,15 @@
     }
     let read = null;
     let tipped = false;
-    if (wasWitnessed(run, obstacle, affordance)) {
+    if (wasWitnessed(run, obstacle, affordance, outcome.success)) {
       const cls = threatClassFor(affordance, run.attempts[key]);
       if (cls !== MJ.THREAT.NORMAL) {
         const applied = MJ.witnessAct(run.state, run.day, cls);
-        read = { threatClass: cls, band: applied.band };
+        read = {
+          threatClass: cls, band: applied.band,
+          changed: applied.band !== applied.before,
+          awkward: applied.awkward,
+        };
         tipped = applied.tipped;
         if (applied.band === "threatening") run.engagedAlert = true;
       }

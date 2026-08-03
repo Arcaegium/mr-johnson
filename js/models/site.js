@@ -186,7 +186,14 @@
       perceives: true,
       affordances: [
         { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, attempts: 1 },
-        { skill: "assensing",  verb: "read it and slip past unnoticed", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 3 },
+        // Two ways past a sentry, astral or otherwise: out of its
+        // notice, or in plain view and unremarkable. Blowing the
+        // covert one is worse than blowing the overt one — being
+        // caught sneaking says more about you than being sensed
+        // walking through does. (Stealth vs. awareness gets its own
+        // treatment later; this is the structure, not the depth.)
+        { skill: "stealth",    verb: "sneak around it", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
+        { skill: "assensing",  verb: "walk past without tripping it", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 3 },
         { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
         { skill: "sorcery",    verb: "blast it down", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
