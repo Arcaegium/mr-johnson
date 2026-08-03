@@ -165,6 +165,11 @@
       MJ.hireRunner(r, "permanent");
       const res = MJ.runActionPeriod(rng, [{ mission: MJ.createReconMission(site, "astral"), runners: [r] }], 7)[0];
       if (!res.success) continue;
+      // A sweep that provoked a response legitimately learns about
+      // the axes that answered — physical responders confirm physical
+      // security, because the crew just met it. Only an unprovoked
+      // sweep confirms its lens alone.
+      if (res.forcedResponse) continue;
       intelProved = true;
       check(site.intel.astral && site.intel.astral.dayTaken === 7, "C2: intel must be stamped with the recon day");
       const view = MJ.siteIntelView(site, 8);

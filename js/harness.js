@@ -559,9 +559,10 @@
     const head = `  ${r.kind}  ${r.success ? "SUCCESS" : "FAILED"}  crew:[${(r.crew || []).join(", ")}]  karma:+${r.karmaAward}${r.intelBonusApplied ? "  (intel bonus)" : ""}`;
     const lines = [head];
     for (const t of r.tasks || []) {
-      lines.push(t.runner
-        ? `      ${t.obstacle} T${t.tier}: ${t.runner} ${t.skill}${t.loud ? " (LOUD)" : ""} ${t.hits}/${t.threshold} ${t.success ? "ok" : "MISS"}${t.criticalGlitch ? " CRITGLITCH+WOUND" : t.glitch ? " glitch" : ""}`
-        : `      ${t.obstacle} T${t.tier}: ${t.result}`);
+      if (!t.runner) lines.push(`      ${t.obstacle} T${t.tier}: ${t.result}`);
+      else if (t.rejected) lines.push(`      ${t.obstacle} T${t.tier}: ${t.runner} tried ${t.skill} — ${t.rejected}`);
+      else lines.push(`      ${t.obstacle} T${t.tier}: ${t.runner} ${t.skill}${t.loud ? " (LOUD)" : ""} ${t.hits}/${t.threshold} ${t.success ? "ok" : "MISS"}${t.criticalGlitch ? " CRITGLITCH+WOUND" : t.glitch ? " glitch" : ""}`);
+      if (t.responders && t.responders.length) lines.push(`        RESPONSE: ${t.responders.join(", ")}`);
     }
     if (r.error) lines.push(`      (${r.error})`);
     if (r.patient) lines.push(`      patient: ${r.patient} — wounds now ${r.woundsNow}`);

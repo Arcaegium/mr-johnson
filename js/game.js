@@ -393,9 +393,17 @@
       // information too, and a failed run is still a fresh read on
       // what's actually guarding the place.
       for (const t of res.tasks || []) {
-        logLine(session, t.runner
-          ? "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : "")
-          : "    " + t.obstacle + " T" + t.tier + ": " + t.result);
+        if (!t.runner) {
+          logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.result);
+        } else if (t.rejected) {
+          // Found out the hard way — that's what the attempt bought.
+          logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " tried " + t.skill + " — " + t.rejected);
+        } else {
+          logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : ""));
+        }
+        if (t.responders && t.responders.length) {
+          logLine(session, "      RESPONSE: " + t.responders.join(", ") + " — they are coming");
+        }
       }
       if (res.threatBand && res.threatBand !== "normal") {
         logLine(session, "  the site reads you as " + res.threatBand.toUpperCase() +

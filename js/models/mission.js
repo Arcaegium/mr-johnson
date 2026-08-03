@@ -342,6 +342,7 @@
       index: 0, tasks: [], armorGuard: armorGuard,
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
       attempts: {},        // "obstacleIndex:skill" -> tries, for budgets and escalation
+      discovered: {},      // "obstacleIndex:skill" -> why it will never work here
       engagedAlert: false, // did this run force a real response
     };
   }
@@ -371,6 +372,48 @@
     return affordance.threat;
   }
 
+  // ── Attempt budgets ─────────────────────────────────────────────
+  // An approach runs out: one shot to talk your way past (you cannot
+  // work the same room twice), a few tries at credentials before the
+  // account locks itself. Spending the last one removes the option
+  // WITHOUT an alarm — the lockout already ended the credible threat.
+  function attemptKey(index, skill) {
+    return index + ":" + skill;
+  }
+
+  function attemptsLeft(run, index, affordance) {
+    const budget = affordance.attempts === undefined ? 1 : affordance.attempts;
+    return budget - (run.attempts[attemptKey(index, affordance.skill)] || 0);
+  }
+
+  // ── Responders: what an engaged axis actually sends ─────────────
+  // Each axis fields a challenge at its own alert level, in its own
+  // idiom. Matrix has no obstacle vocabulary of its own yet, so its
+  // response manifests physically — doors sealing, turrets waking —
+  // rather than inventing ice the unbuilt Matrix pillar would have
+  // to contradict later.
+  const RESPONDER_TYPES = {
+    physical: ["guard", "camera"],
+    astral: ["spirit"],
+    matrix: ["maglock", "camera"],
+  };
+
+  function spawnResponders(run) {
+    const spawned = [];
+    for (const axis of MJ.SECURITY_AXES) {
+      const tier = MJ.alertLevel(run.state, axis);
+      if (tier < 1) continue;
+      const typeId = run.rng.pick(RESPONDER_TYPES[axis]);
+      const projection = axis === "astral" ? "astral" : "physical";
+      const ob = MJ.generateObstacleInstance(run.rng, typeId, Math.min(10, tier), projection);
+      ob.responder = axis;
+      spawned.push(ob);
+    }
+    // They arrive in front of you — next, not at the end of the route.
+    run.obstacles.splice(run.index + 1, 0, ...spawned);
+    return spawned;
+  }
+
   function missionDone(run) {
     return run.aborted || run.index >= run.obstacles.length;
   }
@@ -394,12 +437,18 @@
         const pool = trained + MJ.gearBonusFor(runner, a.skill);
         if (!best || pool > best.pool) best = { runner: runner, pool: pool };
       }
+      const left = attemptsLeft(run, run.index, a);
+      const known = run.discovered[attemptKey(run.index, a.skill)] || null;
       options.push({
         skill: a.skill, verb: a.verb, loud: !!a.loud,
         blocked: !!a.blocked, reason: a.reason || null,
+        // What the CREW knows — a Watsonian immunity is only knowable
+        // by trying it, so the UI shows `discovered`, never `blocked`.
+        discovered: known,
         runner: best ? best.runner : null,
         pool: best ? best.pool : 0,
-        available: !!best,
+        attemptsLeft: left,
+        available: !!best && left > 0 && !known,
       });
     }
     return {
@@ -461,11 +510,14 @@
         }
       }
     }
-    if (!outcome.success) run.failed = true;
-
     // What did that reveal, and did anything see it?
-    const key = run.index + ":" + skill;
+    const key = attemptKey(run.index, skill);
     run.attempts[key] = (run.attempts[key] || 0) + 1;
+    // A blocked affordance is discovered by trying it — you learn the
+    // box is air-gapped by reaching for a signal that isn't there.
+    if (outcome.ok === false && affordance && affordance.blocked) {
+      run.discovered[key] = affordance.reason || "doesn't work here";
+    }
     let read = null;
     let tipped = false;
     if (wasWitnessed(run, obstacle, affordance)) {
@@ -498,8 +550,40 @@
       read: read, tipped: tipped,
     };
     run.tasks.push(task);
-    run.index += 1;
+
+    // Tipping over brings the response into the corridor with you.
+    if (tipped) {
+      const spawned = spawnResponders(run);
+      task.responders = spawned.map((o) => o.label + " T" + o.tier);
+    }
+
+    // A failed approach is not a failed obstacle. The guard who told
+    // you to get lost is exactly as sneak-past-able as he was — so
+    // stay here and pick another way. Only running out of ways
+    // actually stops the crew.
+    if (outcome.success) {
+      run.index += 1;
+    } else if (remainingApproaches(run) === 0) {
+      run.failed = true;
+      run.index += 1;
+    }
     return task;
+  }
+
+  // How many ways of getting past THIS obstacle the crew still has:
+  // trained, budget left, and not yet discovered to be useless here.
+  function remainingApproaches(run) {
+    const obstacle = run.obstacles[run.index];
+    if (!obstacle) return 0;
+    let n = 0;
+    for (const a of obstacle.affordances) {
+      if (!a.skill) continue;
+      if (run.discovered[attemptKey(run.index, a.skill)]) continue;
+      if (attemptsLeft(run, run.index, a) <= 0) continue;
+      const usable = run.runners.some((r) => (MJ.getEffectiveSkills(r)[a.skill] || 0) > 0);
+      if (usable) n += 1;
+    }
+    return n;
   }
 
   // Walk away. The mission fails, but nothing else gets rolled — no
@@ -517,10 +601,20 @@
   // Quick resolve: the stepper, driven by the auto-chooser.
   function resolveSiteMission(rng, mission, runners, day) {
     const run = beginMission(rng, mission, runners, day);
-    while (!missionDone(run)) {
-      const obstacle = run.obstacles[run.index];
-      const auto = pickApproach(runners, obstacle);
-      missionChoose(run, auto ? { skill: auto.skill, runner: auto.runner } : null);
+    let guard = 0;
+    while (!missionDone(run) && guard++ < 500) {
+      const prompt = missionPrompt(run);
+      // The auto-chooser only sees what the crew still actually has:
+      // untried-or-unexhausted approaches nobody has discovered to be
+      // useless here. Quiet beats loud, then the biggest pool.
+      const usable = prompt.options.filter((o) => o.available);
+      let best = null;
+      for (const o of usable) {
+        if (!best) best = o;
+        else if (best.loud && !o.loud) best = o;
+        else if (best.loud === o.loud && o.pool > best.pool) best = o;
+      }
+      missionChoose(run, best ? { skill: best.skill, runner: best.runner } : null);
     }
     return finishMission(rng, run);
   }

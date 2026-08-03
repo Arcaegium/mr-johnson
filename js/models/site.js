@@ -791,6 +791,9 @@
   MJ.OWNERS = OWNERS;
   MJ.ORIENTATIONS = ORIENTATIONS;
   MJ.OBSTACLE_TEMPLATES = OBSTACLE_TEMPLATES;
+  MJ.generateObstacleInstance = generateObstacleInstance; // mission.js spawns responders with this
+  MJ.PHYSICAL_OBSTACLE_TYPES = PHYSICAL_OBSTACLE_TYPES;
+  MJ.ASTRAL_ROOM_TYPES = ASTRAL_ROOM_TYPES;
   MJ.rollValue = rollValue;
   MJ.rollOrientation = rollOrientation;
   MJ.deriveSecurity = deriveSecurity;
