@@ -421,6 +421,27 @@
     renderLog();
   }
 
+  // ── Playing the day, one mission at a time ──────────────────────
+  // Dispatches resolve in queue order. Anything with a decision in
+  // it gets the popup; a craft or a treatment has nothing to ask, so
+  // it just lands in the log as the queue passes over it.
+  function playDay() {
+    const day = MJ.game.beginDay(S);
+    const pending = day.entries.slice();
+    step();
+
+    function step() {
+      while (pending.length && pending[0].done) MJ.game.resolveEntry(S, day, pending.shift());
+      if (!pending.length) {
+        MJ.game.settleDay(S, day);
+        wipeChecks = true;
+        render();
+        return;
+      }
+      MJ.missionPopup.play(S, day, pending.shift(), () => { render(); step(); });
+    }
+  }
+
   // ── Actions ─────────────────────────────────────────────────────
   function act(action, el) {
     if (action === "new-game") {
@@ -452,7 +473,8 @@
     if (action === "refresh-board") MJ.game.refreshBoard(S);
     else if (action === "refresh-market") MJ.game.refreshMarket(S);
     else if (action === "expand-capacity") MJ.game.expandCapacity(S);
-    else if (action === "end-day") { MJ.game.endDay(S); wipeChecks = true; }
+    else if (action === "end-day") { playDay(); return; }
+    else if (action === "quick-day") { MJ.game.endDay(S); wipeChecks = true; }
     else if (action === "accept") MJ.game.acceptJob(S, idx);
     else if (action === "watch-market") MJ.game.watchFromMarket(S, idx);
     else if (action === "hire") MJ.game.hire(S, S.roster[+el.dataset.ridx], el.dataset.tier);
@@ -490,6 +512,11 @@
     }
     render();
   }
+
+  // Dev handle on the live session — the panels are a lossy view of
+  // it, and "what does the model actually think right now" is the
+  // first question worth asking when they disagree.
+  MJ.ui = { session: () => S, play: playDay };
 
   document.addEventListener("click", (e) => {
     const el = e.target.closest("[data-act]");

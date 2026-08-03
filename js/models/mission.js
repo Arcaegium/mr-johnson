@@ -237,6 +237,27 @@
       for (const slot of room.postSlots) obstacles.push(...slot.physicalObstacles);
       obstacles.push(...room.astralObstacles);
     }
+    // Patrols and spirit zones cover a BEAT of rooms rather than
+    // sitting in one, so they are only met if the route crosses
+    // their circuit — but met they must be. Both were generated,
+    // counted toward the site's security rating, and then never
+    // walked into: a guard on patrol and a spirit in its zone were
+    // furniture the crew could not touch, which quietly made the
+    // astral axis thin on runs and let some sites resolve with no
+    // obstacles at all — a free success at a place with two guards
+    // and a spirit in it.
+    // KNOWN ARTIFACT: appended last, so on a route already at
+    // MAX_ROUTE_OBSTACLES these are the first thing the cap drops.
+    // The list is collection-ordered rather than walk-ordered
+    // throughout (edges precede rooms too); making it a true
+    // traversal is its own change.
+    const crosses = (ids) => (ids || []).some((id) => roomSet.has(id));
+    for (const patrol of site.layout.patrols || []) {
+      if (crosses(patrol.roomIds)) obstacles.push(...patrol.physicalObstacles);
+    }
+    for (const zone of site.layout.spiritZones || []) {
+      if (crosses(zone.roomIds)) obstacles.push(...zone.astralObstacles);
+    }
     return obstacles.slice(0, MAX_ROUTE_OBSTACLES);
   }
 
@@ -428,7 +449,22 @@
     // this used to allocate a fresh skill map fifteen times a prompt.
     const eff = run.runners.map((r) => MJ.getEffectiveSkills(r));
     for (const a of obstacle.affordances) {
-      if (!a.skill) continue;
+      // Skill-less affordances are real approaches, not filler:
+      // "route around" costs a beat and needs nobody trained. These
+      // used to be dropped here, which meant a crew with no magic
+      // was told there was NOTHING to try against a spirit it could
+      // simply have walked around.
+      if (!a.skill) {
+        const leftNoSkill = attemptsLeft(run, run.index, a);
+        options.push({
+          skill: null, verb: a.verb, loud: !!a.loud,
+          blocked: !!a.blocked, reason: a.reason || null,
+          discovered: null, runner: null, pool: 0,
+          attemptsLeft: leftNoSkill, noRoll: true,
+          available: leftNoSkill > 0,
+        });
+        continue;
+      }
       let best = null;
       for (let ri = 0; ri < run.runners.length; ri++) {
         const runner = run.runners[ri];
@@ -480,6 +516,31 @@
     const runner = choice.runner;
     const skill = choice.skill;
     const affordance = obstacle.affordances.find((a) => a.skill === skill);
+    // The no-roll approach: nobody tests anything, it just costs the
+    // beat. It still counts as an act, so a normal-class route-around
+    // reads as nothing while a louder one would still be seen.
+    if (!skill) {
+      // Same key attemptsLeft derives from a.skill, or the budget
+      // would never tick down and "route around" would be infinite.
+      const noRollKey = attemptKey(run.index, skill);
+      run.attempts[noRollKey] = (run.attempts[noRollKey] || 0) + 1;
+      const task = { obstacle: obstacle.label, tier: obstacle.tier, result: affordance ? affordance.verb : "went around" };
+      if (wasWitnessed(run, obstacle, affordance)) {
+        const cls = threatClassFor(affordance, run.attempts[noRollKey]);
+        if (cls !== MJ.THREAT.NORMAL) {
+          const applied = MJ.witnessAct(run.state, run.day, cls);
+          task.read = { threatClass: cls, band: applied.band };
+          if (applied.tipped) {
+            run.engagedAlert = true;
+            task.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);
+          }
+        }
+      }
+      if (MJ.alertEngaged(run.state)) MJ.addAlertPointsAll(run.state, ALERT_POINTS_PER_BEAT);
+      run.tasks.push(task);
+      run.index += 1;
+      return task;
+    }
     // Boost consumables: burned for this roll, then gone.
     let boostDice = 0;
     let boostLabel = null;
@@ -599,16 +660,16 @@
     return run;
   }
 
-  // ── Site-mission resolution (jobObjective / recon / resource) ───
-  // Quick resolve: the stepper, driven by the auto-chooser.
-  function resolveSiteMission(rng, mission, runners, day) {
-    const run = beginMission(rng, mission, runners, day);
+  // ── Quick resolve: the stepper, driven by the auto-chooser ──────
+  // The auto-chooser only sees what the crew still actually has:
+  // untried-or-unexhausted approaches nobody has discovered to be
+  // useless here. Quiet beats loud, then the biggest pool. This is
+  // the house playing your hand for you — the same seat the popup
+  // hands to the player, and deliberately the same stepper.
+  function autoResolve(run) {
     let guard = 0;
     while (!missionDone(run) && guard++ < 500) {
       const prompt = missionPrompt(run);
-      // The auto-chooser only sees what the crew still actually has:
-      // untried-or-unexhausted approaches nobody has discovered to be
-      // useless here. Quiet beats loud, then the biggest pool.
       const usable = prompt.options.filter((o) => o.available);
       let best = null;
       for (const o of usable) {
@@ -618,7 +679,11 @@
       }
       missionChoose(run, best ? { skill: best.skill, runner: best.runner } : null);
     }
-    return finishMission(rng, run);
+    return run;
+  }
+
+  function resolveSiteMission(rng, mission, runners, day) {
+    return finishMission(rng, autoResolve(beginMission(rng, mission, runners, day)));
   }
 
   function finishMission(rng, run) {
@@ -840,50 +905,75 @@
   // the crew, and a dispatch with no crew left fails without
   // rolling anything. Every dispatched runner's contract is
   // consumed at dispatch time, success or fail.
+  // ── Opening a dispatch: everything that happens before the dice ──
+  // Validation, the chain gate, and contract consumption — the costs
+  // a dispatch incurs simply by being attempted. Returns either a
+  // finished `result` (nothing for a player to decide) or a live
+  // `run` for the caller to step. runActionPeriod drives that run
+  // with the auto-chooser; the popup drives it with a person. Both
+  // reach the dice through exactly this path, so the interactive
+  // game cannot drift from the simulation it was proven in.
+  function openDispatch(rng, d, day, acted) {
+    const kind = missionKind(d.mission);
+    const refuse = (error) => ({ kind: kind, done: true, result: { kind: kind, success: false, error: error, tasks: [], karmaAward: 0 } });
+
+    // Chain gate (§06): some contracts only work in order —
+    // "acquire the item, deliver it, plug it in." A gated leg
+    // can't be dispatched until its prerequisite resolves, and a
+    // refused dispatch costs nothing: no actions, no contracts.
+    if (d.mission.requiresMission && !d.mission.requiresMission.resolved) {
+      return refuse("gated — prerequisite mission not yet complete");
+    }
+    const crew = (d.runners || []).filter((r) => isDispatchable(r) && !acted.has(r));
+    if (crew.length === 0) {
+      return refuse("no dispatchable crew (uncontracted, KIA, or already acted this period)");
+    }
+    // A treatment session occupies the patient for the period —
+    // no action, no contract, but they can't also be somewhere
+    // else today (and the medic can't operate on themselves).
+    if (kind === "medical") {
+      const patient = d.mission.patient;
+      if (!patient || !patient.market.hired || acted.has(patient) || crew.includes(patient)) {
+        return refuse("patient unavailable (not on the roster, already acted this period, or is the medic)");
+      }
+      acted.add(patient);
+    }
+    const contractEvents = [];
+    for (const runner of crew) {
+      acted.add(runner);
+      contractEvents.push({ runner: runner.identity.handle, ...MJ.consumeContractMission(runner, rng) });
+    }
+    const entry = { kind: kind, crew: crew, contractEvents: contractEvents, dispatch: d };
+    if (kind === "crafting" || kind === "medical" || kind === "search") {
+      entry.done = true;
+      entry.result = closeDispatch(entry, kind === "crafting"
+        ? resolveCraftingMission(rng, d.mission, crew)
+        : kind === "medical"
+          ? resolveMedicalMission(rng, d.mission, crew)
+          : resolveSearchMission(rng, d.mission, crew));
+      return entry;
+    }
+    entry.done = false;
+    entry.run = beginMission(rng, d.mission, crew, day);
+    return entry;
+  }
+
+  // Stamp the crew and the contract cost onto a finished result. The
+  // contracts were spent at open time whatever the dice later said.
+  function closeDispatch(entry, result) {
+    result.crew = entry.crew.map((r) => r.identity.handle);
+    result.contractEvents = entry.contractEvents;
+    return result;
+  }
+
   function runActionPeriod(rng, dispatches, day) {
     const acted = new Set();
     const results = [];
     for (const d of dispatches) {
-      const kind = missionKind(d.mission);
-      // Chain gate (§06): some contracts only work in order —
-      // "acquire the item, deliver it, plug it in." A gated leg
-      // can't be dispatched until its prerequisite resolves, and a
-      // refused dispatch costs nothing: no actions, no contracts.
-      if (d.mission.requiresMission && !d.mission.requiresMission.resolved) {
-        results.push({ kind: kind, success: false, error: "gated — prerequisite mission not yet complete", tasks: [], karmaAward: 0 });
-        continue;
-      }
-      const crew = (d.runners || []).filter((r) => isDispatchable(r) && !acted.has(r));
-      if (crew.length === 0) {
-        results.push({ kind: kind, success: false, error: "no dispatchable crew (uncontracted, KIA, or already acted this period)", tasks: [], karmaAward: 0 });
-        continue;
-      }
-      // A treatment session occupies the patient for the period —
-      // no action, no contract, but they can't also be somewhere
-      // else today (and the medic can't operate on themselves).
-      if (kind === "medical") {
-        const patient = d.mission.patient;
-        if (!patient || !patient.market.hired || acted.has(patient) || crew.includes(patient)) {
-          results.push({ kind: kind, success: false, error: "patient unavailable (not on the roster, already acted this period, or is the medic)", tasks: [], karmaAward: 0 });
-          continue;
-        }
-        acted.add(patient);
-      }
-      const contractEvents = [];
-      for (const runner of crew) {
-        acted.add(runner);
-        contractEvents.push({ runner: runner.identity.handle, ...MJ.consumeContractMission(runner, rng) });
-      }
-      const result = kind === "crafting"
-        ? resolveCraftingMission(rng, d.mission, crew)
-        : kind === "medical"
-          ? resolveMedicalMission(rng, d.mission, crew)
-          : kind === "search"
-            ? resolveSearchMission(rng, d.mission, crew)
-            : resolveSiteMission(rng, d.mission, crew, day);
-      result.crew = crew.map((r) => r.identity.handle);
-      result.contractEvents = contractEvents;
-      results.push(result);
+      const entry = openDispatch(rng, d, day, acted);
+      if (entry.done) { results.push(entry.result); continue; }
+      autoResolve(entry.run);
+      results.push(closeDispatch(entry, finishMission(rng, entry.run)));
     }
     return results;
   }
@@ -909,5 +999,8 @@
   MJ.finishMission = finishMission;
   MJ.discoverResourceSite = discoverResourceSite;
   MJ.missionKind = missionKind;
+  MJ.autoResolve = autoResolve;
+  MJ.openDispatch = openDispatch;
+  MJ.closeDispatch = closeDispatch;
   MJ.runActionPeriod = runActionPeriod;
 })();

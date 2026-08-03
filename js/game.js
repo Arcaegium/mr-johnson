@@ -374,71 +374,97 @@
     session.queue.splice(to, 0, item);
   }
 
-  // ── End of day: resolve, settle, tick, expire ──────────────────
-  function endDay(session, rngOverride) {
+  // ── The day, in three parts ─────────────────────────────────────
+  // beginDay opens every dispatch (validation, contracts, and the
+  // walk to the door), the caller resolves each one, settleDay pays
+  // and ticks. endDay chains all three with the auto-chooser in the
+  // middle; the popup puts the player there instead. One code path,
+  // two drivers — the interactive game and the stress suite cannot
+  // diverge, because there is only one thing to diverge from.
+  function beginDay(session, rngOverride) {
     const rng = rngOverride || liveRNG(); // layer 4: fresh dice, always
-    const results = MJ.runActionPeriod(rng, session.queue, session.day);
-
-    results.forEach((res, i) => {
-      const q = session.queue[i];
-      const crew = (res.crew || []).join(", ");
-      if (res.error) {
-        logLine(session, (q ? q.label : res.kind) + ": REFUSED — " + res.error);
-      } else {
-        logLine(session, (q ? q.label : res.kind) + " [" + crew + "]: " + (res.success ? "SUCCESS" : "failed") +
-          (res.karmaAward ? " (+" + res.karmaAward + " karma each)" : "") +
-          "");
-      }
-      // The full readout, roll by roll — the opponent's numbers are
-      // information too, and a failed run is still a fresh read on
-      // what's actually guarding the place.
-      for (const t of res.tasks || []) {
-        if (!t.runner) {
-          logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.result);
-        } else if (t.rejected) {
-          // Found out the hard way — that's what the attempt bought.
-          logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " tried " + t.skill + " — " + t.rejected);
-        } else {
-          logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : ""));
-        }
-        if (t.responders && t.responders.length) {
-          logLine(session, "      RESPONSE: " + t.responders.join(", ") + " — they are coming");
-        }
-      }
-      if (res.walkedIntoResponse) {
-        logLine(session, "  they were still up from earlier — " + res.walkedIntoResponse.join(", ") + " waiting at the door");
-      }
-      if (res.threatBand && res.threatBand !== "normal") {
-        logLine(session, "  the site reads you as " + res.threatBand.toUpperCase() +
-          (res.forcedResponse ? " — they are responding in force" : ""));
-      }
-      if (res.incident && res.incident.ratcheted) {
-        logLine(session, "  they held what they escalated to — the site's standing posture is higher now" +
-          (res.incident.maxGrew ? ", and they have approved more budget" : ""));
-      }
-      if (res.suppression) logLine(session, "  softened: the site's " + res.suppression.axis + " grid is degraded for the rest of the day (+" + res.suppression.level + "d vs " + res.suppression.axis + " obstacles)");
-      if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
-      if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);
-      if (res.bonusItem) {
-        session.save.armory.items.push(res.bonusItem);
-        logLine(session, "  scavenged: " + res.bonusItem.label + " (T" + res.bonusItem.tier + ") — in the armory");
-      }
-      if (res.yield) {
-        if (res.yield.item) {
-          session.save.armory.items.push(res.yield.item);
-          logLine(session, "  crafted: " + res.yield.item.label + " (T" + res.yield.item.tier + ") — in the armory");
-        } else if (res.yield.kind && res.yield.kind.indexOf("resource:") === 0) {
-          const mats = session.save.armory.materials;
-          mats[res.yield.kind] = (mats[res.yield.kind] || 0) + res.yield.amount;
-          logLine(session, "  stored: " + res.yield.kind.replace("resource:", "") + " x" + res.yield.amount + " (stock now " + mats[res.yield.kind] + ")");
-        } else {
-          logLine(session, "  yield: " + res.yield.kind + " x" + res.yield.amount);
-        }
-      }
-      for (const c of res.contractEvents || []) {
-        if (c.event === "contractCompleted") logLine(session, "  " + c.runner + "'s contract block is used up — back on the shelf");
-      }
+    const acted = new Set();
+    const entries = session.queue.map((d) => {
+      const entry = MJ.openDispatch(rng, d, session.day, acted);
+      entry.label = d.label;
+      return entry;
     });
+    return { rng: rng, entries: entries, live: !rngOverride };
+  }
+
+  // Finish one opened dispatch, however it was steered, and write it
+  // to the log. Safe to call on an already-finished entry.
+  function resolveEntry(session, day, entry) {
+    if (!entry.done) {
+      entry.result = MJ.closeDispatch(entry, MJ.finishMission(day.rng, entry.run));
+      entry.done = true;
+    }
+    logResult(session, entry.label, entry.result);
+    return entry.result;
+  }
+
+  function logResult(session, label, res) {
+    const crew = (res.crew || []).join(", ");
+    if (res.error) {
+      logLine(session, (label || res.kind) + ": REFUSED — " + res.error);
+    } else {
+      logLine(session, (label || res.kind) + " [" + crew + "]: " + (res.success ? "SUCCESS" : "failed") +
+        (res.karmaAward ? " (+" + res.karmaAward + " karma each)" : ""));
+    }
+    // The full readout, roll by roll — the opponent's numbers are
+    // information too, and a failed run is still a fresh read on
+    // what's actually guarding the place.
+    for (const t of res.tasks || []) {
+      if (!t.runner) {
+        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.result);
+      } else if (t.rejected) {
+        // Found out the hard way — that's what the attempt bought.
+        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " tried " + t.skill + " — " + t.rejected);
+      } else {
+        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : ""));
+      }
+      if (t.responders && t.responders.length) {
+        logLine(session, "      RESPONSE: " + t.responders.join(", ") + " — they are coming");
+      }
+    }
+    if (res.walkedIntoResponse) {
+      logLine(session, "  they were still up from earlier — " + res.walkedIntoResponse.join(", ") + " waiting at the door");
+    }
+    if (res.threatBand && res.threatBand !== "normal") {
+      logLine(session, "  the site reads you as " + res.threatBand.toUpperCase() +
+        (res.forcedResponse ? " — they are responding in force" : ""));
+    }
+    if (res.incident && res.incident.ratcheted) {
+      logLine(session, "  they held what they escalated to — the site's standing posture is higher now" +
+        (res.incident.maxGrew ? ", and they have approved more budget" : ""));
+    }
+    if (res.suppression) logLine(session, "  softened: the site's " + res.suppression.axis + " grid is degraded for the rest of the day (+" + res.suppression.level + "d vs " + res.suppression.axis + " obstacles)");
+    if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
+    if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);
+    if (res.bonusItem) {
+      session.save.armory.items.push(res.bonusItem);
+      logLine(session, "  scavenged: " + res.bonusItem.label + " (T" + res.bonusItem.tier + ") — in the armory");
+    }
+    if (res.yield) {
+      if (res.yield.item) {
+        session.save.armory.items.push(res.yield.item);
+        logLine(session, "  crafted: " + res.yield.item.label + " (T" + res.yield.item.tier + ") — in the armory");
+      } else if (res.yield.kind && res.yield.kind.indexOf("resource:") === 0) {
+        const mats = session.save.armory.materials;
+        mats[res.yield.kind] = (mats[res.yield.kind] || 0) + res.yield.amount;
+        logLine(session, "  stored: " + res.yield.kind.replace("resource:", "") + " x" + res.yield.amount + " (stock now " + mats[res.yield.kind] + ")");
+      } else {
+        logLine(session, "  yield: " + res.yield.kind + " x" + res.yield.amount);
+      }
+    }
+    for (const c of res.contractEvents || []) {
+      if (c.event === "contractCompleted") logLine(session, "  " + c.runner + "'s contract block is used up — back on the shelf");
+    }
+  }
+
+  // ── Settling: pay, tick, expire, save ───────────────────────────
+  function settleDay(session, day) {
+    const rng = day.rng;
 
     for (const job of session.jobs) {
       if (!job.paid && !job.expired && MJ.isJobComplete(job)) {
@@ -502,8 +528,18 @@
     // Every day-spend is an autosave point (§09) — but only LIVE
     // days: an injected rng means a test/replay is driving, and the
     // suite must never clobber the player's save slot.
-    if (!rngOverride) saveSession(session);
+    if (day.live) saveSession(session);
+  }
 
+  // The whole day, auto-resolved — what the suite and the "quick
+  // resolve" button run.
+  function endDay(session, rngOverride) {
+    const day = beginDay(session, rngOverride);
+    const results = day.entries.map((entry) => {
+      if (!entry.done) MJ.autoResolve(entry.run);
+      return resolveEntry(session, day, entry);
+    });
+    settleDay(session, day);
     return results;
   }
 
@@ -772,6 +808,10 @@
     unqueue: unqueue,
     moveQueued: moveQueued,
     endDay: endDay,
+    beginDay: beginDay,
+    resolveEntry: resolveEntry,
+    settleDay: settleDay,
+    logResult: logResult,
     availableJobObjectives: availableJobObjectives,
     serializeSession: serializeSession,
     deserializeSession: deserializeSession,
