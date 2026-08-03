@@ -303,81 +303,185 @@
     return best;
   }
 
-  // ── Site-mission resolution (jobObjective / recon / resource) ───
-  function resolveSiteMission(rng, mission, runners, day) {
+  // ── The mission stepper ─────────────────────────────────────────
+  // Resolution is a state machine so a human can stand in the middle
+  // of it: beginMission sets the table, missionPrompt describes the
+  // challenge in front of the crew, missionChoose takes one decision
+  // and rolls it, finishMission settles the consequences. Quick
+  // resolve (resolveSiteMission, below) is just this loop driven by
+  // pickApproach instead of a player — which is what keeps the
+  // stress suite's soak on exactly the same path it always ran.
+  //
+  // RNG DISCIPLINE, load-bearing: dice are only ever consumed by
+  // resolveTask (per obstacle, in order) and growRunner (per runner,
+  // in order) — every other step here is pure. Preserving those two
+  // sequences is what makes interactive and auto play produce
+  // identical worlds from identical choices.
+  function beginMission(rng, mission, runners, day) {
     const site = mission.site;
     const kind = missionKind(mission);
     if (!site.securityState) MJ.initSecurityState(rng, site);
     const state = site.securityState;
-
     // Karma keys off the START of the mission — snapshot first.
     const start = {
       physical: state.axes.physical.current,
       astral: state.axes.astral.current,
       matrix: state.axes.matrix.current,
     };
-    const bonusDice = hasFreshIntel(site, day) ? INTEL_BONUS_DICE : 0;
-
-    const obstacles = kind === "recon" ? reconObstacles(site, mission.lens) : routeObstacles(site);
-    let anyLoud = false;
-    let anyGlitch = false;
-    let failed = false;
-    const tasks = [];
     // Armor: reusable wound guards, refreshed per mission.
     const armorGuard = new Map();
     for (const r of runners) armorGuard.set(r, MJ.woundGuardFor(r));
+    return {
+      rng: rng,
+      mission: mission, runners: runners, day: day, site: site, kind: kind,
+      state: state, start: start,
+      intelBonus: hasFreshIntel(site, day) ? INTEL_BONUS_DICE : 0,
+      obstacles: kind === "recon" ? reconObstacles(site, mission.lens) : routeObstacles(site),
+      index: 0, tasks: [], armorGuard: armorGuard,
+      anyLoud: false, anyGlitch: false, failed: false, aborted: false,
+    };
+  }
 
-    for (const obstacle of obstacles) {
-      const approach = pickApproach(runners, obstacle);
-      if (!approach) {
-        // Nobody can touch it — the crew stalls out, loudly.
-        failed = true;
-        anyLoud = true;
-        tasks.push({ obstacle: obstacle.label, tier: obstacle.tier, result: "no usable approach — stalled" });
-        continue;
+  function missionDone(run) {
+    return run.aborted || run.index >= run.obstacles.length;
+  }
+
+  // What the crew is looking at, and every way they could take it.
+  // Blocked affordances are included on purpose — a Watsonian
+  // immunity is only knowable by trying it (§06: information isn't
+  // confirmed until experienced), so the UI decides what to reveal.
+  function missionPrompt(run) {
+    if (missionDone(run)) return null;
+    const obstacle = run.obstacles[run.index];
+    const options = [];
+    for (const a of obstacle.affordances) {
+      if (!a.skill) continue;
+      let best = null;
+      for (const runner of run.runners) {
+        const trained = MJ.getEffectiveSkills(runner)[a.skill] || 0;
+        if (trained <= 0) continue;
+        // Ranked by effective pool, so the toolkit-holder naturally
+        // wins ties against an equally-skilled bare-handed runner.
+        const pool = trained + MJ.gearBonusFor(runner, a.skill);
+        if (!best || pool > best.pool) best = { runner: runner, pool: pool };
       }
-      // Boost consumables auto-trigger on the first matching roll —
-      // one roll, then gone (v1 auto-use, flagged).
-      let boostDice = 0;
-      let boostLabel = null;
-      const boostItem = MJ.findConsumable(approach.runner, "boost", approach.skill);
-      if (boostItem) {
-        boostDice = MJ.gearBonusForTier(boostItem.tier);
-        boostLabel = boostItem.label;
-        MJ.consumeItem(boostItem);
-      }
-      const outcome = MJ.resolveTask(rng, approach.runner, obstacle, approach.skill, {
-        bonusDice: bonusDice + MJ.gearBonusFor(approach.runner, approach.skill) + boostDice +
-          suppressionBonus(site, obstacle.projection, day),
-      });
-      if (approach.loud) anyLoud = true;
-      if (outcome.glitch) anyGlitch = true;
-      let guarded = null;
-      if (outcome.criticalGlitch) {
-        // Armor eats it first (reusable this mission); then a patch
-        // (consumed); only then does the wound land.
-        if (armorGuard.get(approach.runner) > 0) {
-          armorGuard.set(approach.runner, armorGuard.get(approach.runner) - 1);
-          guarded = "armor";
-        } else {
-          const patch = MJ.findConsumable(approach.runner, "absorbWound", null);
-          if (patch) {
-            guarded = patch.label;
-            MJ.consumeItem(patch);
-          } else {
-            approach.runner.wounds += 1; // placeholder wound rule
-          }
-        }
-      }
-      if (!outcome.success) failed = true;
-      tasks.push({
-        obstacle: obstacle.label, tier: obstacle.tier,
-        runner: approach.runner.identity.handle, skill: approach.skill, pool: outcome.poolSize,
-        loud: approach.loud, hits: outcome.hits, threshold: outcome.threshold,
-        success: outcome.success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch,
-        boosted: boostLabel, guarded: guarded,
+      options.push({
+        skill: a.skill, verb: a.verb, loud: !!a.loud,
+        blocked: !!a.blocked, reason: a.reason || null,
+        runner: best ? best.runner : null,
+        pool: best ? best.pool : 0,
+        available: !!best,
       });
     }
+    return {
+      obstacle: obstacle,
+      label: obstacle.label,
+      tier: obstacle.tier,
+      projection: obstacle.projection,
+      index: run.index,
+      total: run.obstacles.length,
+      options: options,
+    };
+  }
+
+  // One decision, one roll. `choice` is { skill, runner } — or null,
+  // meaning nobody could touch it and the crew stalls out loudly.
+  function missionChoose(run, choice) {
+    if (missionDone(run)) return null;
+    const obstacle = run.obstacles[run.index];
+    if (!choice) {
+      run.failed = true;
+      run.anyLoud = true;
+      const task = { obstacle: obstacle.label, tier: obstacle.tier, result: "no usable approach — stalled" };
+      run.tasks.push(task);
+      run.index += 1;
+      return task;
+    }
+    const runner = choice.runner;
+    const skill = choice.skill;
+    const affordance = obstacle.affordances.find((a) => a.skill === skill);
+    // Boost consumables: burned for this roll, then gone.
+    let boostDice = 0;
+    let boostLabel = null;
+    const boostItem = MJ.findConsumable(runner, "boost", skill);
+    if (boostItem) {
+      boostDice = MJ.gearBonusForTier(boostItem.tier);
+      boostLabel = boostItem.label;
+      MJ.consumeItem(boostItem);
+    }
+    const outcome = MJ.resolveTask(run.rng, runner, obstacle, skill, {
+      bonusDice: run.intelBonus + MJ.gearBonusFor(runner, skill) + boostDice +
+        suppressionBonus(run.site, obstacle.projection, run.day),
+    });
+    if (affordance && affordance.loud) run.anyLoud = true;
+    if (outcome.glitch) run.anyGlitch = true;
+    let guarded = null;
+    if (outcome.criticalGlitch) {
+      // Armor eats it first (reusable this mission); then a patch
+      // (consumed); only then does the wound land.
+      if (run.armorGuard.get(runner) > 0) {
+        run.armorGuard.set(runner, run.armorGuard.get(runner) - 1);
+        guarded = "armor";
+      } else {
+        const patch = MJ.findConsumable(runner, "absorbWound", null);
+        if (patch) {
+          guarded = patch.label;
+          MJ.consumeItem(patch);
+        } else {
+          runner.wounds += 1; // placeholder wound rule
+        }
+      }
+    }
+    if (!outcome.success) run.failed = true;
+    const task = {
+      obstacle: obstacle.label, tier: obstacle.tier,
+      runner: runner.identity.handle, skill: skill, pool: outcome.poolSize,
+      loud: affordance ? !!affordance.loud : false, hits: outcome.hits, threshold: outcome.threshold,
+      success: outcome.success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch,
+      boosted: boostLabel, guarded: guarded,
+      rejected: outcome.ok === false ? outcome.error : null,
+    };
+    run.tasks.push(task);
+    run.index += 1;
+    return task;
+  }
+
+  // Walk away. The mission fails, but nothing else gets rolled — no
+  // further wounds, no further noise. "Is it worth another swing"
+  // is the decision this exists to make real.
+  function missionAbort(run) {
+    if (run.aborted) return run;
+    run.aborted = true;
+    run.failed = true;
+    run.tasks.push({ obstacle: "—", tier: 0, result: "withdrew — the crew pulled out" });
+    return run;
+  }
+
+  // ── Site-mission resolution (jobObjective / recon / resource) ───
+  // Quick resolve: the stepper, driven by the auto-chooser.
+  function resolveSiteMission(rng, mission, runners, day) {
+    const run = beginMission(rng, mission, runners, day);
+    while (!missionDone(run)) {
+      const obstacle = run.obstacles[run.index];
+      const auto = pickApproach(runners, obstacle);
+      missionChoose(run, auto ? { skill: auto.skill, runner: auto.runner } : null);
+    }
+    return finishMission(rng, run);
+  }
+
+  function finishMission(rng, run) {
+    const site = run.site;
+    const kind = run.kind;
+    const mission = run.mission;
+    const runners = run.runners;
+    const day = run.day;
+    const state = run.state;
+    const start = run.start;
+    const obstacles = run.obstacles;
+    const tasks = run.tasks;
+    const anyLoud = run.anyLoud;
+    const anyGlitch = run.anyGlitch;
+    const failed = run.failed;
 
     const success = !failed;
     // Placeholder noise model: the site hears any loud approach, or
@@ -426,8 +530,8 @@
     const result = {
       kind: kind, success: success, karmaAward: karmaAward,
       obstaclesFaced: obstacles.length, tasks: tasks,
-      noise: hit, intelBonusApplied: bonusDice > 0,
-      suppression: suppression,
+      noise: hit, intelBonusApplied: run.intelBonus > 0,
+      suppression: suppression, aborted: run.aborted,
     };
     if (success && kind === "resourceGathering") {
       // Draw from the site's own probability chart (§09: the loot
@@ -631,6 +735,15 @@
   MJ.siteIntelView = siteIntelView;
   MJ.suppressionBonus = suppressionBonus;
   MJ.applySuppression = applySuppression;
+  // The stepper — interactive resolution drives these directly;
+  // resolveSiteMission drives them with pickApproach.
+  MJ.beginMission = beginMission;
+  MJ.missionPrompt = missionPrompt;
+  MJ.missionChoose = missionChoose;
+  MJ.missionAbort = missionAbort;
+  MJ.missionDone = missionDone;
+  MJ.finishMission = finishMission;
+  MJ.pickApproach = pickApproach;
   MJ.discoverResourceSite = discoverResourceSite;
   MJ.missionKind = missionKind;
   MJ.runActionPeriod = runActionPeriod;
