@@ -383,6 +383,25 @@ weapons fill physical; stun weapons (gel rounds, batons, stun spells) fill stun.
 **Either full = down.** This gives non-lethal a real mechanical lane, so a
 capture contract is a loadout decision rather than a fiction.
 
+**The two damages differ in what they leave behind, because they differ in what
+they are.** Physical damage is injury: it rides home on the runner as
+`runner.wounds` — boxes on the same track they would fill in a fight — and is
+still there next week unless somebody treats it. Stun is exhaustion: real inside
+the fight, gone by the next job. So:
+
+- Walking out of a firefight is not walking out unhurt. Survivors carry their
+  physical boxes; going down and living means carrying a full track.
+- Boxes cost dice on **everything**, at **-1 per three**. A decker with cracked
+  ribs is worse at talking their way out of the lobby too.
+- A runner enters the next fight already on those boxes. Turning up at four
+  filled is the whole reason a Johnson keeps a bench.
+- **Two clocks close them.** Rest closes one box every few days, faster for high
+  Body — free, and slow. Medicae closes the threshold plus every hit beyond it,
+  and the case's tier is half the boxes plus Essence already spent, so chrome
+  complicates surgery. Measured: a full track is **~5 days with a trained medic,
+  ~19 with whoever happens to be standing there, ~30 with nobody.** Paying for a
+  medic buys speed, and speed is what matters when a contract has a window.
+
 **Cover is positional** — computed from where a runner stands relative to the
 shooter, so moving into hard cover against one threat can open them to another
 angle. **Reinforcements arrive**, pathing in from entry points on rising Alert,
@@ -582,17 +601,18 @@ Moving toward **tabs holding several widgets each**, adding a level: tab → wid
 **Save stores seeds + deltas, never generated content.**
 
 ### 11.2 Site names ARE the seed
-Format: `Adverb-Color-Adjective-Noun-####`
-- Color → owner (8), Adjective → district (9), Noun → value × orientation (40),
+Format: `Adverb-Adjective-Color-Noun-####` — the colour sits last among the
+adjectives, the way English stacks them: `Cheaply-Crooked-Emerald-Saddle-5299`.
+- Adjective → district (9), Color → owner (8), Noun → value × orientation (40),
   Adverb + 4 digits = uniquifier. ~4.2B names. The same key names the same
   building in every universe; addresses are shareable.
-- `decodeSiteName` is **positional**.
-
-**Planned:** reorder to `Adverb-Adjective-Color-Noun-####`, which reads better.
-This is a **seed-format change** — encode and decode move together, and names
-generated under the old order stop resolving. Confirm the colour and adjective
-word lists are **disjoint** first, so any older name fails cleanly rather than
-resolving to a different site.
+- `decodeSiteName` is **positional**, and that is load-bearing: four words —
+  Amber, Crimson, Ivory, Scarlet — are in both the colour and adjective pools,
+  because each is a perfectly good member of either. The slot a word sits in is
+  what says which table reads it, so the slot ORDER carries meaning. A stress
+  probe holds it: swap the two slots and the name must mean something else.
+- The name is hashed to seed the site, so the word order is part of the seed —
+  a name is a key to one building under one grammar.
 
 ### 11.3 The threat read & live security
 **Three layers:**

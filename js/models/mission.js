@@ -113,7 +113,14 @@
   // lies and huge ones both, so recon stays load-bearing.
   const ESTIMATE_ACCURACY = 0.65;
   const ESTIMATE_MAX_ERROR = 5;
-  const MAX_ROUTE_OBSTACLES = 6;     // V1 cap on how much of a site one mission touches
+  // A route carries everything the site put on it. The site's own
+  // security budget is the bound that matters — it already decides
+  // how much gets bought and placed, so a second cap on top of it
+  // discounts the ratings the player is shown and prices against.
+  // Measured over 3000 sites: the street walk runs p50 4, p90 11,
+  // max 22 obstacles; the host crawl p50 1, p90 6. Long runs are the
+  // heavily-secured ones, which is the point, and quick-resolve is
+  // the standing skip button for anyone who doesn't want to play one.
   const RECON_SAMPLE = 3;            // obstacles a recon pass examines
 
   // ── Eligibility: a dispatch is what a contract buys ─────────────
@@ -309,56 +316,85 @@
   }
 
   // ── Route + recon obstacle selection ────────────────────────────
-  // V1: the shortest entry->objective path, gathering the physical
-  // obstacles along it plus the astral obstacles attached to its
-  // rooms — one crew walks one route, both projections are real.
+  // The shortest entry->objective path, WALKED: the crew comes in
+  // through the entry point, clears the room it lands in, crosses to
+  // the next room, and so on to the objective. Physical and astral
+  // obstacles interleave in the order the ground presents them,
+  // because both projections cover the same route.
+  //
+  // Walk order is the contract with every renderer. A list can print
+  // obstacles in any order and still read; a map cannot — the crew
+  // occupies one room at a time and has to get to the next one. So
+  // the sequence IS the movement, and `leg` is how far along it the
+  // crew has come.
   function routeObstacles(site) {
     const paths = MJ.findPaths(site);
-    if (paths.length === 0) return [];
+    if (paths.length === 0) return { path: [], obstacles: [] };
     const path = paths.reduce((a, b) => (a.length <= b.length ? a : b));
-    const roomSet = new Set(path);
+    const roomById = {};
+    for (const room of site.layout.rooms) roomById[room.id] = room;
+    // Edges are undirected; index both ways so a step can find its
+    // door whichever end the walk approaches from.
+    const edgeBetween = {};
+    for (const edge of site.layout.edges) {
+      edgeBetween[edge.from + "->" + edge.to] = edge;
+      edgeBetween[edge.to + "->" + edge.from] = edge;
+    }
     const obstacles = [];
     // Each obstacle carries WHERE it is, because witnessing is about
-    // what else can see you from the same ground (§07). Derived
-    // straight from the layout, so stamping it on the shared instance
-    // is idempotent — the same obstacle is always in the same place.
-    const at = (rooms, list) => {
-      for (const o of list) { o.rooms = rooms; obstacles.push(o); }
+    // what else can see you from the same ground (§07), and WHEN the
+    // crew reaches it, because a renderer has to move them there.
+    // Both derive straight from the layout, so stamping the shared
+    // instance is idempotent — the same obstacle is always in the
+    // same place, at the same point in the same walk.
+    const at = (rooms, leg, where, list) => {
+      for (const o of list) {
+        o.rooms = rooms; o.leg = leg; o.where = where;
+        obstacles.push(o);
+      }
     };
     const entry = site.layout.entryPoints.find((e) => e.roomId === path[0]);
-    if (entry) at([entry.roomId], entry.physicalObstacles);
-    for (const edge of site.layout.edges) {
-      if (roomSet.has(edge.from) && roomSet.has(edge.to)) at([edge.from, edge.to], edge.physicalObstacles);
-    }
-    for (const room of site.layout.rooms) {
-      if (!roomSet.has(room.id)) continue;
-      for (const slot of room.postSlots) at([room.id], slot.physicalObstacles);
-      at([room.id], room.astralObstacles);
-    }
-    // Patrols and spirit zones cover a BEAT of rooms rather than
-    // sitting in one, so they are only met if the route crosses
-    // their circuit — but met they must be. Both were generated,
-    // counted toward the site's security rating, and then never
-    // walked into: a guard on patrol and a spirit in its zone were
-    // furniture the crew could not touch, which quietly made the
-    // astral axis thin on runs and let some sites resolve with no
-    // obstacles at all — a free success at a place with two guards
-    // and a spirit in it.
-    // KNOWN ARTIFACT: appended last, so on a route already at
-    // MAX_ROUTE_OBSTACLES these are the first thing the cap drops.
-    // The list is collection-ordered rather than walk-ordered
-    // throughout (edges precede rooms too); making it a true
-    // traversal is its own change.
-    const crosses = (ids) => (ids || []).some((id) => roomSet.has(id));
-    // A patrol or a zone covers its whole circuit, so it can witness
-    // you anywhere along it — not just at one room.
+    if (entry) at([entry.roomId], 0, { kind: "entry", type: entry.type, roomId: entry.roomId }, entry.physicalObstacles);
+
+    // A patrol or a spirit zone covers a BEAT of rooms rather than
+    // sitting in one, so the crew meets it at the FIRST room of its
+    // circuit they set foot in — and it can witness them anywhere
+    // along that circuit, which is why `rooms` stays the whole beat.
+    const firstLegOn = (ids) => {
+      for (let i = 0; i < path.length; i++) {
+        if ((ids || []).includes(path[i])) return i;
+      }
+      return -1;
+    };
+    const mobile = [];
     for (const patrol of site.layout.patrols || []) {
-      if (crosses(patrol.roomIds)) at(patrol.roomIds, patrol.physicalObstacles);
+      const leg = firstLegOn(patrol.roomIds);
+      if (leg >= 0) mobile.push({ leg, rooms: patrol.roomIds, kind: "patrol", list: patrol.physicalObstacles });
     }
     for (const zone of site.layout.spiritZones || []) {
-      if (crosses(zone.roomIds)) at(zone.roomIds, zone.astralObstacles);
+      const leg = firstLegOn(zone.roomIds);
+      if (leg >= 0) mobile.push({ leg, rooms: zone.roomIds, kind: "zone", list: zone.astralObstacles });
     }
-    return obstacles.slice(0, MAX_ROUTE_OBSTACLES);
+
+    for (let leg = 0; leg < path.length; leg++) {
+      const room = roomById[path[leg]];
+      if (!room) continue;
+      const here = { kind: "room", roomId: room.id, label: room.label, size: room.size };
+      // What is posted in this room, then what is passing through it.
+      for (const slot of room.postSlots) at([room.id], leg, here, slot.physicalObstacles);
+      at([room.id], leg, here, room.astralObstacles);
+      for (const m of mobile) {
+        if (m.leg !== leg) continue;
+        at(m.rooms, leg, { kind: m.kind, roomIds: m.rooms, roomId: room.id }, m.list);
+      }
+      // Then the door out, which belongs to the crossing rather than
+      // to either room — met on the way out of this one.
+      const next = path[leg + 1];
+      if (next === undefined) continue;
+      const edge = edgeBetween[room.id + "->" + next];
+      if (edge) at([room.id, next], leg, { kind: "edge", from: room.id, to: next }, edge.physicalObstacles);
+    }
+    return { path: path, obstacles: obstacles };
   }
 
   // ── The host crawl ─────────────────────────────────────────────
@@ -414,7 +450,7 @@
         obstacles.push(ice);
       }
     }
-    return { path: path, obstacles: obstacles.slice(0, MAX_ROUTE_OBSTACLES), dataNodes: dataNodes, host: host };
+    return { path: path, obstacles: obstacles, dataNodes: dataNodes, host: host };
   }
 
   // ── The astral run ─────────────────────────────────────────────
@@ -591,6 +627,9 @@
     const kind = missionKind(mission);
     const matrixRun = kind === "matrixRun" ? hostRoute(site, { wantData: !!mission.wantData }) : null;
     const astralRun = kind === "astralRun" ? astralRoute(site) : null;
+    // The meat run walks the building. Held like the other two routes
+    // so a readout can say which room the crew is standing in.
+    const streetRun = kind === "recon" || matrixRun || astralRun ? null : routeObstacles(site);
     if (!site.securityState) MJ.initSecurityState(rng, site);
     const state = site.securityState;
     // Karma keys off the START of the mission — snapshot first.
@@ -610,7 +649,9 @@
       obstacles: kind === "recon" ? reconObstacles(site, mission.lens)
         : kind === "matrixRun" ? matrixRun.obstacles
         : kind === "astralRun" ? astralRun.obstacles
-        : routeObstacles(site),
+        : streetRun.obstacles,
+      // The room path the crew walks, for anything that draws it.
+      streetRoute: streetRun,
       // Sized by the strongest projector on the crew. Null for every
       // other kind of run — only an astral form is on a tether.
       tether: kind === "astralRun" ? tetherFor(runners) : null,
@@ -965,32 +1006,36 @@
       MJ.makeCombatant(r, Object.assign({ side: "crew", ammo: 30 }, MJ.combatLoadoutFor(r))));
   }
 
-  // Going down is where mission risk finally has teeth. The bible's
-  // old "a runner can never die on a job" was written when a mission
-  // was a dice check nobody watched; now the player sees the tracks
-  // fill, chooses to press or withdraw, and can pull out. A death
-  // they saw coming is a consequence, not an ambush.
+  // Going down is where mission risk has teeth. The player watches
+  // the tracks fill, chooses to press or withdraw, and can pull out;
+  // a death they saw coming is a consequence rather than an ambush.
   //
-  // The wound scales with how badly they were overmatched, rather
-  // than a flat -1: being dropped by a tier-9 hardsuit marks a
-  // career in a way a rent-a-cop does not.
+  // Survive it and the boxes come home. Overflow — damage past the
+  // end of the track — is what decides whether they get up at all,
+  // and how much of the beating is still on them tomorrow: being
+  // dropped by a tier-9 hardsuit marks a career in a way a
+  // rent-a-cop does not.
   function resolveTakedown(run, combatant) {
     const runner = combatant.source;
     const overflow = Math.max(0,
       (combatant.physical - combatant.physicalMax) + (combatant.stun - combatant.stunMax));
     if (run.rng.chance(DEATH_ON_TAKEDOWN)) {
       // `dead` is its own flag, deliberately NOT market.phase="kia".
-      // The phase machine describes runners on the WATCH LIST, and
-      // hiring suppresses it — writing a phase onto a hired runner
-      // both broke that invariant and made a corpse look like it was
-      // still cycling through availability. Dying on a job is not a
-      // market state; the roster sweep removes them at day's end.
+      // The phase machine describes runners on the WATCH LIST and
+      // hiring suppresses it, so a corpse with a market phase would
+      // read as still cycling through availability. Dying on a job
+      // is not a market state; the roster sweep removes them at
+      // day's end.
       runner.dead = true;
       if (runner.market) runner.market.hired = null; // the contract ends with them
       return { runner: runner.identity.handle, died: true };
     }
-    const severity = 1 + Math.floor(overflow / 4);
-    runner.wounds += severity;
+    // They filled the track, so the track is what they carry out —
+    // a full physical box count — and overflow adds on top of it.
+    // Anyone who goes down leaves the field badly hurt by
+    // definition, which is what makes pulling out early a real call.
+    const severity = combatant.physicalMax + Math.floor(overflow / 4);
+    runner.wounds = Math.max(runner.wounds, severity);
     return { runner: runner.identity.handle, died: false, wounds: severity };
   }
 
@@ -1025,11 +1070,20 @@
     }
 
     const casualties = [];
+    const injured = [];
     for (const c of crew) {
-      if (!c.down) continue;
-      if (!run.downed) run.downed = new Set();
-      run.downed.add(c.source);
-      casualties.push(resolveTakedown(run, c));
+      if (c.down) {
+        if (!run.downed) run.downed = new Set();
+        run.downed.add(c.source);
+        casualties.push(resolveTakedown(run, c));
+        continue;
+      }
+      // Walking out of a firefight is not the same as walking out
+      // unhurt. Whatever physical damage they are still carrying
+      // goes on the dossier and stays there — the stun does not,
+      // because a beating wears off and a bullet wound does not.
+      const took = MJ.carryDamageHome(c);
+      if (took > 0) injured.push({ runner: c.source.identity.handle, wounds: took });
     }
     // Only a cleared field counts. Standing there unable to finish
     // them is a stalemate — the crew breaks off, the obstacle is
@@ -1041,7 +1095,8 @@
     if (won) for (const f of foes) if (f.sourceObstacle) run.neutralized.add(f.sourceObstacle);
 
     return {
-      won: won, stalemate: stalemate, rounds: combat.round, casualties: casualties,
+      won: won, stalemate: stalemate, rounds: combat.round,
+      casualties: casualties, injured: injured,
       enemies: foes.map((f) => f.name),
       enemiesDown: foes.filter((f) => f.down).length,
       surprise: !!opts.surprise,
@@ -1095,7 +1150,10 @@
       MJ.consumeItem(patch);
       return patch.label;
     }
-    runner.wounds += 1; // placeholder wound rule — real damage lands in P2.3
+    // A fumble outside a firefight — a bad landing, a hand in the
+    // wrong place, a fall down a shaft. One box on the same physical
+    // track a bullet fills, and it rides home like any other.
+    runner.wounds += 1;
     return null;
   }
 
@@ -1256,7 +1314,7 @@
         runner: runner.identity.handle, skill: skill,
         combat: true, surprise: fight.surprise, rounds: fight.rounds,
         enemies: fight.enemies, enemiesDown: fight.enemiesDown,
-        casualties: fight.casualties, loud: true,
+        casualties: fight.casualties, injured: fight.injured, loud: true,
         stalemate: fight.stalemate,
         success: fight.won,
       };
@@ -1675,13 +1733,28 @@
         }
       }
     }
+    // How hard the case is, on the same 1-10 tier scale everything
+    // else in the game uses. Wounds are BOXES — a full physical
+    // track is ten or twelve of them — so a box is half a tier, and
+    // the worst injury a body can hold is a hard case rather than
+    // automatically the hardest thing in the world. Chrome
+    // complicates surgery on top of that: every point of Essence
+    // already spent is another system that has to be worked around.
     const essenceSpent = Math.max(0, patient.essence.max - patient.essence.current);
-    const tier = Math.max(1, Math.min(10, patient.wounds + Math.floor(essenceSpent)));
+    const tier = Math.max(1, Math.min(10,
+      Math.ceil(patient.wounds / 2) + Math.floor(essenceSpent)));
     const pseudo = { tier: tier, affordances: [{ skill: bestSkill, verb: "treat", loud: false }] };
     const outcome = MJ.resolveTask(rng, bestRunner, pseudo, bestSkill, { bonusDice: MJ.gearBonusFor(bestRunner, bestSkill) });
     let karmaAward = 0;
+    let healed = 0;
     if (outcome.success) {
-      patient.wounds -= 1;
+      // A good medic closes more than one box. Boxes healed = the
+      // threshold they had to clear plus every hit beyond it, so a
+      // hard case in skilled hands still moves, and the same session
+      // in poor hands barely does. Physical damage is the only kind
+      // that survives the trip home, so it is the only kind treated.
+      healed = Math.min(patient.wounds, 1 + (outcome.margin || 0));
+      patient.wounds -= healed;
       karmaAward = Math.max(1, Math.round(SUPPORT_KARMA_RATE * tier));
       for (const runner of runners) MJ.growRunner(runner, karmaAward, rng);
       mission.resolved = true;
@@ -1689,7 +1762,7 @@
     }
     return {
       kind: "medical", success: outcome.success, karmaAward: karmaAward,
-      patient: patient.identity.handle, woundsNow: patient.wounds,
+      patient: patient.identity.handle, woundsNow: patient.wounds, healed: healed,
       tasks: [{ obstacle: `treatment (case T${tier})`, tier: tier, runner: bestRunner.identity.handle, skill: bestSkill, hits: outcome.hits, threshold: outcome.threshold, success: outcome.success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch }],
     };
   }
@@ -1809,6 +1882,9 @@
   MJ.createReconMission = createReconMission;
   MJ.createMatrixMission = createMatrixMission;
   MJ.createAstralMission = createAstralMission;
+  // The three pillars' routes, all the same shape ({path, obstacles})
+  // so anything that draws a run can draw any of them.
+  MJ.streetRoute = routeObstacles;
   MJ.astralRoute = astralRoute;
   MJ.tetherFor = tetherFor;
   MJ.hostRoute = hostRoute;

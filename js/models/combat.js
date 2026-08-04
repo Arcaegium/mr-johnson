@@ -63,11 +63,44 @@
   // Tabletop track sizes: 8 + half the governing attribute, round
   // up. Body carries the physical track, Willpower the stun one —
   // the two attributes that hold no skills earn their keep here.
+  //
+  // Both read `.attributes`, which a roster runner and a combatant
+  // both have, so either can be measured without being in a fight.
+  // The roster needs that: a runner's carried injuries are boxes on
+  // the same physical track they would fill in combat.
   function physicalTrack(c) {
-    return 8 + Math.ceil((c.attributes.body || 1) / 2);
+    return 8 + Math.ceil(((c.attributes || {}).body || 1) / 2);
   }
   function stunTrack(c) {
-    return 8 + Math.ceil((c.attributes.willpower || 1) / 2);
+    return 8 + Math.ceil(((c.attributes || {}).willpower || 1) / 2);
+  }
+
+  // The two damages differ in what they are, so they differ in what
+  // they leave behind. Physical damage is injury — it rides home on
+  // the runner and is still there next week unless somebody treats
+  // it. Stun is exhaustion, a beating, the ringing after a stun
+  // baton: real inside the fight, gone by the next job.
+  function carriedDamage(runner) {
+    return Math.max(0, Math.min(runner.wounds || 0, physicalTrack(runner)));
+  }
+
+  // Bodies mend on their own, slowly. Body is the attribute that
+  // decides how fast: a troll shrugs off a day that puts a wired
+  // elf on the bench. Returns boxes closed, so a caller can say so.
+  //
+  // This is the reason injury is a clock rather than a ratchet —
+  // without it every scratch would need a medic, and the roster
+  // would only ever get worse. Paying for Medicae buys speed, and
+  // speed is what matters when a contract has a window.
+  const REST_DAYS_PER_BOX = 4;
+  function restDay(runner, daysRested) {
+    if (!runner || !runner.wounds) return 0;
+    const rate = REST_DAYS_PER_BOX - Math.floor((runner.attributes.body || 1) / 3);
+    const every = Math.max(1, rate);
+    if (daysRested % every !== 0) return 0;
+    const healed = Math.min(runner.wounds, 1);
+    runner.wounds -= healed;
+    return healed;
   }
 
   // ── Stance: the scene-text stand-in for position ───────────────
@@ -152,14 +185,29 @@
       // neither generated yet, so this is the seam they land on.
       initiativeDice: opts.initiativeDice || source.initiativeDice || 1,
       ammo: opts.ammo !== undefined ? opts.ammo : 30,
-      physical: 0,
+      // A runner walks in carrying whatever they have not healed.
+      // Turning up to a firefight with four boxes already filled is
+      // the whole reason a Johnson keeps a bench and pays a medic.
+      physical: opts.physical !== undefined ? opts.physical : carriedDamage(source),
       stun: 0,
       down: false,
       stance: opts.stance || "open",
     };
     c.physicalMax = physicalTrack(c);
     c.stunMax = stunTrack(c);
+    c.physical = Math.min(c.physical, c.physicalMax);
     return c;
+  }
+
+  // What the fight leaves on the roster. Called for everyone still
+  // standing when it ends; the ones who went down are the takedown
+  // path's business, since going down is where dying is decided.
+  function carryDamageHome(combatant) {
+    const runner = combatant.source;
+    if (!runner || typeof runner.wounds !== "number") return 0;
+    const before = runner.wounds;
+    runner.wounds = Math.max(runner.wounds, combatant.physical);
+    return runner.wounds - before;
   }
 
   // Flat, no roll — you can read the whole order before committing.
@@ -388,4 +436,7 @@
   MJ.combatOver = combatOver;
   MJ.physicalTrack = physicalTrack;
   MJ.stunTrack = stunTrack;
+  MJ.carriedDamage = carriedDamage;
+  MJ.carryDamageHome = carryDamageHome;
+  MJ.restDay = restDay;
 })();

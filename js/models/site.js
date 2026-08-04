@@ -765,7 +765,7 @@
     };
   }
 
-  // ── Site names: Adverb-Color-Adjective-Noun-#### ────────────────
+  // ── Site names: Adverb-Adjective-Color-Noun-#### ────────────────
   // The what3words idea, fully weaponized: the NAME IS THE COMPLETE
   // SEED, and the name's structure ENCODES the site's qualities —
   // so when the universe randomly needs "a safe-band physical site
@@ -773,8 +773,8 @@
   // CONSTRUCTS the name that means them (no search, no override,
   // no algorithm guessing). Decoding the same name in any universe
   // reproduces the same site, qualities and all:
-  //   Color     -> owner        (16 colors / 8 owners, 2 each)
   //   Adjective -> district     (64 adjectives / 9 districts)
+  //   Color     -> owner        (16 colors / 8 owners, 2 each)
   //   Noun      -> value x orientation (64 nouns / 40 combos)
   //   Adverb + 4 digits -> pure uniquifier (64 x 10,000 per combo)
   // ~4.2 billion names. Veterans can learn to read addresses —
@@ -848,14 +848,21 @@
     const noun = rng.pick(wordsFor(NAME_NOUNS, 40, combo));
     const adverb = rng.pick(NAME_ADVERBS);
     const num = String(rng.int(0, 9999)).padStart(4, "0");
-    return adverb + "-" + color + "-" + adjective + "-" + noun + "-" + num;
+    // Adverb-Adjective-Color-Noun-NNNN. The colour sits last among
+    // the adjectives, the way English stacks them: a Boldly-Bitter-
+    // Coral-Anthem, never a Boldly-Coral-Bitter one.
+    return adverb + "-" + adjective + "-" + color + "-" + noun + "-" + num;
   }
 
+  // Decoding is POSITIONAL, never a search. Four words live in both
+  // the colour and adjective pools — Amber, Crimson, Ivory, Scarlet
+  // are all perfectly good colours and perfectly good adjectives —
+  // so the slot a word sits in is what says which table reads it.
   function decodeSiteName(name) {
     const parts = String(name).split("-");
     if (parts.length !== 5 || !/^\d{4}$/.test(parts[4])) return null;
-    const colorIdx = NAME_COLORS.indexOf(parts[1]);
-    const adjIdx = NAME_ADJECTIVES.indexOf(parts[2]);
+    const adjIdx = NAME_ADJECTIVES.indexOf(parts[1]);
+    const colorIdx = NAME_COLORS.indexOf(parts[2]);
     const nounIdx = NAME_NOUNS.indexOf(parts[3]);
     if (NAME_ADVERBS.indexOf(parts[0]) === -1 || colorIdx === -1 || adjIdx === -1 || nounIdx === -1) return null;
     const combo = nounIdx % 40;

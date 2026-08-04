@@ -5,15 +5,18 @@
    version stamped from day one so future shape changes have
    something to migrate from.
 
-   Only `meta` is genuinely wired up to IndexedDB right now. The
-   integration layer (game.js) holds a live session — roster,
-   market, known sites, jobs, and a real armory (game.js writes
-   crafted items and harvested materials into `armory` below) —
-   but full session serialization to disk is still the flagged
-   v0.5 follow-up: site/mission object graphs need their
-   compressSite-style record forms first. The shape is the current understanding's
-   own §09 spec either way, so finishing persistence populates
-   fields that already exist rather than changing the schema.
+   This file is the store: open the database, write one record,
+   read it back, stamp a schema version so a future shape change
+   has something to migrate from. It knows nothing about what a
+   session contains.
+
+   The record itself is built and rebuilt by game.js
+   (`serializeSession` / `deserializeSession`), which round-trips
+   the whole live session — roster, market, known sites, accepted
+   jobs, the board, the armory, and the two-way gear references
+   between items and the runners holding them. Sites travel as
+   names, per §09: the name is the complete seed, so a known site
+   costs one string and mints back identical.
 
    Usage:
      const state = MJ.defaultSave(rootSeed);

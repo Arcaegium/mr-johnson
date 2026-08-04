@@ -13,10 +13,9 @@
 
      Layer 1 (universe): runners and sites mint from the universe
        seed by saved counters (runnerMintIndex / siteMintIndex).
-     Layer 2 (history): the session object IS the history; full
-       serialization to IndexedDB is the flagged v0.5 follow-up
-       (save.js works, but site/mission object graphs need the
-       compressSite-style record forms first).
+     Layer 2 (history): the session object IS the history, and it
+       round-trips whole through serializeSession/deserializeSession
+       — sites travel as names, since a name is a complete seed.
      Layer 3 (arrivals): refreshBoard seeds off the wall clock —
        reload to before a refresh and those offers never existed.
      Layer 4 (live action): endDay resolves the queue on fresh
@@ -64,8 +63,39 @@
     return MJ.makeRNG("live|" + Date.now() + "|" + Math.random());
   }
 
-  function logLine(session, text) {
-    session.log.push("day " + session.day + ": " + text);
+  // ── The log ─────────────────────────────────────────────────────
+  // The hub keeps a log at every fidelity: a scrolling text pane
+  // today, a readout on a drawn console later. So an entry is a
+  // RECORD, not a sentence — `text` is one rendering of it, and a
+  // renderer that wants to colour the money lines, filter to one
+  // runner, or make a site name clickable has the pieces to do it
+  // without parsing English back out of a string.
+  //
+  //   seq  — monotonic, so a view can append what it has not shown
+  //   day  — the game day it happened on
+  //   kind — a small vocabulary, for filtering and styling
+  //   text — the placeholder shell's sentence
+  //   refs — what the line is ABOUT: handles, site names, job number
+  const LOG_KINDS = ["note", "job", "money", "roster", "dispatch", "site", "system"];
+
+  function logLine(session, text, kind, refs) {
+    const entry = {
+      seq: session.logSeq = (session.logSeq || 0) + 1,
+      day: session.day,
+      kind: LOG_KINDS.indexOf(kind) !== -1 ? kind : "note",
+      text: text,
+      refs: refs || null,
+    };
+    session.log.push(entry);
+    return entry;
+  }
+
+  // One rendering of an entry, for anything that wants a line of
+  // text. Tolerates the bare strings older saves stored.
+  function logText(entry) {
+    if (typeof entry === "string") return entry;
+    if (!entry) return "";
+    return "day " + entry.day + ": " + entry.text;
   }
 
   // ── Session ─────────────────────────────────────────────────────
@@ -84,12 +114,13 @@
       board: [],         // current offers [{job, siteResults}]
       queue: [],         // today's planned dispatches [{mission, runners, label}]
       lastPlan: null,    // yesterday's queue, as replayable specs (repeatLastPlan)
-      log: [],
+      log: [],            // event records; see logLine
+      logSeq: 0,
     };
     session.save = MJ.defaultSave(session.universeSeed);
     session.save.johnson.money = STARTING_MONEY;
     fillMarket(session);
-    logLine(session, "new game — universe \"" + session.universeSeed + "\", stake " + STARTING_MONEY + " nuyen");
+    logLine(session, "new game — universe \"" + session.universeSeed + "\", stake " + STARTING_MONEY + " nuyen", "system", { universe: session.universeSeed });
     return session;
   }
 
@@ -112,7 +143,7 @@
     session.board = MJ.generateBoard(rng, session.knownSites, session.day, session.save.johnson.boardCapacity, {
       siteProvider: siteProviderFor(session),
     });
-    logLine(session, "board refreshed — " + session.board.length + " offers (the old ones are gone for good)");
+    logLine(session, "board refreshed — " + session.board.length + " offers (the old ones are gone for good)", "system", { offers: session.board.length });
     return session.board;
   }
 
@@ -120,7 +151,7 @@
   function refreshMarket(session) {
     session.market = [];
     fillMarket(session);
-    logLine(session, "market refreshed — new faces (the old ones moved on)");
+    logLine(session, "market refreshed — new faces (the old ones moved on)", "system");
     return session.market;
   }
 
@@ -133,7 +164,8 @@
     for (const m of entry.job.missions) {
       MJ.addKnownSite(session.knownSites, m.site, session.day, "job");
     }
-    logLine(session, "ACCEPTED Job #" + entry.job.contractNumber + " — " + entry.job.hiringFaction + ", " + entry.job.missions.length + " leg(s), pay " + entry.job.pay + ", expires day " + entry.job.expiryDay + (entry.job.chained ? " (CHAINED)" : ""));
+    logLine(session, "ACCEPTED Job #" + entry.job.contractNumber + " — " + entry.job.hiringFaction + ", " + entry.job.missions.length + " leg(s), pay " + entry.job.pay + ", expires day " + entry.job.expiryDay + (entry.job.chained ? " (CHAINED)" : ""),
+      "job", { job: entry.job.contractNumber, faction: entry.job.hiringFaction, expiryDay: entry.job.expiryDay });
     return { ok: true, job: entry.job };
   }
 
@@ -147,7 +179,8 @@
     session.market.splice(marketIndex, 1);
     MJ.watchRunner(runner, rngOverride || liveRNG());
     session.roster.push(runner);
-    logLine(session, "watching " + runner.identity.handle + " (" + MJ.describeDiscipline(runner) + ")");
+    logLine(session, "watching " + runner.identity.handle + " (" + MJ.describeDiscipline(runner) + ")",
+      "roster", { runners: [runner.identity.handle], watched: true });
     fillMarket(session);
     return { ok: true, runner: runner };
   }
@@ -217,7 +250,7 @@
     return { ok: true, watched: site.knownMeta.watched };
   }
 
-  // Call in a site by its key name ("Boldly-Modest-Falcon-250") —
+  // Call in a site by its key name ("Boldly-Modest-Teal-Falcon-0250") —
   // cross-universe knowledge made playable: the name is the seed,
   // so the same building answers in every universe. Called-in sites
   // arrive with their CANONICAL identity (district/owner rolled
@@ -238,7 +271,7 @@
   function discoverByName(session, rawName, rngOverride) {
     const name = canonicalSiteName(rawName);
     if (!name) {
-      logLine(session, "\"" + rawName + "\" isn't a site key (Adverb-Color-Adjective-Noun-####)");
+      logLine(session, "\"" + rawName + "\" isn't a site key (Adverb-Adjective-Color-Noun-####)");
       return { ok: false, error: "bad site key format" };
     }
     const existing = session.knownSites.find((s) => s.identity.name === name);
@@ -253,7 +286,8 @@
     }
     MJ.generateSecurityEstimate(rngOverride || liveRNG(), site);
     MJ.addKnownSite(session.knownSites, site, session.day, "called-in");
-    logLine(session, "called in \"" + name + "\" — " + site.identity.theme + ", " + site.identity.district + " (" + site.identity.owningFaction + "), the word checks out");
+    logLine(session, "called in \"" + name + "\" — " + site.identity.theme + ", " + site.identity.district + " (" + site.identity.owningFaction + "), the word checks out",
+      "site", { site: name, district: site.identity.district, owner: site.identity.owningFaction });
     return { ok: true, site: site };
   }
 
@@ -277,7 +311,8 @@
     site.tags.push({ tag: "resource:" + kind, expiryDay: Infinity });
     MJ.generateSecurityEstimate(rng, site);
     MJ.addKnownSite(session.knownSites, site, session.day, "discovery");
-    logLine(session, "discovered a " + kind + " site: \"" + site.identity.name + "\" — " + site.identity.theme + ", " + site.identity.district);
+    logLine(session, "discovered a " + kind + " site: \"" + site.identity.name + "\" — " + site.identity.theme + ", " + site.identity.district,
+      "site", { site: site.identity.name, district: site.identity.district, discovered: true });
     return { ok: true, site: site };
   }
 
@@ -418,10 +453,12 @@
   function logResult(session, label, res) {
     const crew = (res.crew || []).join(", ");
     if (res.error) {
-      logLine(session, (label || res.kind) + ": REFUSED — " + res.error);
+      logLine(session, (label || res.kind) + ": REFUSED — " + res.error,
+        "dispatch", { runners: res.crew || [], refused: true });
     } else {
       logLine(session, (label || res.kind) + " [" + crew + "]: " + (res.success ? "SUCCESS" : "failed") +
-        (res.karmaAward ? " (+" + res.karmaAward + " karma each)" : ""));
+        (res.karmaAward ? " (+" + res.karmaAward + " karma each)" : ""),
+        "dispatch", { runners: res.crew || [], success: !!res.success, karma: res.karmaAward || 0, missionKind: res.kind });
     }
     // The full readout, roll by roll — the opponent's numbers are
     // information too, and a failed run is still a fresh read on
@@ -435,7 +472,13 @@
           (t.success ? "crew held the ground" : t.stalemate ? "broke off — could not finish them" : "THE CREW WENT DOWN") + readNote(t.read));
         for (const c of t.casualties || []) {
           logLine(session, "      " + c.runner + (c.died
-            ? " was KILLED" : " went down — " + c.wounds + " wound" + (c.wounds === 1 ? "" : "s")));
+            ? " was KILLED" : " went down — carried out with " + c.wounds + " box" + (c.wounds === 1 ? "" : "es")),
+            "roster", { runners: [c.runner], died: !!c.died, wounds: c.wounds || 0 });
+        }
+        // Everyone who stayed on their feet but did not stay whole.
+        for (const inj of t.injured || []) {
+          logLine(session, "      " + inj.runner + " took " + inj.wounds + " box" + (inj.wounds === 1 ? "" : "es") + " and kept going",
+            "roster", { runners: [inj.runner], wounds: inj.wounds });
         }
       } else if (t.extended) {
         const outcome = t.abandoned ? "backed off"
@@ -473,7 +516,9 @@
         (res.incident.maxGrew ? ", and they have approved more budget" : ""));
     }
     if (res.suppression) logLine(session, "  softened: the site's " + res.suppression.axis + " grid is degraded for the rest of the day (+" + res.suppression.level + "d vs " + res.suppression.axis + " obstacles)");
-    if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
+    if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " box(es)" +
+      (res.healed ? " — closed " + res.healed : ""),
+      "roster", { runners: [res.patient], wounds: res.woundsNow, healed: res.healed || 0 });
     if (res.dataHaul) {
       logLine(session, "  pulled " + res.dataHaul.files + " datafile(s) from " +
         res.dataHaul.nodesLooted + " node(s) — deck storage " + res.dataHaul.storage);
@@ -508,7 +553,8 @@
       if (!job.paid && !job.expired && MJ.isJobComplete(job)) {
         const before = session.save.johnson.money;
         MJ.collectJobPay(session.save, job);
-        logLine(session, "JOB COMPLETE — " + job.hiringFaction + " pays " + (session.save.johnson.money - before) + " (reputation +1)");
+        logLine(session, "JOB COMPLETE — " + job.hiringFaction + " pays " + (session.save.johnson.money - before) + " (reputation +1)",
+          "money", { job: job.contractNumber, delta: session.save.johnson.money - before, faction: job.hiringFaction });
       }
     }
 
@@ -517,7 +563,8 @@
     // available tomorrow.
     for (let i = session.roster.length - 1; i >= 0; i--) {
       if (!session.roster[i].dead) continue;
-      logLine(session, session.roster[i].identity.handle + " did not come back — the operation is short a runner");
+      logLine(session, session.roster[i].identity.handle + " did not come back — the operation is short a runner",
+        "roster", { runners: [session.roster[i].identity.handle], died: true });
       session.roster.splice(i, 1);
     }
 
@@ -525,16 +572,37 @@
     const wages = MJ.payUpkeep(session.save, session.roster);
     if (wages.owed > 0) {
       logLine(session, "payroll: " + wages.paid + " to permanent staff" +
-        (wages.shortfall ? " — SHORT " + wages.shortfall + ", they noticed" : ""));
+        (wages.shortfall ? " — SHORT " + wages.shortfall + ", they noticed" : ""),
+        "money", { delta: -wages.paid, shortfall: wages.shortfall || 0 });
     }
 
     for (const site of session.knownSites) {
       if (site.securityState) MJ.advanceSiteDay(site.securityState);
     }
+    // Who worked today. A runner who was out on a job did not spend
+    // the day healing, so their rest counter starts over.
+    const worked = new Set();
+    for (const entry of day.entries || []) {
+      for (const r of entry.crew || []) worked.add(r);
+      if (entry.dispatch && entry.dispatch.mission && entry.dispatch.mission.patient) {
+        worked.add(entry.dispatch.mission.patient);
+      }
+    }
     for (const runner of session.roster) {
+      if (worked.has(runner)) runner.restedDays = 0;
+      else {
+        runner.restedDays = (runner.restedDays || 0) + 1;
+        const mended = MJ.restDay(runner, runner.restedDays);
+        if (mended > 0 && runner.wounds === 0) {
+          logLine(session, runner.identity.handle + " is back to full health",
+            "roster", { runners: [runner.identity.handle], wounds: 0 });
+        }
+      }
       const ev = MJ.advanceMarketDay(runner, rng);
-      if (ev.event === "kia") logLine(session, runner.identity.handle + " was KILLED between jobs — the street keeps what it takes");
-      else if (ev.event !== "none" && ev.event !== "protected") logLine(session, runner.identity.handle + ": " + ev.event);
+      if (ev.event === "kia") logLine(session, runner.identity.handle + " was KILLED between jobs — the street keeps what it takes",
+        "roster", { runners: [runner.identity.handle], died: true });
+      else if (ev.event !== "none" && ev.event !== "protected") logLine(session, runner.identity.handle + ": " + ev.event,
+        "roster", { runners: [runner.identity.handle], event: ev.event });
     }
     for (let i = session.market.length - 1; i >= 0; i--) {
       const ev = MJ.advanceMarketDay(session.market[i], rng);
@@ -553,7 +621,8 @@
     for (const job of session.jobs) {
       if (!job.paid && !job.expired && session.day > job.expiryDay && !MJ.isJobComplete(job)) {
         job.expired = true;
-        logLine(session, "JOB FAILED — " + job.hiringFaction + "'s window closed unfinished (day " + job.expiryDay + " passed, no pay)");
+        logLine(session, "JOB FAILED — " + job.hiringFaction + "'s window closed unfinished (day " + job.expiryDay + " passed, no pay)",
+          "job", { job: job.contractNumber, faction: job.hiringFaction, failed: true });
       }
     }
     session.board = session.board.filter((entry) => {
@@ -738,6 +807,11 @@
       lastPlan: null, // transient — repeat resumes after the next played day
       log: record.log || [],
     };
+    // A save from before the log carried records holds bare strings.
+    // Keep them readable rather than dropping the history: they
+    // render through logText untouched, and `logSeq` picks up past
+    // whatever is already there so new entries stay ordered.
+    session.logSeq = session.log.reduce((n, e) => Math.max(n, (e && e.seq) || 0), 0);
     session.save.johnson = record.johnson;
     session.save.armory.materials = record.materials || {};
     // JSON can't carry Infinity — it lands as null. The only fields
@@ -821,9 +895,9 @@
     const record = serializeSession(session);
     // Log synchronously — async confirmation lines would interleave
     // nondeterministically with later commands' log lines.
-    logLine(session, "saved (day " + session.day + ")");
+    logLine(session, "saved (day " + session.day + ")", "system", { saved: true });
     return MJ.saveGame(record).then(() => ({ ok: true })).catch((e) => {
-      logLine(session, "save WRITE FAILED — " + e);
+      logLine(session, "save WRITE FAILED — " + e, "system", { saveFailed: true });
       return { ok: false, error: String(e) };
     });
   }
@@ -832,7 +906,7 @@
     return MJ.loadGame().then((record) => {
       if (!record || !record.universeSeed) return null;
       const session = deserializeSession(record);
-      logLine(session, "loaded — day " + session.day + ", universe \"" + session.universeSeed + "\"");
+      logLine(session, "loaded — day " + session.day + ", universe \"" + session.universeSeed + "\"", "system", { loaded: true });
       return session;
     });
   }
@@ -851,7 +925,16 @@
     return out;
   }
 
+  // Reading the log needs no session, so it sits on MJ directly —
+  // any renderer, at any fidelity, can turn a record into a line.
+  MJ.logText = logText;
+  MJ.LOG_KINDS = LOG_KINDS;
+
   MJ.game = {
+    // A renderer's own line in the log — a refused click, a note to
+    // the player. Goes through the same record shape as everything
+    // else so no view has to hand-build one.
+    note: logLine,
     newGame: newGame,
     refreshBoard: refreshBoard,
     refreshMarket: refreshMarket,

@@ -91,7 +91,11 @@
     const s = current;
     if (!s) return;
     const opts = (s.options || []).map((o, i) =>
-      `<button class="opt${o.dead ? " dead" : ""}${o.tone ? " " + o.tone : ""}" data-pick="${i}">` +
+      // An approach the crew cannot take is disabled in the DOM as
+      // well as dimmed in the CSS, so a keyboard and a screen reader
+      // are told the same thing the eye is. The handler still guards
+      // it — the two agree rather than one covering for the other.
+      `<button class="opt${o.dead ? " dead" : ""}${o.tone ? " " + o.tone : ""}"${o.dead ? " disabled" : ""} data-pick="${i}">` +
       `<span class="opt-main">${o.html}</span>` +
       (o.meta ? `<span class="opt-meta">${o.meta}</span>` : "") +
       "</button>").join("");
@@ -137,7 +141,7 @@
         '<span class="dimmed"> round' + (t.rounds === 1 ? "" : "s") + "</span>: " +
         (t.success ? ok("crew held the ground") : t.stalemate ? no("broke off — could not finish them") : no("THE CREW WENT DOWN")) + readNote(t.read);
       const fallen = (t.casualties || []).map((c) => "<br>&nbsp;&nbsp;" + nm(c.runner) +
-        (c.died ? " " + no("was KILLED") : " went down — " + num(c.wounds) + " wound" + (c.wounds === 1 ? "" : "s"))).join("");
+        (c.died ? " " + no("was KILLED") : " went down — carried out with " + num(c.wounds) + " box" + (c.wounds === 1 ? "" : "es"))).join("");
       return head + fallen +
         (t.responders && t.responders.length
           ? "<br>" + "&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
@@ -166,6 +170,34 @@
   }
 
   // Everything the crew can see about where they are standing.
+  // The crew's position on the route, from the `where`/`leg` stamps
+  // routeObstacles walks onto every obstacle. Reads for all three
+  // pillars: rooms in a building, nodes in a host, the astral's
+  // there-and-back.
+  // A crossing already names both rooms, so it says its own
+  // position; the rest get the "n of m rooms in" tail appended.
+  const WHERE_TEXT = {
+    entry: (w) => ({ body: "coming in by the " + esc(w.type || "entry") }),
+    room: (w) => ({ body: "in " + esc(w.label || ("Room " + w.roomId)) + (w.size ? " (" + esc(w.size) + ")" : "") }),
+    edge: (w) => ({ body: "crossing from Room " + num(w.from) + " into Room " + num(w.to), located: true }),
+    patrol: (w) => ({ body: "a patrol crosses here — its circuit covers " + num((w.roomIds || []).length) + " rooms" }),
+    zone: (w) => ({ body: "inside a spirit's haunt — " + num((w.roomIds || []).length) + " rooms of it" }),
+  };
+
+  function whereLine(run) {
+    const obstacle = run.obstacles && run.obstacles[run.index];
+    const w = obstacle && obstacle.where;
+    const route = run.streetRoute;
+    if (!w || !route || !route.path.length) return null;
+    const shape = WHERE_TEXT[w.kind] ? WHERE_TEXT[w.kind](w) : null;
+    if (!shape) return null;
+    if (shape.located) return '<span class="dimmed">' + shape.body + "</span>";
+    return '<span class="dimmed">' + shape.body + " · room </span>" +
+      num((obstacle.leg || 0) + 1) +
+      '<span class="dimmed"> of </span>' + num(route.path.length) +
+      '<span class="dimmed"> on the way in</span>';
+  }
+
   function contextLines(run) {
     const id = run.site ? run.site.identity : null;
     const lines = [];
@@ -174,6 +206,13 @@
         ' <span class="dimmed">· ' + esc(id.owningFaction) + " · " + esc(id.district) +
         (id.theme ? " · " + esc(id.theme) : "") + "</span>");
     }
+    // WHERE they are. A street run walks the building room by room,
+    // so the obstacle in front of the crew has a place, and the
+    // route has a length they are some way along. The placeholder
+    // prints it as a sentence; a drawn top-down puts the crew on
+    // that room and animates the crossing. Same data either way.
+    const here = whereLine(run);
+    if (here) lines.push(here);
     if (run.walkedIntoResponse && run.walkedIntoResponse.length) {
       lines.push(no("Already up from earlier: ") + run.walkedIntoResponse.map(esc).join(", ") + no(" — waiting at the door"));
     }

@@ -7,7 +7,7 @@ right now**, what is a placeholder, and what is built-but-unreachable.
 Update this whenever a system lands. If it disagrees with the code, the code
 wins and this file is stale — verify before trusting a line here.
 
-Last verified at commit `7c7db34`.
+Last verified at commit `ccff415` + the walk/injury/log pass.
 
 ---
 
@@ -59,14 +59,20 @@ js/models/economy.js  280  canAfford spend earn collectJobPay
                            dailyUpkeep payUpkeep hireCost hireRunnerWithCost
                            upgradeContractWithCost itemCost buyItem sellItem
                            sellMaterials expandBoardCapacity
-js/models/combat.js   391  WEAPONS COMBAT_STANCES FIRE_MODES weaponProfile
+js/models/combat.js   440  WEAPONS COMBAT_STANCES FIRE_MODES weaponProfile
                            makeCombatant initiativeScore buildRound
                            beginCombat combatActor combatAct combatOver
                            physicalTrack stunTrack
+                           carriedDamage carryDamageHome restDay
+                           -- physicalTrack/stunTrack read `.attributes`, so a
+                              roster runner measures without being in a fight
 js/models/mission.js 1840  THE BIG ONE. crewCapability AXIS_SKILLS
                            create*Mission (recon/matrix/astral/crafting/medical/
                              resource/search)
-                           routeObstacles hostRoute hostPaths astralRoute tetherFor
+                           streetRoute (= routeObstacles) hostRoute hostPaths
+                           astralRoute tetherFor
+                           -- all three routes share the shape {path, obstacles}
+                              so anything that draws a run can draw any of them
                            beginMission missionPrompt missionChoose
                            missionExtendedStep missionAbort missionDone finishMission
                            autoResolve openDispatch closeDispatch runActionPeriod
@@ -85,7 +91,7 @@ js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
                            MJ.missionPopup (drives the mission stepper through it)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)
-js/stress.js          ~1.3k 11+ probe classes. ~82k assertions.
+js/stress.js          ~1.4k 12 probe classes. ~82k assertions, 0 failures.
 ```
 
 **Two pages:** `index.html` (the playable shell) and `inspector.html` (benches +
@@ -112,6 +118,19 @@ function, so all three agree by construction.
   are per-AFFORDANCE (a guard's two stealth plays are different swings);
   discoveries are per-SKILL (learning he is sensor-equipped rules out sneaking
   however you found out).
+- **`session.log` holds RECORDS, not sentences.** The hub keeps a log at every
+  fidelity — a scrolling pane today, a readout on a drawn console later — so an
+  entry is `{seq, day, kind, text, refs}`. `kind` is one of
+  `MJ.LOG_KINDS` (note / job / money / roster / dispatch / site / system) for
+  filtering and styling; `refs` carries what the line is ABOUT (runner handles,
+  site name, job number, deltas) so a view can colour the money lines, filter to
+  one runner, or make a site name clickable without parsing English back out of
+  a string. `MJ.logText(entry)` is the one-line rendering, and it tolerates the
+  bare strings older saves stored. `MJ.game.note(session, text, kind, refs)` is
+  how a renderer adds its own line.
+- **`MJ.carryDamageHome(combatant)` / `MJ.restDay(runner, daysRested)` /
+  `MJ.carriedDamage(runner)`** — the three functions that make injury persist.
+  See `UNDERSTANDING.md` §on the dual tracks: physical rides home, stun does not.
 
 ---
 
@@ -151,9 +170,25 @@ dual-natured spirits, the ratchet, nightly reset, suppression.
 matrix→Patrol/Black ICE, meatspace→Guard/Camera).
 
 ### The three pillars
-- **Meatspace** — `routeObstacles`: shortest path, collecting obstacles from
-  entry points, edges, room post-slots, and **patrols and spirit zones** whose
-  circuit the route crosses.
+- **Meatspace** — `routeObstacles` (exported as `MJ.streetRoute`): the shortest
+  entry→objective path, **walked**. The crew comes in through the entry point,
+  clears the room they land in, crosses to the next, and so on to the objective;
+  patrols and spirit zones are met at the **first room of their circuit** the
+  crew sets foot in. Every obstacle is stamped with `rooms` (who can see you
+  from the same ground), `leg` (how far along the walk) and `where` (entry /
+  room / edge / patrol / zone).
+
+  **Walk order is the contract with every renderer.** A list can print obstacles
+  in any order and still read; a map cannot, because the crew occupies one room
+  at a time and has to get to the next one. The sequence IS the movement. A
+  stress probe holds it: legs never run backwards, every obstacle sits on ground
+  the path crosses, and the walk ends in the objective room.
+
+  **No cap on route length.** The site's security budget already decides how
+  much gets bought and placed, so a second cap on top of it discounts the
+  ratings the player is shown and prices against. Measured over 3000 sites: p50
+  4, p90 11, max 22 obstacles. Long runs are the heavily-secured ones, which is
+  the point; quick-resolve is the standing skip button.
 - **Matrix** — `generateHost` builds a node graph (SPU/Datastore/Slave/Data
   store/CPU) scaled by `security.matrix`; ice as ordinary obstacles;
   `hostRoute` with quiet vs greedy routing; **data haul** capped by deck
@@ -190,9 +225,10 @@ byte-identical state" true.
 | Runner full skill list (incl. zeros) | yes | **no** — only non-zero shown |
 | Runner career record (runs, kills, hacks) | **NO — data does not exist** | n/a; must be added before any sheet |
 | Bench value vs field value | implicitly | **no** |
-| Health tracks / initiative / weapon profile | yes | only inside a fight |
+| Health tracks / initiative / weapon profile | yes | initiative and weapon only inside a fight; carried injury shows on the dossier as `n/max boxes (−Nd)` |
 | Site host graph | yes | **no** |
-| Site room layout / obstacle inventory | yes | **no** |
+| Site room layout / obstacle inventory | yes | the crew's current room shows during a run (`whereLine`); the layout as a whole, **no** |
+| The walked route (`streetRoute.path`, per-obstacle `leg`/`where`) | yes | one line at a time; this is what a top-down street reads |
 | Site loot table | yes | **no** |
 | Live Min/Current/Max per axis | yes | partially, in the site row |
 | Recon's obstacle knowledge | yes | **no** — only `~3 → 3✓` |
@@ -248,7 +284,8 @@ Anything here is a dial, not a decision.
    CURRENT DIRECTION). Decisions still open: home/level-0 tab?
    where Medicae and Contacts land? is Runners one widget or three?
 2. **Runner career record** — data model first, then the sheet.
-3. **Site name reorder** to `Adverb-Adjective-Color-Noun-####`. Encode and decode
-   move together. Confirm the colour and adjective word lists are disjoint first,
-   so any name in the older order fails cleanly.
-4. **Simultaneity** — the last Phase 2 item, gated on the console.
+3. **Simultaneity** — the last Phase 2 item, gated on the console.
+4. **Stance versus geometry.** `COMBAT_STANCES` is position expressed as a menu
+   choice. When the top-down street arrives it supplies real position, and cover
+   becomes ground the crew is standing behind rather than a stance they select.
+   The accuracy/defence numbers move with it; the three-gate chain does not.

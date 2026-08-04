@@ -1,16 +1,18 @@
 /* ============================================================
    Mr. Johnson — core/resolve.js
-   The task/skill resolution system (current understanding §02's
-   "quick-resolve": one aggregate roll, instant). V1 scope is a
-   single task at a time: pick a runner, a target obstacle, one of
-   its affordances, resolve. Chaining tasks into a whole mission's
-   worth of wounds/Karma/pay is a later, higher-level layer — this
-   file only answers "did this one check succeed."
+   The dice. One check at a time: pick a runner, a target obstacle,
+   one of its affordances, resolve. Chaining checks into a whole
+   mission's worth of wounds/Karma/pay belongs to mission.js — this
+   file only answers "did this one check succeed," and it answers it
+   the same way for every rung of the fidelity ladder. Quick-resolve
+   and a played-out scene roll identical dice; they differ in how
+   many decisions the player makes between rolls, never in the math.
 
    Real SR5 dice mechanics, not an invented probability curve:
-     - Dice pool = the runner's effective rank in the chosen skill
-       (attribute pairing deliberately deferred — see the build
-       plan backlog — V1 is skill-only, per direction).
+     - Dice pool = effective skill rank + the skill's linked
+       attribute + situational bonus dice, from `dicePoolFor` — the
+       one definition the resolver, the chooser and every readout
+       all call, so the number shown is always the number rolled.
      - Roll that many d6; a 5 or 6 is a hit.
      - Threshold = ceil(obstacle tier / 2), so tier 1-2 needs 1 hit,
        tier 9-10 needs 5 -- a real SR5-range threshold instead of

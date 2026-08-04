@@ -90,7 +90,7 @@
       for (const skill of craftDisciplines()) acts.push({ v: skill, label: skill });
     } else if (activity === "medicae") {
       S.roster.forEach((r, i) => {
-        if (r.wounds > 0 && r.market.hired) acts.push({ v: "treat:" + i, label: `treat ${r.identity.handle} (${r.wounds} wound${r.wounds > 1 ? "s" : ""})` });
+        if (r.wounds > 0 && r.market.hired) acts.push({ v: "treat:" + i, label: `treat ${r.identity.handle} (${r.wounds} box${r.wounds > 1 ? "es" : ""})` });
       });
     } else if (activity === "search") {
       acts.push({ v: "search:scrap", label: "scrap yard" });
@@ -215,6 +215,17 @@
   // The full VISIBLE dossier — design-legal by §04's own pricing
   // rule: skills are always visible and true; only the Discipline
   // label (the market's claim) can be wrong. Reading the spread
+  // Injury, as boxes on the physical track and what they cost. The
+  // dice penalty is the part that decides whether to send them, so
+  // it is shown rather than left for the player to divide out.
+  function woundRead(r) {
+    if (!r.wounds) return "";
+    const max = MJ.physicalTrack(r);
+    const dice = Math.floor(r.wounds / 3);
+    const cls = r.wounds >= max ? "warn" : dice > 0 ? "warn" : "muted";
+    return `<span class="${cls}">${r.wounds}/${max} boxes${dice > 0 ? ` (−${dice}d)` : ""}</span>`;
+  }
+
   // against the label is how hype and hidden gems get spotted.
   function runnerCard(r) {
     const a = r.attributes;
@@ -263,7 +274,7 @@
     }
     else btns.push(`<button class="sm" data-act="unwatch" data-ridx="${i}">${r.market.phase === "kia" ? "strike from list" : "unwatch"}</button>`);
     return `<div class="row">${runnerCard(r)}<br>` +
-      `<span class="muted">karma ${r.karma}  wounds ${r.wounds}  </span>${fmtContract(r)}<br>${btns.join(" ")}</div>`;
+      `<span class="muted">karma ${r.karma}  ${woundRead(r)}  </span>${fmtContract(r)}<br>${btns.join(" ")}</div>`;
   }
 
   // Crew and watch list are different groups with different caps
@@ -317,7 +328,7 @@
 
   function renderSites() {
     const prevLookup = $("site-lookup") ? $("site-lookup").value : "";
-    const lookup = `<div style="margin-bottom:8px"><input type="text" class="sm" id="site-lookup" placeholder="call in by key: Boldly-Crimson-Quiet-Bicycle-0417" value="${prevLookup.replace(/"/g, "")}" /> <button class="sm" data-act="discover-name">look up</button></div>`;
+    const lookup = `<div style="margin-bottom:8px"><input type="text" class="sm" id="site-lookup" placeholder="call in by key: Boldly-Quiet-Crimson-Bicycle-0417" value="${prevLookup.replace(/"/g, "")}" /> <button class="sm" data-act="discover-name">look up</button></div>`;
     if (S.knownSites.length === 0) { $("panel-sites").innerHTML = lookup + '<span class="muted">No known sites — accept a job, search, or call one in by name.</span>'; return; }
     $("panel-sites").innerHTML = lookup + MJ.siteListView(S.knownSites, S.day).map((row, i) => {
       const site = S.knownSites[i];
@@ -448,9 +459,13 @@
       `<div class="good" style="margin-top:8px">GEAR SHOP <span class="muted" style="text-transform:none;letter-spacing:0">(hover for effect)</span></div>${shop}`;
   }
 
+  // The placeholder shell's rendering of the log: one line each.
+  // The records carry `kind` and `refs` alongside the text, which is
+  // what a drawn console will colour, filter and link off — this
+  // view just takes the sentence.
   function renderLog() {
     const el = $("panel-log");
-    el.textContent = S.log.slice(-80).join("\n");
+    el.textContent = S.log.slice(-80).map(MJ.logText).join("\n");
     el.scrollTop = el.scrollHeight;
   }
 
@@ -554,7 +569,7 @@
       if (!built) return;
       const crew = Array.from(document.querySelectorAll(".crew-check:checked")).map((c) => S.roster[+c.dataset.ridx]);
       const res = MJ.game.queueDispatch(S, built.mission, crew, built.label);
-      if (!res.ok) S.log.push("day " + S.day + ": can't queue — " + res.error);
+      if (!res.ok) MJ.game.note(S, "can't queue — " + res.error, "dispatch", { refused: true });
     }
     render();
   }

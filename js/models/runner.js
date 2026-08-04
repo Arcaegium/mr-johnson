@@ -136,6 +136,7 @@
   };
   const METATYPE_IDS = Object.keys(METATYPES);
   const MAGIC_MAX = 6; // Essence caps it further; see applyMagic/growth
+  const WOUNDS_PER_DIE = 3; // boxes of physical damage per -1 die, everywhere
 
   function attributeCeiling(runner, attrId) {
     if (attrId === "magic") {
@@ -732,14 +733,17 @@
         if (out[skill] !== undefined && out[skill] > 0) out[skill] += implant.skillMods[skill];
       }
     }
-    // Not every combatant is a roster runner — a guard, a spirit or
-    // a security spider has skills and attributes but no career, no
-    // focus and no dossier. The wound penalty keys off the focus's
-    // key skill, so anything without a classification simply has no
-    // key skill to degrade.
-    const key = runner.classification && runner.classification.focusKeySkill;
-    if (key && runner.wounds > 0 && out[key] !== undefined) {
-      out[key] = Math.max(0, out[key] - runner.wounds);
+    // Injury is not a specialist problem. `runner.wounds` counts
+    // boxes on the physical track, and boxes cost dice on EVERYTHING
+    // — a decker with cracked ribs is worse at talking their way out
+    // of the lobby too. Tabletop rate: -1 die per three boxes, so a
+    // scratch or two is shrugged off and a real mauling is felt
+    // across the whole sheet until somebody treats it.
+    const penalty = Math.floor((runner.wounds || 0) / WOUNDS_PER_DIE);
+    if (penalty > 0) {
+      for (const skill of Object.keys(out)) {
+        if (out[skill] > 0) out[skill] = Math.max(0, out[skill] - penalty);
+      }
     }
     return out;
   }
@@ -834,7 +838,8 @@
       attributes: attrs,
       essence: essence,
       skills: skills,
-      wounds: 0,
+      wounds: 0,       // boxes of physical damage carried; -1 die per three
+      restedDays: 0,   // consecutive days off the job, which is how they mend
       karma: 0,
       attributeFund: 0, // banked share of past awards, waiting on the next attribute step
       gear: [],         // personal kit below, plus whatever the operation issues

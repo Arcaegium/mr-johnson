@@ -310,6 +310,36 @@
     check(save.johnson.money === job.pay && save.johnson.reputation === 1, "C2: collectJobPay wrong delta");
     MJ.collectJobPay(save, job);
     check(save.johnson.money === job.pay && save.johnson.reputation === 1, "C2: double collection must be inert");
+
+    // ── The street route is a walk ────────────────────────────────
+    // Every renderer past the placeholder moves a crew through rooms
+    // one at a time, so the obstacle order has to BE that movement:
+    // legs never run backwards, every obstacle sits on ground the
+    // path actually crosses, and the walk ends in the objective room.
+    let legsChecked = 0, mobileMet = 0;
+    for (let i = 0; i < 400; i++) {
+      const site = MJ.mintSite("stress-walk", i);
+      const route = MJ.streetRoute(site);
+      if (!route.path.length) continue;
+      const onPath = new Set(route.path);
+      check(route.path[route.path.length - 1] === 0, "C2: a street walk must end in the objective room (site " + i + ")");
+      let lastLeg = -1;
+      for (const o of route.obstacles) {
+        legsChecked += 1;
+        check(o.leg >= lastLeg, "C2: walk order went backwards at site " + i + " (leg " + o.leg + " after " + lastLeg + ")");
+        lastLeg = o.leg;
+        check(o.leg >= 0 && o.leg < route.path.length, "C2: obstacle leg outside the path (site " + i + ")");
+        check((o.rooms || []).some((r) => onPath.has(r)), "C2: obstacle placed off the walked path (site " + i + ")");
+        // A patrol or a zone is met on its circuit, and the leg it is
+        // met at must be a room of that circuit — not merely nearby.
+        if (o.where && (o.where.kind === "patrol" || o.where.kind === "zone")) {
+          mobileMet += 1;
+          check(o.where.roomIds.indexOf(route.path[o.leg]) !== -1, "C2: mobile threat met off its own circuit (site " + i + ")");
+        }
+      }
+    }
+    check(legsChecked > 500, "C2: walk probe needs real obstacle volume to mean anything (saw " + legsChecked + ")");
+    check(mobileMet > 20, "C2: patrols and spirit zones must actually be walked into (saw " + mobileMet + ")");
   }
 
   // ── Class 3: timing / same-day communication ────────────────────
@@ -813,7 +843,7 @@
       check(owners.size >= Math.min(F, 4), "C8: district " + district + " is owned by too few factions (" + owners.size + ") — pairing has locked");
     }
 
-    // Site names: Adverb-Color-Adjective-Noun-#### — the name is
+    // Site names: Adverb-Adjective-Color-Noun-#### — the name is
     // the COMPLETE seed, and its words ENCODE the qualities: the
     // governor selects what it needs and constructs the name that
     // means it; decoding the same name anywhere reproduces the
@@ -832,6 +862,34 @@
     check(contentOf(nmSite) === contentOf(MJ.mintSiteByName(nm)), "C8: the name must be the complete seed — identical anywhere, identity included");
     check(MJ.mintSiteByName(nm) !== null && contentOf(MJ.mintSiteByName(nm)) === contentOf(MJ.mintSiteByName(nm)), "C8: mintSiteByName must be deterministic");
     check(MJ.decodeSiteName("Not-A-Real-Site-0001") === null, "C8: off-grammar words must not decode");
+    // Slot order: Adverb-Adjective-Color-Noun-####, the colour last
+    // among the adjectives. Four words sit in BOTH the colour and
+    // adjective pools, so the reading is positional — which makes
+    // the slot order load-bearing rather than cosmetic. A name built
+    // with the colour in the adjective slot must decode differently.
+    const rngSlot = MJ.makeRNG("stress-name-slots");
+    let slotChecked = 0;
+    for (let i = 0; i < 60; i++) {
+      const want = {
+        district: rngSlot.pick(MJ.SITE_DISTRICTS), owner: rngSlot.pick(MJ.OWNERS),
+        value: rngSlot.int(1, 10), orientation: rngSlot.pick(["physical", "astral", "matrix"]),
+      };
+      const built = MJ.encodeSiteName(want, rngSlot.fork("s" + i)).split("-");
+      const swapped = [built[0], built[2], built[1], built[3], built[4]].join("-");
+      const straight = MJ.decodeSiteName(built.join("-"));
+      check(straight && straight.district === want.district && straight.owner === want.owner,
+        "C8: the adjective slot must read district and the colour slot owner");
+      const other = MJ.decodeSiteName(swapped);
+      // Swapping the two slots either reads as a different site or
+      // falls out of the grammar; what it must never do is decode to
+      // the same qualities, which would mean the order carried none.
+      if (other) {
+        slotChecked += 1;
+        check(other.district !== want.district || other.owner !== want.owner || built[1] === built[2],
+          "C8: swapping adjective and colour must change what the name means");
+      }
+    }
+    check(slotChecked > 0, "C8: slot-order probe never produced a decodable swap");
     // Encode/decode round-trips the whole quality space, including
     // Unowned owners and the wilderness districts.
     const rngRT = MJ.makeRNG("stress-name-rt");
@@ -1276,6 +1334,83 @@
     check(MJ.sellMaterials(save, "resource:scrap").ok === false, "C11: empty stock must refuse");
   }
 
+  // ── Class 12: injury carries, exhaustion does not ───────────────
+  // Physical damage is the roster's memory of a bad night. It rides
+  // home on the runner, costs dice on everything until treated, and
+  // walks back into the next firefight already on the track. Stun
+  // is the other half of the pair and belongs entirely to the fight.
+  function class12_injury() {
+    const rng = MJ.makeRNG("stress-injury");
+
+    // The penalty is universal and rated: three boxes buy one die.
+    const subject = makeRoster(rng.fork("subj"), 1)[0];
+    const clean = MJ.getEffectiveSkills(subject);
+    const trained = Object.keys(clean).filter((k) => clean[k] > 0);
+    check(trained.length > 0, "C12: probe needs a runner with trained skills");
+    for (const boxes of [1, 2, 3, 5, 6, 9, 12]) {
+      subject.wounds = boxes;
+      const hurt = MJ.getEffectiveSkills(subject);
+      const expected = Math.floor(boxes / 3);
+      for (const skill of trained) {
+        check(hurt[skill] === Math.max(0, clean[skill] - expected),
+          "C12: wound penalty at " + boxes + " boxes must be -" + expected + " on " + skill);
+      }
+      check(Object.keys(hurt).every((k) => hurt[k] >= 0), "C12: no skill may go negative from wounds");
+    }
+    subject.wounds = 0;
+
+    // A runner walks into a fight carrying what they have not healed.
+    const carrier = makeRoster(rng.fork("carry"), 1)[0];
+    carrier.wounds = 4;
+    const cc = MJ.makeCombatant(carrier, { side: "crew" });
+    check(cc.physical === 4, "C12: a combatant must start on the boxes their runner carries");
+    check(cc.stun === 0, "C12: stun never carries into a fight");
+    check(cc.physical <= cc.physicalMax, "C12: carried damage cannot exceed the track");
+
+    // Coming out: physical goes on the dossier, stun does not, and
+    // a lighter night never heals what a worse one already did.
+    cc.physical = 7; cc.stun = 6;
+    MJ.carryDamageHome(cc);
+    check(carrier.wounds === 7, "C12: physical damage must ride home (have " + carrier.wounds + ")");
+    const lighter = MJ.makeCombatant(carrier, { side: "crew" });
+    lighter.physical = 2; lighter.stun = 9;
+    MJ.carryDamageHome(lighter);
+    check(carrier.wounds === 7, "C12: a lighter fight must not heal an older injury");
+    check(!("stun" in carrier), "C12: stun must not become a roster field");
+
+    // Enemies have no dossier to write to — the writeback must be
+    // safe on anything that walks into a fight.
+    const foe = MJ.makeCombatant({ label: "guard T4", attributes: { body: 4, willpower: 3 }, skills: {} }, { side: "enemy" });
+    foe.physical = 5;
+    check(MJ.carryDamageHome(foe) === 0, "C12: a combatant with no dossier must absorb the writeback");
+
+    // Rest closes boxes one at a time and stops at healthy.
+    const rester = makeRoster(rng.fork("rest"), 1)[0];
+    rester.wounds = 3;
+    let closed = 0;
+    for (let d = 1; d <= 60 && rester.wounds > 0; d++) closed += MJ.restDay(rester, d);
+    check(rester.wounds === 0 && closed === 3, "C12: rest must close exactly the boxes that were open");
+    check(MJ.restDay(rester, 61) === 0 && rester.wounds === 0, "C12: rest on a healthy runner is inert");
+
+    // Treatment never over-heals, and a full track is a hard case
+    // rather than automatically the worst case in the world.
+    const pat = makeRoster(rng.fork("pat"), 1)[0];
+    const doc = makeRoster(rng.fork("doc"), 1)[0];
+    MJ.watchRunner(pat, rng); MJ.watchRunner(doc, rng);
+    pat.market.hired = { tier: "freelance", missionsRemaining: 99 };
+    doc.market.hired = { tier: "freelance", missionsRemaining: 99 };
+    pat.wounds = 2;
+    for (let n = 0; n < 30 && pat.wounds > 0; n++) {
+      MJ.runActionPeriod(rng.fork("tx" + n), [{ mission: MJ.createMedicalMission(pat), runners: [doc] }], n + 1);
+      doc.market.hired.missionsRemaining = 99;
+      check(pat.wounds >= 0, "C12: treatment must never drive wounds negative");
+    }
+    check(pat.wounds === 0, "C12: a treatable patient must reach zero boxes");
+    pat.wounds = 12;
+    const hardCase = MJ.createMedicalMission(pat);
+    check(!!hardCase, "C12: a full-track patient must still be treatable");
+  }
+
   // ── Runner ──────────────────────────────────────────────────────
   function runStress() {
     clear();
@@ -1295,6 +1430,7 @@
       ["9. Site list & compression (seeds+deltas, proven live)", class9_sitelist],
       ["10. Integration layer (session commands, expiry teeth)", class10_integration],
       ["11. Armory (second roster: issue, chrome, craft, ledger)", class11_armory],
+      ["12. Injury carries, exhaustion does not", class12_injury],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
