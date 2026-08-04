@@ -15,14 +15,17 @@ browser's local storage. Saves live on the device you played on.
 
 ## Design documents
 
-The canonical design lives in three living documents. **Read them before
-extending anything** — working from a remembered version of the design is how
-a placeholder gets mistaken for the target.
+> **Working on this? Read `docs/UNDERSTANDING.md` first, every time.** It is
+> written for an AI assistant's recall and opens with the four mistakes that
+> have actually been made on this project. `docs/BUILD-PLAN.md` is how we build;
+> `docs/SYSTEM-STATE.md` is what is currently in the code.
 
 | document | in this repo | living artifact |
 |---|---|---|
-| **Design bible** — what the game is; cited throughout the code as §NN | [`docs/current-understanding.html`](docs/current-understanding.html) | [artifact](https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8) |
-| **Build plan** — phases, the fidelity ladder, the deferred backlog | [`docs/build-plan.html`](docs/build-plan.html) · [markdown](docs/BUILD-PLAN.md) | [artifact](https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d) |
+| **Understanding** — what the game is; read first | [`docs/UNDERSTANDING.md`](docs/UNDERSTANDING.md) | — |
+| **System state** — what's built, placeholder, or orphaned | [`docs/SYSTEM-STATE.md`](docs/SYSTEM-STATE.md) | — |
+| *Current understanding (HTML)* — the older prose version, kept for the §NN section numbers the code cites | [`docs/current-understanding.html`](docs/current-understanding.html) | [artifact](https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8) |
+| **Build plan** — phases, the fidelity ladder, working practices | [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) · [older HTML](docs/build-plan.html) | [artifact](https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d) |
 | **Phase 2 work plan** — the current phase, in dependency order | [`docs/PHASE-2-PLAN.md`](docs/PHASE-2-PLAN.md) | [artifact](https://claude.ai/code/artifact/ae02034e-d2a1-4496-9828-fc84d275eba3) |
 
 The artifacts are the editable originals; the repo copies are the durable
@@ -87,10 +90,14 @@ js/stress.js                             the stress suite
 
 ## Status
 
-Phase 1 (the management game) is complete and playable end to end.
-Next up: the tactical pillar systems — the Matrix as a card game,
-meatspace runs, and the astral layer — which zoom into missions the
-management layer currently quick-resolves.
+Phases 0 and 1 are complete. **Phase 2 (Text Missions) is nearly done** —
+all three pillars have distinct scene-text genres: meatspace with turn-based
+combat, a Matrix host crawl, and astral projection with wards and a tether.
+Remaining: simultaneity (multi-front operations), which is gated on the hub
+console rebuild. See `docs/SYSTEM-STATE.md` for exactly what is built.
+
+The text shell is a **placeholder renderer** — a lie detector for the systems.
+The destination is a drawn CRT hub console plus three rendered pillar worlds.
 
 Everything in here is original work. The setting is a homage to the
 cyberpunk tabletop tradition; names, mechanics, and content are our own.
