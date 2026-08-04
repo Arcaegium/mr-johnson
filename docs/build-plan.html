@@ -1,0 +1,209 @@
+<title>Build Plan — Shadowrun-Inspired Roster Game</title>
+<style>
+  :root {
+    --bg: #f2ede2; --bg-raised: #ffffff; --bg-sunken: #e9e2d3;
+    --ink: #1c1a16; --ink-dim: #6b6558;
+    --accent: #b5651d; --accent-soft: #b5651d1a;
+    --accent-2: #1f7a70; --accent-2-soft: #1f7a701a;
+    --danger: #9c3a28;
+    --line: rgba(28,26,22,0.14); --line-strong: rgba(28,26,22,0.28);
+    --font-display: "Bahnschrift", "Arial Narrow", "Segoe UI Semibold", sans-serif;
+    --font-body: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --font-mono: "Cascadia Code", Consolas, ui-monospace, "SFMono-Regular", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151c; --bg-raised: #1a1e28; --bg-sunken: #0d0f14;
+    --ink: #e8e6df; --ink-dim: #9a9fae;
+    --accent: #e0964a; --accent-soft: #e0964a22;
+    --accent-2: #5cc4b8; --accent-2-soft: #5cc4b822;
+    --danger: #e07361;
+    --line: rgba(255,255,255,0.1); --line-strong: rgba(255,255,255,0.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151c; --bg-raised: #1a1e28; --bg-sunken: #0d0f14;
+      --ink: #e8e6df; --ink-dim: #9a9fae;
+      --accent: #e0964a; --accent-soft: #e0964a22;
+      --accent-2: #5cc4b8; --accent-2-soft: #5cc4b822;
+      --danger: #e07361;
+      --line: rgba(255,255,255,0.1); --line-strong: rgba(255,255,255,0.22);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); line-height: 1.55; font-size: 16px; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 28px 100px; }
+  a { color: var(--accent); }
+
+  .cover { padding-bottom: 34px; margin-bottom: 40px; border-bottom: 1px solid var(--line-strong); }
+  .cover-tag { display: inline-flex; gap: 8px; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-2); background: var(--accent-2-soft); border: 1px solid var(--accent-2); padding: 4px 10px; border-radius: 2px; margin-bottom: 20px; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(2rem, 5vw, 2.9rem); letter-spacing: 0.01em; text-transform: uppercase; margin: 0 0 10px; text-wrap: balance; }
+  .subtitle { font-family: var(--font-body); font-style: italic; color: var(--ink-dim); font-size: 1.12rem; max-width: 60ch; margin: 0 0 18px; }
+  .cover-meta { display: flex; flex-wrap: wrap; gap: 20px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); }
+  .cover-meta b { color: var(--ink); }
+
+  section { margin-bottom: 46px; scroll-margin-top: 20px; }
+  .sh { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .sh .n { font-family: var(--font-mono); color: var(--accent); font-size: 13px; }
+  h2 { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; font-size: 1.35rem; margin: 0; text-wrap: balance; }
+  .dek { color: var(--ink-dim); max-width: 68ch; margin: 8px 0 22px; }
+  h3 { font-family: var(--font-display); text-transform: uppercase; font-size: 1rem; letter-spacing: 0.03em; margin: 26px 0 10px; }
+  p { max-width: 70ch; }
+
+  .card { background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px; padding: 18px 22px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+  th, td { text-align: left; padding: 10px 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.wrap, th.wrap { white-space: normal; }
+  thead th { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); background: var(--bg-sunken); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .note { border: 1px dashed var(--line-strong); border-radius: 6px; padding: 15px 18px; font-size: 14.5px; color: var(--ink-dim); background: var(--bg-sunken); }
+  .note b { color: var(--ink); }
+
+  blockquote { margin: 18px 0; padding: 10px 0 10px 20px; border-left: 3px solid var(--accent); color: var(--ink); font-style: italic; font-size: 1.08rem; }
+
+  .ladder { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  .rung { background: var(--bg-raised); border: 1px solid var(--line); border-left: 3px solid var(--accent-2); border-radius: 4px; padding: 15px 17px; }
+  .rung h4 { font-family: var(--font-display); text-transform: uppercase; font-size: 0.92rem; margin: 0 0 7px; }
+  .rung p { margin: 0; font-size: 13.6px; color: var(--ink-dim); font-family: var(--font-body); }
+  .rung .tag { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); margin-top: 9px; }
+
+  ol.tasks { padding-left: 0; list-style: none; counter-reset: t; display: flex; flex-direction: column; gap: 10px; }
+  ol.tasks li { counter-increment: t; position: relative; padding: 12px 16px 12px 46px; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 4px; font-size: 14.5px; }
+  ol.tasks li::before { content: "P0." counter(t); position: absolute; left: 14px; top: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
+  ol.tasks b { color: var(--ink); }
+
+  ul.backlog { padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  ul.backlog li { position: relative; padding: 12px 16px; background: var(--bg-raised); border: 1px solid var(--line); border-left: 3px solid var(--ink-dim); border-radius: 4px; font-size: 14.5px; }
+  ul.backlog li.done { border-left-color: var(--accent-2); }
+  ul.backlog b { color: var(--ink); }
+  .res { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-2); background: var(--accent-2-soft); border: 1px solid var(--accent-2); padding: 1px 7px; border-radius: 2px; margin-right: 7px; }
+
+  .gate { font-family: var(--font-mono); font-size: 12px; color: var(--danger); text-transform: uppercase; letter-spacing: 0.05em; }
+  .status { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-2); display: block; margin-top: 6px; }
+  .status.now { color: var(--accent); }
+
+  .foot { margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-dim); }
+</style>
+
+<div class="wrap">
+  <div class="cover">
+    <div class="cover-tag">● build plan · companion to the design bible</div>
+    <h1>Build Plan</h1>
+    <p class="subtitle">How a two-person team — you and Claude — ships an enormous systems game without drowning in it. The spine is simulation-first: prove the systems bare, add the skin later.</p>
+    <div class="cover-meta">
+      <span><b>Team</b> you + Claude</span>
+      <span><b>Cash to playable</b> ~$0</span>
+      <span><b>Stack</b> vanilla JS / Canvas, client-side</span>
+      <span><b>Host</b> GitHub Pages under arcaegium.com</span>
+      <span><b>Now</b> Phase 2</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="sh"><span class="n">01</span><h2>The Governing Principle</h2></div>
+    <p class="dek">One idea drives every sequencing choice below.</p>
+    <blockquote>If the systems don't work in simulation mode, they won't work after we've spent a ton of time polishing the turds.</blockquote>
+    <p>This game's fun lives in its <b>systems</b> — the roster market, the economy, growth, Discipline mispricing, job interconnection, the whole Johnson loop. Those are data, menus, and math: they can be built and <em>proven fun</em> in text, where iteration is instant and free. The tactical missions are content those systems generate; their eventual visuals are a <b>rendering layer</b>, not the game. So we build the entire game as a text/simulation first — a real, complete, playable thing — and only skin it with visuals once the core has earned it. Simulation mode is a lie detector: it tells us cheaply whether the loop is fun before a single sprite is drawn.</p>
+    <div class="note"><b>Why this game specifically suits it:</b> we built the whole design as <em>data</em> per "systems are expensive, rows are cheap." A site's obstacles are affordance lists; skills gate them; the job grammar generates objectives. That means the design came out text-ready by accident — a text renderer just reads the data the generators already produce and prints choices. Nothing needs re-designing to run in simulation mode.</div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="n">02</span><h2>The Fidelity Ladder</h2></div>
+    <p class="dek">Three renderings of the <em>same</em> underlying systems. We build the whole game at the middle rung first.</p>
+    <div class="ladder">
+      <div class="rung"><h4>Quick-resolve</h4><p>One aggregate roll, instant. The skip button, and the always-available fallback that keeps the game playable while anything else is half-built.</p><span class="tag">exists from Phase 1</span></div>
+      <div class="rung" style="border-left-color: var(--accent);"><h4>Scene-text</h4><p>Describe the scene from the site data, offer the affordance skill-rolls, resolve the chosen one, mark the result, advance. Interactive, choice-driven, no rendering. Every system, no skin.</p><span class="tag">← we build here first</span></div>
+      <div class="rung"><h4>Full spatial</h4><p>Top-down positioning, radius movement, cover geometry, the visual pillars. The eventual layer, laid over the proven text core, added per pillar.</p><span class="tag">Phase 3+</span></div>
+    </div>
+    <div class="note" style="margin-top:16px;"><b>What scene-text validates vs. defers.</b> It fully proves the systems, the economy, the roster loop, and job interconnection — the core. It abstracts the <em>spatial</em> tactical feel (exact positioning, cover angles, the radius dance) into scene choices; that specific feel is precisely what the visual layer restores. Since this game's fun lives in the systems, that's the right thing to defer — named, not glossed.</div>
+    <div class="note" style="margin-top:12px; border-color: var(--accent);"><b>Read that rung carefully — geometry is the ONLY thing it defers.</b> Initiative, the action economy, combat resolution, health tracks and Drain all belong at scene-text, not at the visual layer. Reading this ladder as "scene-text means one roll per obstacle" is what stalled Phase 2 once already; see the Phase 2 work plan, §0.</div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="n">03</span><h2>Tech &amp; Budget</h2></div>
+    <p class="dek">The plan reaches a complete, playable game for essentially no cash. Time is the real cost.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Area</th><th class="wrap">Approach</th><th>Cost</th></tr></thead>
+        <tbody>
+          <tr><td>Engine</td><td class="wrap">Vanilla JS + HTML + Canvas, matching the Apocollapse/Profile Arcaegium stack. Reassess a free lib (Phaser) only for the spatial phase.</td><td>$0</td></tr>
+          <tr><td>Hub UI</td><td class="wrap"><b>Adapt the Profile project</b> — it's already the terminal-widget visual language in working code. Biggest UI surface, largely done.</td><td>$0</td></tr>
+          <tr><td>Backend</td><td class="wrap">None, ever. Client-side only; IndexedDB save (seeds + deltas).</td><td>$0</td></tr>
+          <tr><td>Hosting</td><td class="wrap">GitHub Pages under arcaegium.com, like the rest of the catalog.</td><td>$0</td></tr>
+          <tr><td>Art</td><td class="wrap">Procedural/canvas + placeholders early; CC0 packs and AI-assisted pixel art per visual phase; paid commission only if the game proves out.</td><td>deferred / optional</td></tr>
+          <tr><td>Labor</td><td class="wrap">Claude writes the code; you direct, test, and make the calls. Iterative, per phase.</td><td>your time + compute</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="n">04</span><h2>The Phases</h2></div>
+    <p class="dek">Phases 0–2 produce a complete, playable game in text. Phase 3+ is optional visual polish over a proven core. It is always playable from Phase 1 on.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Phase</th><th class="wrap">What gets built</th><th class="wrap">Ends when</th></tr></thead>
+        <tbody>
+          <tr><td><b>0</b><br>Foundation<span class="status">✓ done</span></td><td class="wrap">The three data models (runner, site, save), seeded RNG, the day clock, save/load to IndexedDB. Bedrock from §09 of the bible. A dev harness to inspect generated state.</td><td class="wrap">We can generate runners and sites from seeds, save and reload them.</td></tr>
+          <tr><td><b>1</b><br>Management Game<span class="status">✓ done</span></td><td class="wrap">Hub console (adapt Profile), job board, roster/market, hire/watch/retain, gear armory, <b>quick-resolve missions</b> (Discipline pricing, Karma growth, wounds, wipes, the economy), the market state machine.</td><td class="wrap"><span class="gate">GO / NO-GO GATE</span><br>A complete, playable management game. Is the roster loop fun? If not, we learned it cheap.</td></tr>
+          <tr><td><b>2</b><br>Text Missions<span class="status now">◀ current</span></td><td class="wrap">All three pillars as <b>scene-text</b>: read the site's affordances, offer skill-rolls, resolve, advance. Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve, the multi-front ops. Play-through vs. quick-resolve becomes a real choice.<br><br>Sequenced work, dependencies and open questions live in the <b>Phase 2 work plan</b>. Headline items: attributes into the dice pool, extended tests, turn-based mode, the combat/health/Drain systems, witnessing by plane, and <b>simultaneity</b> — multi-front ops needing several teams at once, scheduled after the pillars and gated on UI that can convey it.</td><td class="wrap">The <b>whole game</b> is playable in text — every pillar, every system, proven fun or revised.</td></tr>
+          <tr><td><b>3+</b><br>Visual Layer</td><td class="wrap">Rendering laid over the proven core, one pillar at a time (Matrix cheapest to visualize first). Then depth &amp; content: crafting benches, full tag/combo, faction-heat escalation, job variety, the framing/McGuffin, balance, art pass.</td><td class="wrap">Never — this is the "infinite game" content, added at leisure from a position of a working, fun game.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:16px;"><b>The critical property:</b> after Phase 1 you have a shippable game, and every phase after is independent and optional. You can stop, pause, or reorder between phases, and it stays playable. No month-long sink before a payoff.</div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="n">05</span><h2>Phase 0 — The First Concrete Tasks</h2></div>
+    <p class="dek">Where we actually started. Pure data design, no gameplay, no art — the bedrock everything instantiates. <b>Complete.</b></p>
+    <ol class="tasks">
+      <li><b>Repo scaffold.</b> New Arcaegium subfolder, <code>index.html</code>, a module structure, git. Match the existing project conventions.</li>
+      <li><b>Seeded RNG.</b> A deterministic PRNG utility — the core of the save-as-seeds model, so any generated entity reproduces exactly from its seed.</li>
+      <li><b>Runner model + generator.</b> The record schema (attributes, skills, Discipline label + hidden true-archetype, Essence, wounds, Karma, market state). Generation from seed: archetype → spread template → skills → Discipline label at 80/10/10. The derived price function (Discipline lens × skills).</li>
+      <li><b>Site model + generator.</b> The schema (three security axes, room/obstacle graph, obstacles as affordance lists, population) and generation from seed, with the three invariants (brute force always available, ≥1 alternate solution chain, no obstacle single-skill-locked).</li>
+      <li><b>Day clock + save/load.</b> The spent-not-elapsed day counter; IndexedDB persistence storing seeds + deltas; a stamped schema version for future migrations.</li>
+      <li><b>Dev harness.</b> A bare inspector page — generate and dump runners and sites, roll the day, save and reload — to verify the models produce sane, varied, reproducible output before any game UI exists.</li>
+    </ol>
+    <div class="note" style="margin-top:14px;"><b>Phase 0 done =</b> we can conjure a believable runner market and a believable job site from seeds, watch them vary and persist, and trust the data before building a single screen on top of it.</div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="n">06</span><h2>Risks &amp; How the Plan Answers Them</h2></div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Risk</th><th class="wrap">Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Scope — an enormous design, a tiny team</td><td class="wrap">Always-playable phasing. A shippable game at Phase 1; everything after is optional and independent.</td></tr>
+          <tr><td>The loop might not be fun</td><td class="wrap">Simulation-first means we find out at Phase 1, in the cheapest possible medium, before any polish investment.</td></tr>
+          <tr><td>Solo + AI sustainability</td><td class="wrap">Each phase is self-contained and leaves a working build. Pauses cost nothing; there's no fragile half-finished monolith.</td></tr>
+          <tr><td>Art cost / time</td><td class="wrap">Deferred entirely to Phase 3+, placeholder-and-procedural until then, and only ever spent on a game that's already proven.</td></tr>
+          <tr><td class="wrap">A placeholder gets mistaken for the design</td><td class="wrap">Cost us most of a session once: quick-resolve was extended as if it were the target, and an invented attempt-budget hardened into a rule. Re-read the bible and this plan before extending anything; if a constraint isn't written down, don't invent one to make a scaffold behave — say the system is missing.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sh"><span class="n">07</span><h2>Deferred Polish Backlog</h2></div>
+    <p class="dek">Work that's explicitly not a current-pass blocker — flagged here so it doesn't get lost. Items marked <span class="res">resolved</span> were settled in design and now live in the Phase 2 work plan; they still need implementing.</p>
+    <ul class="backlog">
+      <li><b>Flavor text volume.</b> Personality lines and aims lines currently ship as small placeholder pools (§09's identity fields) — enough to prove the generator wires them in, not enough for real market variety at scale. Come back and expand both pools substantially once the systems around them are proven.</li>
+      <li class="done"><span class="res">resolved</span><b>Handle/name formatting.</b> Expanded into genuine formatting variety — larger pools, L337 spellings, and anti-collision so two near-identical handles can't surface in one universe.</li>
+      <li><b>Obstacle placement tuning (site generator).</b> Room post-slot counts by size (small/medium/large → 1/2/3) and patrol/zone route count per site (0-2) are provisional defaults, not derived from anything. More importantly: transition points (edges) currently place obstacles evenly/round-robin regardless of distance from the objective room. Revisit so that transitions closer to the objective can roll <em>concentrated</em>, layered security — the classic image of a maglock door, a camera, a hardpoint turret, and an armored guard all standing between the crew and the payload at once, rather than one obstacle type spread thin across the whole route. A "closer to the objective, more likely to stack" weighting is the piece still missing.</li>
+      <li><b>Immunities need a scannable in-fiction tell.</b> Every Watsonian immunity an obstacle instance can roll (sensor-equipped, hardened against tampering, air-gapped, cloaked against astral perception — currently just a <code>reason</code> string on the affected affordance) needs a corresponding observable artifact a player can actually notice: a visible sensor rig, telltale shielding, a spirit's aura reading as unusually old or bound. Same "recon is a sensor, not a dial" principle the job-board scouting system already runs on (§06), applied to per-obstacle immunities. The data already carries everything needed — what's missing is the scan/observe interaction and the UI for revealing it.</li>
+      <li class="done"><span class="res">resolved</span><b>Metatype and Awakened distribution.</b> Settled: <b>Human 50 / Ork 20 / Elf 10 / Dwarf 10 / Troll 10</b>, with the Awakened a full third of the market (~25% mages, ~8% adepts). Above the Sixth World's ~1% baseline because a runner market is self-selected; well below an even split because humans must read as the default. Two dials produce it and must move together — the metatype draw <em>and</em> the focus draw, since mage focuses are Awakened by construction and their share of the focus table sets a floor. Implementation pending.</li>
+      <li class="done"><span class="res">resolved</span><b>Task resolution needs an attribute in the dice pool.</b> Settled: pool becomes Skill + Attribute, with a full mapping across seven attributes (Strength restored; Body and Willpower carry no skills and are the pure soak stats). This is now <b>P2.0</b> and blocks the rest of Phase 2 — evasion is Agility and Initiative is Agility + Intelligence, so combat cannot exist without it.</li>
+      <li class="done"><span class="res">resolved</span><b>Karma growth needs to consider Attributes.</b> Settled: <b>a reserved share of every award banks into an attribute fund</b>, spent on the focus's key attribute first, then attributes backing archetype skills; skills keep the existing cascade with the remainder. Tabletop attribute pricing is explicitly <em>not</em> used — that cost assumes a player choosing to save up, whereas an automatic cascade buys the cheapest affordable thing and would never reach an attribute at all. Metatype now sets attribute ceilings rather than starting deltas.</li>
+      <li><b>Reputation's actual scaling and impact needs defining.</b> Currently a flat +1 per completed job — a bare placeholder proving the field exists and gets touched. It's meant to represent negotiating power as a Johnson (access to and discounts on purchasable things), but neither how much a job should be worth in Reputation (flat? scaled by pay/tier/mission count?) nor what Reputation unlocks has been designed. Needs real attention once there's an armory/purchase system for it to modify.</li>
+      <li><b>Job/mission sequencing is still a placeholder shape.</b> A job correctly bundles 1+ missions, but <code>missionCount</code> is a flat uniform roll (1-3) with no distribution behind it, and there's no player-facing concept yet of running <em>extra</em>, non-contracted prep missions (recon, softening a target) before committing the closing mission — real designed-for gameplay (Karma to every runner involved, nuyen only once) that now has a dispatch system to hang off. Route-type missions (movement between two sites — the Gauntlet transit case) are a reserved shape (<code>locationType</code>) that site.js still can't generate.</li>
+      <li><b>Ammunition.</b> Burst and full auto burn rounds; without tracking them, fire modes are free upside and a firefight has nothing to run out of. Planned for late in Phase 2, alongside the rest of the depletion layer.</li>
+    </ul>
+    <div class="note" style="margin-top:14px;"><b>Why deferred, not dropped:</b> none of this blocks any system from being provably fun in simulation mode — a placeholder pool exercises the generator exactly as well as a large one. Expanding it is pure content volume, cheapest to do in a dedicated pass rather than piecemeal while the mechanical foundation is still moving.</div>
+  </section>
+
+  <div class="foot">Companion to the design bible · text-first is the spine · Phase 2 is where we are</div>
+</div>
