@@ -115,34 +115,95 @@ The distinguishing resource is **Overwatch**: every illegal act raises it, and
 convergence ends the run regardless of how well the crew is doing. A decker
 plays against a timer no one else has.
 
-### 3.3 Astral — perception and Force
+### 3.3 Astral — THE LATTICE
 Pressure clock: **the tether** (built, Magic × 6).
 
-| verb | what it is |
-|---|---|
-| `assense` | The astral's core verb: read auras. What is here, what it is, whether it has noticed. Nothing else in the game perceives this way. |
-| `drift` | Move through the astral, ignoring walls. Wards are the only barrier. |
-| `manifest` | Become perceptible to the physical world — powerful, and instantly witnessable. |
-| `channel` | Act at a chosen Force, with Drain scaling. Built; becomes an explicit verb. |
+The astral's distinct flavour is that magic is not a roll, it is a **structure
+you manipulate**. Every construct — a ward, a spirit's binding, a spell being
+assembled — is a lattice of mana threads. One metaphor, three uses.
 
-The distinguishing resource is the **tether against Force**: everything you do
-out of body burns the clock, and pushing Force burns you.
+**The dials (user spec, 2026-08-04):**
+
+| stat | what it governs |
+|---|---|
+| **Magic** | how hard you can push at MAX — your ceiling, and your max threads when assembling |
+| **Force** | what **% of your max** you are pushing right now. A throttle on Magic, and Drain scales with it |
+| **Sorcery** | how strong a **single move** is — how far one push carries you toward the goal |
+| **Conjuring** | the same measure, for summoning and banishing spirits |
+| **Assensing** | the **quality of information** about each thread — its strength, whether it is a dead end. NOT whether threads are visible; you see the lattice, assensing tells you what you are looking at |
+
+**The three uses:**
+
+1. **Break a ward** — *unwind the spell far enough to slip through before it
+   cranks itself back closed.* A race: you unwind, it re-winds, you need a window
+   wide enough to pass. Progress against decay.
+2. **Banish a spirit** — *cut the threads in the right order, like defusing a
+   bomb.* There is a correct sequence. Assensing tells you which strands are
+   dead ends and which are load-bearing; a wrong cut backlashes.
+3. **Cast / summon** — *assemble your own circuit.* The spell or spirit defines
+   the **shape**; Magic sets your **max threads**; Force decides **how many you
+   commit**.
+
+**The design constraint that must hold:** the player is the Johnson and never
+personally goes. So the puzzle must never be a test of the PLAYER's dexterity or
+pattern-recognition — that would make a brilliant mage and a mediocre one play
+identically and quietly replace runner skill with player skill, gutting the
+roster loop. The runner's stats set the puzzle's parameters; the player's choices
+are the modifier on top.
+
+### 3.4 Bound helpers — watcher spirits and AGENTS
+The user's parallel: summoning a spirit should mirror running an autonomous
+program in the Matrix. **Both are one model with two skins.**
+
+**No technomancers, no sprites.** Sprites are technomancer-only (Compiling,
+Resonance, Fading) and the user does not want that class. The thing they were
+remembering is the **Agent** — and agents are plain decker gear:
+
+| SR5 fact | consequence here |
+|---|---|
+| Agents are rated **1–6**, autonomous, with their own persona icon | no new attribute, no new skill, no new origin |
+| Each occupies **one program slot** | the deck's capacity is the cost |
+| A deck runs agents of **rating ≤ deck rating** | the existing deck tiers (3/6/9) already gate it |
+| Explicitly **"dog-brain"** | genuinely limited, not a second decker |
+| Unexpected situation → **Rating × 2 test**; on failure it acts wrongly or **stops and asks for instructions** | autonomy with a real edge — this is the flavour |
+
+`ITEM_TEMPLATES.watchdog` ("Watchdog Agent", category `program`, requires a deck)
+already exists as a flat dice bonus. It becomes an actual entity.
+
+**The shared model:** a bound helper owes you **N tasks** — effectively rounds it
+helps — and each task it spends is a **separate action**, so it widens what the
+crew can do in a beat rather than doing it better.
+
+| | watcher spirit | agent |
+|---|---|---|
+| pillar | astral | matrix |
+| acquired by | Conjuring, via the Lattice (assemble a circuit) | loaded onto a deck |
+| cost | Drain | a program slot |
+| capped by | Force | deck rating |
+| brains | limited | dog-brain, stalls on the unexpected |
 
 ---
 
 ## 4. BUILD ORDER
 
-1. **`js/core/tempo.js`** — the mode machine and the world-advance seam.
-   Clocking only; no player-visible effect. Exposes counters for tests.
-2. **Wire mode into the run** — `run.mode`, combat forces turn-based, toggle
-   surfaces in the popup.
-3. **Matrix grammar** — traverse / probe / run / exfiltrate / jack out, plus
-   Overwatch. Cheapest to prove because the node graph and ice already exist.
-4. **Astral grammar** — assense / drift / manifest / channel against the tether.
-5. **Street grammar** — move / observe / approach / engage.
-6. **Probes** — one class per pillar asserting its verbs and clock are distinct,
-   plus a shared-frame class for the mode machine.
-7. **Docs** — fold into `UNDERSTANDING.md` §3 and `SYSTEM-STATE.md`.
+1. ~~**`js/core/tempo.js`** — the mode machine and the world-advance seam.~~
+   **DONE** (`c0fb7eb`). Clocking only; proven inert against the 1200-run
+   harness and by replaying a run at 0/7/50 ticks for identical output.
+2. ~~**Wire mode into the run** — combat forces turn-based.~~ **DONE** (`c0fb7eb`).
+3. **`js/models/lattice.js`** — the astral puzzle model. Three modes (unwind /
+   unravel / assemble), parameterised by Magic, Force, Sorcery, Conjuring,
+   Assensing per §3.3. Model first, plain text rendering; the visual layer makes
+   it beautiful later.
+4. **`js/models/helpers.js`** — bound helpers: watcher spirits and agents, one
+   model, N tasks, each task a separate action. Agents load onto decks and are
+   capped by deck rating; the "asks for instructions" failure is the flavour.
+5. **Astral grammar** — assense / drift / manifest, with the Lattice as how
+   wards, banishing and casting actually resolve.
+6. **Matrix grammar** — traverse / probe / run / exfiltrate / jack out, plus
+   Overwatch, plus agents acting on their own tasks.
+7. **Street grammar** — move / observe / approach / engage.
+8. **Probes** — one class per pillar asserting its verbs and clock are distinct.
+9. **Docs** — fold into `UNDERSTANDING.md` §3 and `SYSTEM-STATE.md`.
 
 Each step commits separately and leaves the suite green.
 
