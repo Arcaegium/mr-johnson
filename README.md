@@ -19,9 +19,15 @@ The canonical design lives in three living documents. **Read them before
 extending anything** — working from a remembered version of the design is how
 a placeholder gets mistaken for the target.
 
-- **[Design bible](https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8)** — what the game is. Sections are cited throughout the code as §NN.
-- **[Build plan](https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d)** — phases, the fidelity ladder, the deferred backlog.
-- **[Phase 2 work plan](docs/PHASE-2-PLAN.md)** — the current phase, in dependency order. Also published [as a formatted page](https://claude.ai/code/artifact/ae02034e-d2a1-4496-9828-fc84d275eba3).
+| document | in this repo | living artifact |
+|---|---|---|
+| **Design bible** — what the game is; cited throughout the code as §NN | [`docs/design-bible.html`](docs/design-bible.html) | [artifact](https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8) |
+| **Build plan** — phases, the fidelity ladder, the deferred backlog | [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) | [artifact](https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d) |
+| **Phase 2 work plan** — the current phase, in dependency order | [`docs/PHASE-2-PLAN.md`](docs/PHASE-2-PLAN.md) | [artifact](https://claude.ai/code/artifact/ae02034e-d2a1-4496-9828-fc84d275eba3) |
+
+The artifacts are the editable originals; the repo copies are the durable
+mirror, so nothing is lost if a link goes stale. **When you change one, update
+the other** — a stale mirror is worse than no mirror.
 
 Phase 0 (foundation) and Phase 1 (management game) are complete. **Phase 2 —
 Text Missions — is the current work.**

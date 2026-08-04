@@ -1,0 +1,1310 @@
+<!doctype html><html><head><!-- frame-runtime --><script>window.__FRAME_PREAMBLE={"capabilities":{"db":"db.CfOZ1CRq.js","downloads":"downloads.BXsoAvg9.js","mcp":"mcp.CjxgyTlr.js","permissions":"permissions.DdITF2Mk.js","self":"self.DtZoNC4q.js","user":"user.Cr_h1ETf.js"},"transforms":"_transforms.VaITkagF.js","comments":"_comments.XY398Yit.js","translate":"_translate.BOzFH2D9.js"}</script><script>(function(){"use strict";var ee=["light","dark","system"];function te(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_init;return t!==null&&typeof t=="object"}function W(e){return e!==null&&typeof e=="object"&&e.__frame_size_poke===!0}function re(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_theme;if(t===null||typeof t!="object")return!1;const r=t.theme;return typeof r=="string"&&ee.includes(r)}function ne(e){try{typeof reportError=="function"?reportError(e):setTimeout(()=>{throw e},0)}catch{}}var se=Object.freeze(Object.assign(Object.create(null),{user:Object.freeze(Object.assign(Object.create(null),{id:null,isOwner:!1,canEdit:!1,name:null,avatarUrl:null,email:null}))}));function Y(e){if(window===top||e.type==="auxclick"&&e.button!==1)return;const t=e.composedPath?e.composedPath():[e.target];let r=null;for(let f=0;f<t.length;f++){const c=t[f];if(c&&c.matches&&c.matches("a[href],area[href]")){r=c;break}}if(!r&&e.target&&e.target.closest&&(r=e.target.closest("a[href],area[href]")),!r)return;const l=r.getAttribute("href");if(!l)return;let i,s;try{i=new URL(l,document.baseURI),s=new URL(document.baseURI).origin}catch{return}(i.protocol==="http:"||i.protocol==="https:")&&i.origin!==s&&(e.preventDefault(),parent.postMessage({__frame_nav:!0,url:i.href},"*"))}var K={};function U(e){if(window===top)return;const t=Date.now();t-(K[e]||0)<500||(K[e]=t,parent.postMessage({__frame_engaged:!0,kind:e},"*"))}var oe=2e3,x=["wheel","touchstart","touchmove","keydown","pointerdown"],J=0;function ie(e){e.isTrusted&&(J=Date.now())}function ae(){addEventListener("click",Y,!0),addEventListener("auxclick",Y,!0)}function ce(){for(let e=0;e<x.length;e++)addEventListener(x[e],ie,{capture:!0,passive:!0});addEventListener("scroll",e=>{e.isTrusted&&Date.now()-J<oe&&U("scroll")},{capture:!0,passive:!0}),addEventListener("pointermove",e=>{e.isTrusted&&U("pointer")},{capture:!0,passive:!0}),addEventListener("click",e=>{e.isTrusted&&U("click")},{capture:!0,passive:!0})}var D="__frame_scroll",le=150,ue=310,fe=160,de=3e4;function pe(){let e=0,t=!1,r=!1,l=!1,i=0;const s=a=>{try{sessionStorage.setItem(D,JSON.stringify({y:a}))}catch{}},f=()=>{if(t){t=!1;return}r=!0,clearTimeout(e),e=setTimeout(()=>s(scrollY),le)};try{addEventListener("scroll",f,{passive:!0}),addEventListener("pagehide",()=>{clearTimeout(e),s(scrollY)})}catch{}const c=()=>{let a;try{a=sessionStorage.getItem(D)}catch{return null}if(a===null)return null;let _;try{_=JSON.parse(a)}catch{_=null}const p=_?.y;if(!(typeof p=="number"&&Number.isFinite(p)&&p>=0)){try{sessionStorage.removeItem(D)}catch{}return null}return p};let h=!1;const g=a=>{try{const _=scrollY;scrollTo({top:a,left:0,behavior:"instant"}),i=a,l=!0,s(a);const p=scrollY;p!==_&&(t=!0),p!==a&&!h&&(h=!0,addEventListener("load",()=>{try{if(scrollY===p){const y=c();g(y!==null?y:i)}}catch{}},{once:!0}))}catch{}},o=()=>{try{return!!location.hash}catch{return!0}};let u=!1;const d=()=>{try{if(u||innerWidth>ue||innerHeight>fe)return;u=!0;const a=Date.now(),_=()=>{try{removeEventListener("resize",_)}catch{}if(Date.now()-a>de||r||o())return;const p=c();g(p!==null?p:i)};addEventListener("resize",_)}catch{}};let m=!1,v=!1;return{restore(){if(m||(m=!0,o()))return;const a=c();a!==null&&(g(a),d())},promoted(){if(v||(v=!0,o()))return;const a=c();a!==null?(g(a),d()):l&&g(i)}}}function me(e,t,r){const l=[...t.values()].filter(i=>i.targets.some(s=>s.startsWith(e+".")));return{wrap(i,s){const f=`${e}.${i}`,c=l.filter(h=>h.targets.includes(f));return c.length===0?(...h)=>{try{return s(...h)}catch(g){return Promise.reject(g)}}:(...h)=>{let g=h;for(const u of c){const d=u.module.parameters;if(d)try{g=d(g)}catch{return Promise.reject({code:"transform_error",id:u.id,scope:e,message:"parameters transform failed"})}}let o;try{o=s(...g)}catch(u){o=Promise.reject(u)}return o.then(u=>{for(let d=c.length-1;d>=0;d--){const m=c[d],v=m.module.returns;if(v)try{u=v(u)}catch{return r({id:m.id,scope:e,leg:"returns"}),u}}return u},u=>{for(let d=c.length-1;d>=0;d--){const m=c[d],v=m.module.throws;if(v)try{u=v(u)}catch{return r({id:m.id,scope:e,leg:"throws"}),Promise.reject(u)}}return Promise.reject(u)})}}}}function he(e,t,r,l=()=>{}){const i=new Set(e.changes??[]),s=new Map;for(const f of i){const c=t[f];c&&s.set(f,c)}return{contract:e.contract,changes:i,flags:new Set(e.flags??[]),capabilities:e.capabilities??{},capBudgets:e.capBudgets??{},transforms:s,shellOrigin:r.shellOrigin,mount:r.mount,pipe:f=>me(f,s,l)}}var Ee="modulepreload",we=function(e){return"/"+e},Oe={},ge=function(t,r,l){let i=Promise.resolve();function s(f){const c=new Event("vite:preloadError",{cancelable:!0});if(c.payload=f,window.dispatchEvent(c),!c.defaultPrevented)throw f}return i.then(f=>{for(const c of f||[])c.status==="rejected"&&s(c.reason);return t().catch(s)})};(function(){const e=Object.defineProperty,t=globalThis,r=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let l=0;for(let i=0;i<r.length;i++){const s=r[i];try{e(t,s,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[s]}catch{}try{e(t,s,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[s]=="function"&&l++}if(l&&window!==top)try{parent.postMessage({__frame_rtc_lockdown_failed:l},"*")}catch{}})();var ve=1e4,_e=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function G(e){for(const t of _e)if(t.endsWith(":*"))try{const r=new URL(e);if(`${r.protocol}//${r.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}var P=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),I=window.__FRAME_PREAMBLE?.transforms,z=window.__FRAME_PREAMBLE?.comments,B=window.__FRAME_PREAMBLE?.translate,T=/^[\w.-]+\.js$/,ye=/^[a-z][a-z0-9_-]{0,63}$/,X=null,j=null;function q(e,t,r){try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var $=!1;function V(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,$=!0):$&&(delete t.dataset.theme,t.style.colorScheme="",$=!1)}var M=Object.assign(Object.create(null),{mcp:Object.assign(Object.create(null),{watchTool:{handlerArg:3}})}),A=new Map;function Q(e,t){const r=A.get(e);if(!r)return;const l=Object.assign(Object.create(null),t);Object.assign(r.impl,l),r.impl.__settled=()=>Promise.reject({code:"capability_removed",message:`${e}: method not in this runtime`});const i=r.queue;r.queue=[];for(const s of i){const f=l[s.method];if(f)if(M[e]?.[s.method])try{s.resolve(f(...s.args))}catch{N(s,M[e][s.method].handlerArg,{code:"transform_error",message:`${e}.${s.method} rejected its arguments`})}else f(...s.args).then(s.resolve,s.reject);else{const c={code:"capability_removed",message:`${e}.${s.method} is not in this runtime`},h=M[e]?.[s.method];if(h){N(s,h.handlerArg,c);continue}s.reject(c)}}}function be(e,t){const r=A.get(e);if(!r)return;r.impl.__settled=()=>Promise.reject(t);const l=r.queue;r.queue=[];for(const i of l){const s=M[e]?.[i.method];if(s){N(i,s.handlerArg,t);continue}i.reject(t)}}function k(e,t){const r=se[e];if(!r){be(e,t);return}Q(e,Object.fromEntries(Object.entries(r).map(([l,i])=>[l,()=>Promise.resolve(i)])))}function N(e,t,r){if(e.syncState?.dead)return;const l=e.args[t];typeof l=="function"&&queueMicrotask(()=>{if(!e.syncState?.dead)try{l({type:"error",error:r})}catch(i){ne(i)}})}var F=Object.getOwnPropertyDescriptor(window,"claude");if(window!==top&&!(F&&F.writable===!1)){ae(),ce();let e=null;try{e=pe()}catch{}const t=F?.value??{};q(window,"claude",t);const r=o=>{const u={impl:Object.create(null),queue:[]};A.set(o,u);const d=u.impl,m=new Proxy(d,{get:(v,a)=>{if(typeof a!="string"||a==="then"||a==="toJSON"||a==="valueOf")return;if(a==="toString")return Object.prototype.toString;const _=M[o]?.[a];return _?(...p)=>{if(typeof p[_.handlerArg]!="function")throw new TypeError(`${o}.${a} requires a handler function`);const y=d[a];if(y)return y(...p);if(d.__settled){const b={dead:!1},R={args:[...p],syncState:b};return d.__settled().catch(C=>N(R,_.handlerArg,C)),()=>{b.dead=!0}}let E=null;const O={dead:!1};return u.queue.push({method:a,args:p,resolve:b=>{E=typeof b=="function"?b:null,O.dead&&E?.()},reject:()=>{},syncState:O}),()=>{O.dead=!0,E?.()}}:(...p)=>{const y=d[a]??d.__settled;return y?y(...p):new Promise((E,O)=>{u.queue.push({method:a,args:p,resolve:E,reject:O})})}},set:()=>!1});q(t,o,m)};for(const o of Object.keys(P)){if(t[o]!==void 0){q(t,o,t[o]);continue}r(o)}let l=null,i=null,s=0;const f=o=>{o.source!==parent||!G(o.origin)||te(o.data)&&(l=o.data.__frame_init,j=o.origin,removeEventListener("message",f),clearTimeout(s),i?.())};addEventListener("message",f),parent.postMessage({__frame_connect:!0},"*");const c=new Promise(o=>{i=o,s=setTimeout(()=>{removeEventListener("message",f),o()},ve)}),h=document.readyState==="loading"?new Promise(o=>document.addEventListener("DOMContentLoaded",()=>o(),{once:!0})):Promise.resolve();h.then(()=>{try{e?.restore()}catch{}});const g=o=>{if(!(o.source!==parent||!G(o.origin))&&W(o.data)){removeEventListener("message",g);try{e?.promoted()}catch{}}};addEventListener("message",g),c.then(async()=>{if(!l||!j){for(const n of A.keys())k(n,{code:"not_granted",message:"frame initialization did not arrive - capability unavailable"});return}V(l.theme);const o=j;let u=!1,d=!1;addEventListener("message",n=>{if(n.source!==parent||n.origin!==o)return;re(n.data)&&V(n.data.__frame_theme.theme);const w=n.data?.__fc_mode;w&&typeof w=="object"&&!u&&z&&T.test(z)&&(u=!0,m(z).then(H=>H.install?.(o,w.on===!0)).catch(()=>{}));const S=n.data?.__ft_cmd;S&&typeof S=="object"&&!d&&B&&T.test(B)&&(d=!0,m(B).then(H=>H.install?.(o,S)).catch(()=>{}))});const m=n=>ge(()=>import("/_runtime/"+n),void 0),v=Object.keys(l.capabilities??{});for(const n of v)Object.hasOwn(P,n)||ye.test(n)&&t[n]===void 0&&(r(n),k(n,{code:"capability_disabled",message:"capability not in this runtime generation"}));const a=v.filter(n=>Object.hasOwn(P,n)).map(n=>[n,P[n]]).filter(n=>typeof n[1]=="string"&&T.test(n[1])),[_,...p]=await Promise.allSettled([I&&T.test(I)?m(I):Promise.resolve({}),...a.map(([,n])=>m(n))]),y=j;X=he(l,_.status==="fulfilled"&&_.value?.TRANSFORMS||{},{shellOrigin:y,mount:Q},n=>parent.postMessage({__frame_cap_telemetry:n},y));const E=n=>parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:n}},y),O=X;p.forEach((n,w)=>{const S=a[w][0];if(n.status!=="fulfilled"){E(S);return}try{n.value?.install?.(O)}catch{E(S)}});for(const[n,w]of A)if(!(w.queue.length===0&&Object.keys(w.impl).length>0)){if(v.includes(n)){k(n,{code:"capability_disabled",message:"capability not available in this session"});continue}k(n,{code:"not_granted",message:"capability not available in this session"})}await h,parent.postMessage({__frame_ready:!0},j);let b=-1,R=0;const C=()=>{R=0;const n=Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0);n!==b&&(b=n,parent.postMessage({__frame_size:!0,h:n},y))},L=()=>{R||(R=setTimeout(C,200))},Z=new ResizeObserver(L);Z.observe(document.documentElement),document.body&&Z.observe(document.body),document.addEventListener("load",L,!0),document.fonts?.ready.then(L,()=>{}),addEventListener("beforeprint",()=>{b=-1,C()}),L(),addEventListener("message",n=>{if(!(n.source!==parent||n.origin!==y)&&W(n.data)){try{e?.promoted()}catch{}b=-1,L()}})})}})();</script><!-- /frame-runtime --><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>Shadowrun-Inspired Roster Game — Design Bible</title>
+<style>
+  :root {
+    --bg: #f2ede2;
+    --bg-raised: #ffffff;
+    --bg-sunken: #e9e2d3;
+    --ink: #1c1a16;
+    --ink-dim: #6b6558;
+    --accent: #b5651d;
+    --accent-soft: #b5651d1a;
+    --accent-2: #1f7a70;
+    --accent-2-soft: #1f7a701a;
+    --danger: #9c3a28;
+    --line: rgba(28,26,22,0.14);
+    --line-strong: rgba(28,26,22,0.28);
+    --font-display: "Bahnschrift", "Arial Narrow", "Segoe UI Semibold", sans-serif;
+    --font-body: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --font-mono: "Cascadia Code", Consolas, ui-monospace, "SFMono-Regular", monospace;
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #12151c;
+    --bg-raised: #1a1e28;
+    --bg-sunken: #0d0f14;
+    --ink: #e8e6df;
+    --ink-dim: #9a9fae;
+    --accent: #e0964a;
+    --accent-soft: #e0964a22;
+    --accent-2: #5cc4b8;
+    --accent-2-soft: #5cc4b822;
+    --danger: #e07361;
+    --line: rgba(255,255,255,0.1);
+    --line-strong: rgba(255,255,255,0.22);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151c;
+      --bg-raised: #1a1e28;
+      --bg-sunken: #0d0f14;
+      --ink: #e8e6df;
+      --ink-dim: #9a9fae;
+      --accent: #e0964a;
+      --accent-soft: #e0964a22;
+      --accent-2: #5cc4b8;
+      --accent-2-soft: #5cc4b822;
+      --danger: #e07361;
+      --line: rgba(255,255,255,0.1);
+      --line-strong: rgba(255,255,255,0.22);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.55;
+    font-size: 16px;
+  }
+
+  a { color: var(--accent); }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { display: none; }
+  }
+
+  .rail {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 32px 18px 32px 28px;
+    border-right: 1px solid var(--line);
+  }
+
+  .rail-kicker {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 14px;
+  }
+  .rail-kicker.second { margin-top: 22px; }
+
+  .rail nav { display: flex; flex-direction: column; gap: 2px; }
+  .rail a {
+    text-decoration: none;
+    color: var(--ink-dim);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    padding: 7px 10px;
+    border-radius: 3px;
+    border-left: 2px solid transparent;
+  }
+  .rail a:hover { color: var(--ink); background: var(--bg-sunken); }
+  .rail .num { color: var(--accent); margin-right: 8px; }
+  .rail .num.alt { color: var(--ink-dim); }
+
+  main { padding: 48px 44px 100px; min-width: 0; }
+  @media (max-width: 640px) { main { padding: 32px 20px 80px; } }
+
+  .cover {
+    padding-bottom: 36px;
+    margin-bottom: 44px;
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .cover-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    background: var(--accent-2-soft);
+    border: 1px solid var(--accent-2);
+    padding: 4px 10px;
+    border-radius: 2px;
+    margin-bottom: 22px;
+  }
+  h1.title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(2.1rem, 5vw, 3.1rem);
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  .subtitle {
+    font-family: var(--font-body);
+    font-style: italic;
+    color: var(--ink-dim);
+    font-size: 1.15rem;
+    max-width: 64ch;
+    margin: 0 0 20px;
+  }
+  .cover-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+  .cover-meta b { color: var(--ink); font-weight: 600; }
+
+  section { margin-bottom: 58px; scroll-margin-top: 24px; }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 6px;
+  }
+  .section-index {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .section-index.alt { color: var(--ink-dim); }
+  h2 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-size: 1.5rem;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .section-dek {
+    color: var(--ink-dim);
+    max-width: 70ch;
+    margin: 10px 0 26px;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    font-size: 1.02rem;
+    letter-spacing: 0.03em;
+    margin: 30px 0 12px;
+    color: var(--ink);
+  }
+
+  p { max-width: 72ch; }
+
+  .card {
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 20px 24px;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+  }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  td.wrap, th.wrap { white-space: normal; }
+  thead th {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    background: var(--bg-sunken);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--accent-soft); }
+  .num-cell { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    letter-spacing: 0.04em;
+  }
+  .pill-simple { background: var(--accent-2-soft); color: var(--accent-2); }
+  .pill-moderate { background: var(--accent-soft); color: var(--accent); }
+  .pill-expert { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+
+  .run-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+  }
+  .run-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 4px;
+    padding: 16px 18px;
+  }
+  .run-card h4 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 8px;
+  }
+  .run-card p { margin: 0; font-size: 13.8px; color: var(--ink-dim); font-family: var(--font-body); }
+  .run-card .pay {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--accent);
+    margin-top: 10px;
+    display: block;
+  }
+
+  .districts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .district {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 14px 16px;
+    background: var(--bg-sunken);
+  }
+  .district h4 {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin: 0 0 6px;
+  }
+  .district p { margin: 0; font-size: 13.5px; color: var(--ink-dim); }
+
+  .diagram {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    background: var(--bg-sunken);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--accent-2);
+  }
+  .diagram .key { color: var(--ink-dim); }
+
+  blockquote {
+    margin: 0;
+    padding: 4px 0 4px 18px;
+    border-left: 2px solid var(--accent);
+    color: var(--ink-dim);
+    font-style: italic;
+  }
+
+  .note {
+    border: 1px dashed var(--line-strong);
+    border-radius: 6px;
+    padding: 16px 20px;
+    font-size: 14.5px;
+    color: var(--ink-dim);
+    background: var(--bg-sunken);
+  }
+  .note b { color: var(--ink); }
+
+  .open-note {
+    border: 1px dashed var(--danger);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: 14px;
+    color: var(--ink-dim);
+    background: color-mix(in srgb, var(--danger) 6%, transparent);
+    margin-top: 14px;
+  }
+  .open-note b.tag { color: var(--danger); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .qlist { display: flex; flex-direction: column; gap: 10px; padding: 0; margin: 0; list-style: none; }
+  .qlist li {
+    padding: 12px 16px;
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 14.5px;
+  }
+  .qlist b { color: var(--accent); font-family: var(--font-mono); font-size: 12px; margin-right: 8px; }
+
+  .foot {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+  .foot a { color: var(--ink-dim); }
+
+  .part-divider {
+    margin: 70px 0 40px;
+    padding-top: 30px;
+    border-top: 2px solid var(--line-strong);
+  }
+  .part-divider .part-kicker {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 8px;
+  }
+  .part-divider h2 {
+    font-size: 1.15rem;
+  }
+  .part-divider p { color: var(--ink-dim); font-size: 14.5px; }
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="rail-kicker">Part One — Our Design</div>
+    <nav>
+      <a href="#premise"><span class="num">01</span>The Core Premise</a>
+      <a href="#pillars"><span class="num">02</span>Three Pillars &amp; Consciousness</a>
+      <a href="#roster"><span class="num">03</span>The Roster</a>
+      <a href="#archetypes"><span class="num">04</span>Archetypes &amp; Skills</a>
+      <a href="#matrix-design"><span class="num">05</span>The Matrix — Full Design</a>
+      <a href="#jobboard"><span class="num">06</span>Jobs, The Board &amp; Missions</a>
+      <a href="#meatspace-design"><span class="num">07</span>Meatspace — Full Design</a>
+      <a href="#astral"><span class="num">08</span>The Astral Realm</a>
+      <a href="#foundation"><span class="num">09</span>The Data Foundation</a>
+      <a href="#hub"><span class="num">10</span>The Hub Console</a>
+      <a href="#translation"><span class="num">11</span>Open Questions</a>
+    </nav>
+    <div class="rail-kicker second">Part Two — Source Research</div>
+    <nav>
+      <a href="#loop"><span class="num alt">12</span>The Contract Loop (1994)</a>
+      <a href="#runs"><span class="num alt">13</span>Run Types (1994)</a>
+      <a href="#matrix"><span class="num alt">14</span>The Matrix (1994)</a>
+      <a href="#districts"><span class="num alt">15</span>Seattle Districts (1994)</a>
+      <a href="#gear"><span class="num alt">16</span>Gear &amp; Progression (1994)</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="cover">
+      <div class="cover-tag">● design bible · living document</div>
+      <h1 class="title">Shadowrun-Inspired Roster Game</h1>
+      <p class="subtitle">You are not a runner. You're the Johnson — the fixer who takes the contracts, builds the team, and sends other people into the dark.</p>
+      <div class="cover-meta">
+        <span><b>Genre inspiration</b> Shadowrun (Sega Genesis, 1994)</span>
+        <span><b>Platform</b> browser, Arcaegium project</span>
+        <span><b>Priority</b> depth &gt; graphics &gt; story</span>
+      </div>
+    </div>
+
+    <section id="premise">
+      <div class="section-head"><span class="section-index">01</span><h2>The Core Premise</h2></div>
+      <p class="section-dek">Everything else in this document is downstream of these calls. If a later section seems to contradict one of these, this section wins.</p>
+
+      <div class="run-grid">
+        <div class="run-card"><h4>You are a Johnson</h4><p>Not a runner. You take contracts, browse a market of independently-generated runners, hire and develop a roster, and dispatch them. Your operation grows. You never personally do.</p></div>
+        <div class="run-card"><h4>No ending</h4><p>Shadowrunning is a lifestyle, not a career with a finish line. The game is meant to be played indefinitely — there is no final boss, no credits.</p></div>
+        <div class="run-card"><h4>No plot, deliberately</h4><p>Succeeding on the job in front of you is as far as anyone needs to think it through. One open exception — see §11.</p></div>
+        <div class="run-card"><h4>Depth &gt; graphics &gt; story</h4><p>In that order, and by a wide margin on all sides. Genesis-tier (16-bit sprite) visual ambition.</p></div>
+        <div class="run-card"><h4>Hub-based structure</h4><p>The player lives in a persistent hub between jobs. Jobs are browsed and assigned through an in-hub terminal — no walking a map to find a physical Johnson.</p></div>
+        <div class="run-card"><h4>No single meta item</h4><p>Enforced at three levels at once: which <em>pillar</em> a job routes to, which <em>skill</em> a job rewards, and which specific <em>runner</em> brings it. No one gear piece, build, or archetype can substitute for a gap in the roster.</p></div>
+      </div>
+
+      <div class="note" style="margin-top:18px;">
+        <b>Why "infinite" needs more than bigger numbers:</b> a single character grinding toward godhood only has one axis to scale, and no matter how the cost curve is stretched, that eventually gets tedious because it's the <em>only</em> axis. A roster scales horizontally instead — more specialists, more team compositions, more relationships to protect or gamble on — which is a much harder thing to "solve" than a stat sheet.
+      </div>
+    </section>
+
+    <section id="pillars">
+      <div class="section-head"><span class="section-index">02</span><h2>Three Pillars &amp; The Consciousness Principle</h2></div>
+      <p class="section-dek">Meatspace, the Matrix, and the Astral plane are three different worlds, which is why each earns a genuinely different genre of gameplay rather than a reskin of the others.</p>
+
+      <div class="card">
+        <h3 style="margin-top:0;">The organizing rule</h3>
+        <p>A pillar exists wherever a character's active consciousness can leave <b>physical reality itself</b> — not just leave the body. A decker's mind projects into something purely virtual. A mage's mind projects onto a metaphysical plane. Both are categorically different from being a body in the world, so both earn their own genre. A rigger jacking into a drone never leaves physical reality — the drone is just a second body in the same meatspace, governed by the same rules. That's why Rigging is a meatspace specialty (§07), not a fourth pillar.</p>
+      </div>
+
+      <div class="table-wrap" style="margin-top:18px;">
+        <table>
+          <thead><tr><th>Pillar</th><th class="wrap">Visual treatment</th><th class="wrap">Where consciousness goes</th><th class="wrap">What it's good at</th></tr></thead>
+          <tbody>
+            <tr><td>Meatspace</td><td class="wrap">Top-down, cyberpunk street</td><td class="wrap">Nowhere — this is the default, embodied world</td><td class="wrap">Combat, infiltration, escort, courier, and every meatspace-native specialty</td></tr>
+            <tr><td>Matrix</td><td class="wrap">Over-the-shoulder, CRT / terminal dossier</td><td class="wrap">A wholly virtual space (the decker's Persona)</td><td class="wrap">Data theft, remote sabotage, zero-travel jobs</td></tr>
+            <tr><td>Astral</td><td class="wrap">Over-the-shoulder, oil-painting / impressionist</td><td class="wrap">A metaphysical plane (the mage's projection)</td><td class="wrap">Detecting and hunting spirits and the Infected, scouting, non-lethal resolution</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Why they feel different, in-fiction</h3>
+      <p>Matrix is discrete because it's processors trading packets — turns make sense there. Meatspace is real-time because it's bodies in physical space. Astral consciousness is unbound from the body and runs faster than flesh — canonically 2 initiative dice to meatspace's 1, so a projected mind acts twice for every embodied action, which is exactly how projecting mid-mission interleaves into the shared turn order (§07). That's flavor for <em>why the pace differs</em>, not a mandate to share an engine — Astral needs its own over-the-shoulder, painterly identity, not a slowed-down copy of the top-down meatspace renderer.</p>
+    </section>
+
+    <section id="roster">
+      <div class="section-head"><span class="section-index">03</span><h2>The Roster</h2></div>
+      <p class="section-dek">This is the actual core system of the game — more central than any single pillar. Progress isn't a stat sheet, it's who you know, who you've protected, and who you can afford.</p>
+
+      <h3>The market</h3>
+      <p>A continuously, procedurally regenerated pool of runners — infinite variety, no hand-authored ceiling. Each has a <b>dossier</b>: fully-visible stats, a <b>Discipline</b> line (Generalist or a named Specialist focus), a personality line, and a price. Price is the <b>Discipline lens applied to the visible skills</b> (§04), not a flat number and not always a fair one — the label can over- or under-value the actual skills, which is exactly where bargains and traps live. It rises as a runner succeeds and falls as they're wounded, so an expensive elite runner is a real, trackable, growing thing from the moment you first see their dossier.</p>
+
+      <h3>Watched vs. unwatched — and hired is a kind of watched</h3>
+      <p>Every runner starts unmarked. Marking a runner "Watched" is free — the only real constraint is shared board capacity, which costs increasing amounts to expand. The relationship between the states matters and is easy to get backwards:</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="margin-top:0;">Watched (the umbrella)</h3>
+          <p><b>All Hired runners are Watched.</b> Watched is what turns on stat tracking and growth, and it's also what exposes a runner to the market's shelf-life roll — <em>unless</em> they're currently under contract, in which case hiring is what suppresses that roll for as long as the contract lasts. A Watched-but-not-Hired runner is being followed with real stakes: they can grow, and they can also roll Working, Out of Town, or KIA.</p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;">Unwatched (guaranteed loss)</h3>
+          <p>Not all runners are Watched — most aren't. An unwatched runner has one shelf-life timer and nothing else: no roll, no growth, no closure. When it expires, they're simply gone, and the slot refills with someone new after a day. This asymmetry is deliberate — the richer simulation only ever runs for the runners a player actually cared enough to mark. The timer itself is <b>visible</b> (amended from the original hidden design): "leaves in 2 days" versus "leaves in 7" is exactly what makes pick-or-pass a real decision — grab someone mediocre before they walk, or let the clock run out and gamble on the next draw.</p>
+        </div>
+      </div>
+
+      <h3>The market state machine (Watched, not-currently-Hired runners)</h3>
+      <p>Shelf life re-rolls after every state transition rather than pausing and resuming — a cheap abstraction that implies a whole hidden economy of other Johnsons and other jobs without ever simulating any of it:</p>
+      <div class="diagram">Available (shelf life rolled)
+   │  expires
+   ▼
+ roll outcome ──► Working ──► (rolled duration) ──► expires ──► roll again
+   │                                                                 │
+   ├──► Out of Town ──► (rolled duration) ──► expires ──► roll again┘
+   │
+   └──► KIA  <span class="key">(terminal — nothing changes again; the player eventually stops watching)</span></div>
+      <p>Odds are tier-weighted, deliberately: top-tier runners rarely roll KIA — they're too good at not dying, and more often show up Working or Out of Town. Low-tier runners carry real KIA risk. This is also why losing a runner saved up for over a hundred hours doesn't feel like a rug-pull — by that point KIA will have visibly happened to lesser runners many times, so the rule was always true, not sprung on anyone.</p>
+
+      <h3>Growth</h3>
+      <p>Runners grow through <b>Karma</b>, awarded per mission and scaled to the security threat actually faced (§06), spent automatically along their archetype (§04) — Specialists concentrate it into their peak, Generalists spread it broadly. <b>Growth only ever comes from something the player actually assigned that specific runner to do</b> — a mission, a scouting task, or crafting duty (below) — never automatically. A Watched-but-not-hired runner cycling through Working or Out of Town isn't secretly running jobs for some other Johnson and quietly leveling from it; those states are about <em>availability and risk</em> — will this runner even still be here, will they roll KIA before you can act — not a hidden clock that keeps advancing them regardless of what the player does. This is deliberate: a top-tier dream hire has to stay a reachable target for as long as the player is saving toward them, never one that gets more expensive <em>and</em> more skilled purely from sitting on the shelf, which would turn the chase into a tease instead of a real goal. A hired specialist kept on support duty — crafting at the bench, working the Medicae — still earns Karma: it's the player's own assignment, exactly the kind of activity growth rewards. Support Karma <b>scales with the difficulty of the work</b> — the tier of the item being crafted, the severity of the case being treated — so a dedicated bench career keeps moving instead of freezing. But it earns at a rate deliberately and <em>visibly</em> below what obstacle-exposing missions pay at comparable difficulty, and its difficulty ceilings (what's craftable, what's treatable) sit far below what stretch contracts expose a crew to. This is the risk lane split, on purpose: a player who won't risk wounds can grind support work and keep leveling — legitimately, indefinitely, slowly — while missions with real obstacles remain the obviously efficient path. Safe grinding is allowed; it is never optimal.</p>
+
+      <h3>Hiring tiers — a ladder of contracted missions</h3>
+      <p>Contracts are counted in <b>missions consumed, never calendar days</b> — the money paid to the runner is for the tasks they actually do, not for time on the clock. Every dispatch (a job-derived objective, recon, crafting, resource gathering, a Medicae treatment session — all the same mechanism, §06) consumes one; a treatment session is the medic's mission, with the patient occupied but not spending anything. This is also why medics don't go stale from sparing use: working an actual case is an assignment, and assignments are where growth comes from. Downtime never does: a retained runner healing in the Medicae, or simply benched, burns nothing — a wound already costs you the runner's degraded key stat, and it must not double-charge you the contract too.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tier</th><th class="wrap">What it buys</th></tr></thead>
+          <tbody>
+            <tr><td>Freelance</td><td class="wrap">Exactly one mission, at current market price. Back on the market the moment it resolves.</td></tr>
+            <tr><td>Retainer</td><td class="wrap">A contracted block of missions at a discount off current price, protected until the block is used up — insurance against losing them between dispatches, and the <b>audition tier</b>: field them across the block to watch how they actually grow (§04) before committing to a permanent buy.</td></tr>
+            <tr><td>Permanent</td><td class="wrap">A lump sum relative to current price, paid once. Protected forever.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>An untouched retainer never lapses, on purpose.</b> A runner held on retainer and never dispatched stays protected indefinitely — and that is not an exploit to police, because the cost is real and self-balancing: they don't grow while benched, the operation's reputation, runner pool, and mission scale all keep moving past them, and pulling them out years later is essentially hiring a low-level runner who needs training up from scratch. A player doing this is committing a roster slot to a roll of the RNG they fell in love with — an aesthetic choice the game should honor, not punish.</div>
+      <div class="open-note"><b class="tag">Needs revalidation</b> — the ratio shape here (retainer meaningfully cheaper than freelance per mission; permanent priced so it pays off within a real playthrough, not never) is confirmed correct. The literal numbers need to be re-derived against a moving, stat-derived price rather than a flat one, at some point before this is load-bearing for balance.</div>
+
+      <h3>Mission risk is a completely separate system from market risk</h3>
+      <p>Once hired and deployed, a runner can never die on a job. Going down mid-mission costs an <b>indefinitely stacking</b> −1 step to their key stat — a wound. A mid-tier consumable revives a downed runner mid-mission; everyone fully heals their <em>health</em> between missions, but wounds persist until treated. Each runner's dossier tracks their current wound count. Because runners can never actually die on the job, wounds are the real stake of mission risk — and they must not cap, or recklessness eventually stops costing anything.</p>
+      <p><b>Wounds are debt, and there are two ways to pay it.</b> They're ledger entries, not status effects — the score is simply lower. <b>Magical therapy</b> (a healer-mage internal job, §03 below) truly removes wound points — but it's Health-spell magic, penalized by the patient's Essence loss, so it works best on natural bodies and grows expensive-to-impossible on chromed ones. <b>Cyberware</b> offsets instead of removing: an implant that raises the stat by 3 raises it by 3, and a thrice-wounded veteran who gets it sits at net zero, not +3 — money and Essence spent to stand still, and every point of Essence spent makes future therapy worse. The split is self-reinforcing: high-Essence runners are maintainable long-term through the mage; low-Essence runners slide toward the machine, and Essence is finite, so the slide has a floor.</p>
+
+      <div class="note">
+        <b>Why mixed-tier hiring is the central strategic loop:</b> own a couple of runners outright, keep a few on retainer, and still hire cheap freelance gangers as disposable bait for the risky role you need filled today. You'd never risk a protected investment's wound on a suicide task — but a freelancer's wound costs you nothing you were protecting.
+      </div>
+
+      <h3>Equipment belongs to the operation, not to any one runner</h3>
+      <p>Gear — decks (§05), weapons, armor, drones, foci, fetishes, relays — is owned outright by the Johnson's operation, not generated as part of a runner's dossier. The player builds and upgrades an equipment armory over time and issues specific pieces to whichever runner is going on a given job. This is a second roster, running in parallel to the runner market: runners are people, priced dynamically, at risk on the open market; equipment is property, bought once, upgraded over time, and simply reassigned as needed. A player with two decker runners but only one top-tier deck has a real allocation decision every time both could use it.</p>
+
+      <h3>Internal jobs: the roster produces the armory</h3>
+      <p>Crafting is a job you hire your own roster for. You spec the item — mostly predefined templates with customizable parameters, in the spellmaking-menu tradition — assign a capable runner, and pay a cost that scales with the spec, in money and days. Quality scales with the crafter's stats, which makes a great craftsman worth retaining even if you rarely field them, and it gives idle hired runners a real purpose between contracts — a freelancer you release can't be your program shop.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Crafter</th><th class="wrap">Produces</th><th class="wrap">Raw input</th></tr></thead>
+          <tbody>
+            <tr><td>Decker</td><td class="wrap">Programs — parameterized templates, custom-specced</td><td class="wrap">Money, time</td></tr>
+            <tr><td>Enchanter mage</td><td class="wrap">Foci, fetishes, one-shot preparations</td><td class="wrap">Harvested reagents (§08)</td></tr>
+            <tr><td>Any mage</td><td class="wrap">Spell formulas — designed custom, bought, or stolen (a Matrix run against a corp research system can exfiltrate a formula a mage then learns)</td><td class="wrap">Money, time</td></tr>
+            <tr><td>Rigger</td><td class="wrap">Drone kits — chassis and module development</td><td class="wrap">Money, time</td></tr>
+            <tr><td>Street Samurai</td><td class="wrap">Weapons within their specialty — the demolitionist develops charge types, the marksman rifles, the heavy gunner support weapons</td><td class="wrap">Money, time</td></tr>
+            <tr><td>Street Doc</td><td class="wrap">Cyberware — developed and surgically implanted (§04)</td><td class="wrap">Money, time, the patient's Essence</td></tr>
+            <tr><td>Healer mage</td><td class="wrap">Magical wound therapy — removes wound point(s) from a runner; cost and duration scale with the patient's Essence loss, so it works best on natural bodies</td><td class="wrap">Money, time — and both healer and patient are occupied for the duration</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>Guardrail:</b> crafted gear follows the same power-cost curves as bought gear. Customization buys <em>fit</em> — exactly the program your route needs, exactly the fetish count your mage's habits want — never a power-per-nuyen discount, or crafting becomes the only rational acquisition path and the shop economy dies. Crafting's real edge is availability and precision, paid for in a runner's occupied days while the job board keeps turning.</div>
+      <p style="margin-top:14px;"><b>Implantation is a second progression axis.</b> Growth-through-jobs is slow and automatic; surgery is direct investment — buy or develop cyberware, pay the Doc's job, permanently upgrade a specific runner at the price of their Essence. Roster development stops being purely observational.</p>
+
+      <h3>The economy: sources, sinks, and the binding constraint</h3>
+      <p>The whole-game sanity check — every source feeds sinks, nothing dead-ends, and the real scarcity isn't money.</p>
+      <div class="diagram">        ┌──────────────── JOBS ────────────────┐
+        │  pay · data · reagents · loot         │
+        ▼                                       │
+     <span class="key">NUYEN</span> ─► gear · hiring · crafting ─► <span class="key">CREW + ARMORY</span>
+        ▲    therapy · cyberware · expansion     │
+        │    consumables restock                 │
+        └────── stronger crew → harder jobs ─────┘
+
+  Matrix run ─► data ─► fence ─► NUYEN        <span class="key">(second payday)</span>
+  Astral harvest ─► reagents ─► craft ─► ARMORY   <span class="key">(no nuyen middleman)</span>
+  Downed ─► wound ─► therapy (¥+time) / cyber (¥+Essence)
+  Wipe ─► all issued gear forfeit ─► replace (¥)</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Sources of nuyen</th><th>Sinks</th></tr></thead>
+          <tbody>
+            <tr><td>Job pay (primary — scales with tier &amp; client standing)</td><td class="wrap">Hiring (freelance / retainer / permanent)</td></tr>
+            <tr><td>Data sales (Matrix run yield → fence, §05)</td><td class="wrap">Gear purchase from the armory shop</td></tr>
+            <tr><td>Loot &amp; gear resale (found / dropped on-site)</td><td class="wrap">Crafting internal jobs (¥ + time + materials)</td></tr>
+            <tr><td></td><td class="wrap">Wound therapy (¥ + time) and cyberware surgery (¥ + Essence)</td></tr>
+            <tr><td></td><td class="wrap">Gear replacement after a wipe — the failure sink</td></tr>
+            <tr><td></td><td class="wrap">Board &amp; roster capacity expansion (increasing cost)</td></tr>
+            <tr><td></td><td class="wrap">Consumables restock (ammo, fetishes, medkits)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><b>Time is the binding constraint, not nuyen.</b> Every action costs days, and days are bounded by board churn — jobs expire while you spend them. Nuyen replenishes; time doesn't. Crafting a program, scouting a target, running a mission, and healing a runner all compete for the same finite days, so the deepest strategic layer is time allocation, not the bank balance.</p>
+      <p><b>The roster is an infinite money sink.</b> Because it scales horizontally — always another elite to hire out, another specialist to add, another veteran to chrome — accumulated wealth always has somewhere to go. Paired with the super-linear cost curves of §01 (gaps grow with scale), that's what stops hoarding from ever trivializing the game. <b>Failure also feeds the economy:</b> wounds and wipes are sinks triggered by loss, which is what gives caution real monetary value rather than only costing time.</p>
+      <p>Two secondary-yield loops run in parallel and exit differently: a Matrix run's stolen <b>data</b> converts to nuyen through a fence; an Astral harvest's <b>reagents</b> convert straight to crafted gear with no nuyen middleman. Same "grab extra on the way out," two different off-ramps.</p>
+      <div class="open-note"><b class="tag">Tuning, later</b> — sink adequacy (the anti-hoarding curve) is the balance question this graph can't answer without numbers: do the super-linear costs actually keep pace with high-tier income across hundreds of days? A playtest question, flagged not solved.</div>
+    </section>
+
+    <section id="archetypes">
+      <div class="section-head"><span class="section-index">04</span><h2>Archetypes &amp; Skills</h2></div>
+      <p class="section-dek">Every specialty in the game has to earn its roster slot — and variety comes from the skills the game actually uses, not from a designer-imposed list of roles to fill.</p>
+
+      <div class="card">
+        <h3 style="margin-top:0;">The rubric: Distinct, Frequent, Versatile</h3>
+        <p>A specialty must be genuinely different from what a generalist already does (<b>Distinct</b>), come up often enough to matter regularly (<b>Frequent</b>), and have at least two meaningfully different ways it gets used (<b>Versatile</b>). A specialty that fails any of these is either redundant, a dead roster slot, or a one-trick pony.</p>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h3 style="margin-top:0;">The design law: systems are expensive, rows are cheap</h3>
+        <p>A focus may only <b>recombine verbs the game already has</b>. If it needs a new system to be playable, it's not an archetype — it's scope creep. Every focus below is expressible as generator data (stat templates, origin flags, access permissions on existing verbs), which is how the roster grows forever in <em>variety</em> without ever growing in <em>systems</em>.</p>
+      </div>
+
+      <h3>Fighters: skill focuses, not predefined roles</h3>
+      <p>The unit of variety is the meatspace <b>skill</b> a runner has focused into. Street Samurai and Physical Adept aren't single archetypes each needing to individually clear the rubric — they're two power sources (cyberware, magic) that can each be paired with any skill focus, and the combination is what a player evaluates on a dossier.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Skill focus</th><th class="wrap">Real tradeoff</th><th class="wrap">Street Samurai flavor (cyber)</th><th class="wrap">Physical Adept flavor (magic)</th></tr></thead>
+          <tbody>
+            <tr><td>Heavy Weapons</td><td class="wrap">Slow to reposition, ammo-hungry — a stationary threat, not a mobile one</td><td class="wrap">Cyber-reinforced frame and a literal machine-gun arm to handle the recoil and weight</td><td class="wrap">Supernatural strength to wield and carry heavy ordnance with no cyberware at all</td></tr>
+            <tr><td>Demolitions</td><td class="wrap">Loud, always — grenades are not remotely stealthy, full stop</td><td class="wrap">Quick-draw grenade rigs, blast-resistant plating</td><td class="wrap">Magically precise throwing accuracy, or a danger-sense for perfect timing</td></tr>
+            <tr><td>Stealth</td><td class="wrap">Trades raw damage and durability for never being seen</td><td class="wrap">Optical-camo-adjacent cyberware, sound dampening</td><td class="wrap">An actual Adept power — silent movement, minor invisibility</td></tr>
+            <tr><td>Melee / Martial Arts</td><td class="wrap">Has to close distance first — vulnerable to anything at range</td><td class="wrap">Spurs / Hand Razors cyberware</td><td class="wrap">Enhanced reflexes and combat sense — and the Adept exclusive: Killing Hands can strike dual-natured creatures barehanded, the mundane-adjacent answer to a ghoul or spirit</td></tr>
+            <tr><td>Marksman</td><td class="wrap">The patience game — position and exposure management, useless in a scrum</td><td class="wrap">Smartlink cybereyes, stabilization rigs</td><td class="wrap">Enhanced perception and preternatural stillness</td></tr>
+            <tr><td>2nd-Story / Athletics</td><td class="wrap">Entry through windows, roofs, and gaps others can't path to — light gear only</td><td class="wrap">Cyber-parkour: enhanced limbs, grip pads</td><td class="wrap">Wall running, great leap, light body — the circus-performer Adept</td></tr>
+            <tr><td>Tank / Close Protection</td><td class="wrap">Draws fire and holds the line — low damage output, their value is what never reaches the rest of the crew</td><td class="wrap">Dermal plating, bone lacing, reinforced frame</td><td class="wrap">Mystic armor and pain resistance — the immovable Adept</td></tr>
+            <tr><td>Combat Medic</td><td class="wrap">Fights <em>and</em> heals — worse at each than a specialist, better than nothing at both: the spread-focus generalist</td><td class="wrap">Biotech suites, trauma-response wetware</td><td class="wrap">Steady hands and pain-resistance transferred to patients</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note" style="margin-top:14px;">
+        <b>Mundane healing is strategically load-bearing:</b> magical healing takes a penalty against low-Essence targets, and stims and medkits don't care. A heavily-cybered crew's healer <em>has</em> to come from the mundane side — the Combat Medic or the Street Doc (below) — while natural crews can lean on the healer mage. The healers aren't interchangeable, and the roster decides which one a given crew needs.
+      </div>
+
+      <h3>Mages: the spell categories are the skill focuses</h3>
+      <p>Each focus answers two questions — what they do embodied on a team job, and what they do when they project:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Focus</th><th class="wrap">Embodied (meatspace)</th><th class="wrap">Projecting (astral)</th></tr></thead>
+          <tbody>
+            <tr><td>Combat</td><td class="wrap">Battle-mage in the formation — spells as artillery</td><td class="wrap">Spirit-killer and mage-hunter: clears hostile spirits, fights dual-natured Infected through the walls they think protect them, astral overwatch</td></tr>
+            <tr><td>Detection</td><td class="wrap">Mind-probe interrogation, detect-enemies as living radar</td><td class="wrap">The spy: tail a target invisibly, astral forensics (read signatures — who cast what, here, when), track an aura trail across a district</td></tr>
+            <tr><td>Health</td><td class="wrap">The medic — and the one who keeps a lightly-cybered team standing</td><td class="wrap">Bio-assensing: diagnose through walls — which hostage is wounded, which guard is augmented, and who's infected or possessed. Hunt jobs are theirs</td></tr>
+            <tr><td>Illusion</td><td class="wrap">Ghost-run gold: invisibility and silence for the team, physical-mask disguises to walk in as guards</td><td class="wrap">The stealthiest projector — aura masking, astral decoys</td></tr>
+            <tr><td>Manipulation</td><td class="wrap">The thief mage, a lore-legal two-phase loop: project to case the vault interior, then return to body and work from outside the room — clairvoyance to see in, magic fingers to lift the keycard. Steals from rooms nobody enters</td><td class="wrap">The casing phase of the same loop</td></tr>
+            <tr><td>Conjuring</td><td class="wrap">Materialized spirit muscle in the formation</td><td class="wrap">The magical rigger: spirits are their drones — send an elemental in instead of a body, post watcher spirits as living cameras</td></tr>
+            <tr><td>Enchanting</td><td class="wrap">Crafts foci and one-shot preparations for the armory — the mage the equipment economy runs through</td><td class="wrap">Reagent dowsing and harvesting — Astral's economy loop, feeding the armory raw materials</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><b>Ritual magic is a job-enabler, not a playable focus:</b> remote magical work requires a material link (hair, blood, a beloved object), which generates meatspace fetch-jobs that unlock ritual-support options — a built-in cross-pillar combo in the same shape as the tag system. <b>Aspected vs. full mages is the pricing axis:</b> a cheap aspected conjurer who only summons, a mid-price detection specialist, a rare full mage touching several categories but mastering none — dossier-evaluation texture with no new systems.</p>
+
+      <h3>Deckers: one archetype, tilted by dossier</h3>
+      <p>The Matrix game is already the specialization engine — the runner's stats and the deck the operation issues them tilt it. A Masking-leaning decker ghosts the long routes; an Attack-leaning one brute-forces the short ones and counter-hacks enemy deckers; a Search-leaning one maximizes the data-selling economy and reads stolen files for tags other crews would miss. All dossier variance within the one card system, no separate focuses required.</p>
+
+      <h3>Riggers: one archetype, the drone defines the verb</h3>
+      <p>Equipment defines behavior — the same principle as demolitions charges. A recon-class drone grants the jump-in scouting mode; a combat-class platform grants the extra-body formation behavior; a medic-class drone grants an extra healing body (all specified in §07). The runner's focus stats define <em>proficiency</em>, not permission — a recon-lean rigger can run a combat platform badly, the way any specialist holds off-spec gear.</p>
+
+      <h3>Face / Thief</h3>
+      <p>Reduces Alert/Response through social means instead of hacking, broadened with lockpicking and sleight of hand — see §07.</p>
+
+      <h3>Street Doc</h3>
+      <p>The fighter family's dedicated support archetype and the physical mirror of the healer mage: in formation they contribute healing via drugs and stims and <b>no damage at all</b>, they carry the field-revive on-task verb, and their real depth is the workshop — cyberware development and implant surgery as internal jobs (§03). The two dedicated healers split the game's crews along the Essence line: magical healing is penalized against chromed patients, stims don't care — so chromed crews need the Doc, natural crews can use the mage, and the Doc's own products create the demand for his services.</p>
+      <div class="note"><b>One role, four fillers — healing:</b> the healer mage (zero damage, magical, astral-capable, Essence-penalized), the Street Doc (zero damage, stims, crafting depth), the Combat Medic (fights <em>and</em> heals — worse at each than either specialist, better than nothing at both, per the spreading-focus rule), and the rigger's medic drone (§07 — an extra healing body from one seat, fragile and permanently lost when destroyed). Same role, four tradeoff shapes, no dominant answer.</div>
+
+      <h3>Origins: the generator's variety engine</h3>
+      <p>Every focus in every family can appear in the market under multiple origins — mundane skill, cyberware, adept power, infection. A Stealth specialist might be a camo-chrome samurai, a traceless-walk adept, or an HMHVV night-stalker; a Face might be a mundane grifter, a kinesics social adept, or a pheromone-tailored cyber-charmer. The focus defines what they do; the origin defines flavor, price texture, and edge cases (the adept punches ghosts; the infected Face can't work day jobs). Focuses × origins × stat rolls — effectively inexhaustible, and all of it data, not systems.</p>
+
+      <h3>Generalist vs. Specialist: shape, growth, and the marketing gap</h3>
+      <p>Cutting across every focus is one more axis with an outsized role: whether a runner is a <b>Specialist</b> (one towering skill, several weak ones paying for it) or a <b>Generalist</b> (a spread of solid skills, no single peak). One stored flag does three jobs at once:</p>
+      <ul class="qlist">
+        <li><b>Shapes the starting skills</b> at generation — the specialist template rolls peak-and-valleys, the generalist a broad spread.</li>
+        <li><b>Drives growth.</b> Karma is awarded per job, scaled to the job's size (a big job levels a runner by more than a point), and the archetype spends it automatically: a Specialist pours it into their focus skill so the peak climbs; a Generalist spreads it so the base rises broadly. Watching a runner develop along their nature is a real payoff, and fielding your best on big jobs is how you accelerate it.</li>
+        <li><b>Sets the price</b>, through a visible dossier line — <b>Discipline</b> — reading <em>Generalist</em>, or for a specialist naming the focus (<em>Discipline: Heavy Weapons</em>). The Specialist lens pays a premium for the single highest skill; the Generalist lens pays for breadth.</li>
+      </ul>
+      <p><b>Three things, only one hidden.</b> A runner's <em>current skills</em> are always fully visible — you never gamble on what they can do today. The <em>Discipline line</em> is visible too: the price lens and an 80%-reliable forecast of how they'll grow. The only hidden value is the <em>true archetype</em>, which matches the label 80% of the time — 10% they think they're more focused than they are, 10% broader. That mismatch is a slow-burn surprise, surfacing over jobs as the runner develops the "wrong" way: the "Specialist" whose peak quietly plateaus while they spread, the "Generalist" who quietly sharpens into an elite peak. It reveals through employment and watching, never as a coin-flip at purchase — which is what makes the <b>retainer the audition tier</b>: retain a promising runner, watch how they actually grow across the block, then decide if they're worth a permanent buy.</p>
+      <p><b>Current shape is independent of the archetype</b>, and that's what makes the market interesting. A street sam can have a tall Stealth today but a Generalist Discipline — priced for breadth, so that Stealth is underpriced <em>right now</em>, a genuine near-term bargain, even though he'll broaden rather than sharpen. Reading a dossier is reading three things at once: what they do now (shape), how they're priced and likely to grow (Discipline), and the small chance the forecast lies (revealed over time). Pricing stays clean — <b>Discipline lens × current visible skills</b> — landing at fair value 80% of the time and the rewarding over/under the other 20%.</p>
+      <p>And because combat is turn-based, <b>on-task actions are gated by skill, not archetype</b> — any runner takes any on-task order their skills support, on their turn. That makes the Generalist a first-class pick rather than a lesser specialist: their breadth means several on-task options from a single one of your four slots (pick this, plant that, talk past him), where a specialist brings one at elite level. Flexibility versus peak — a real composition choice, sitting underneath the whole marketing-and-pricing game.</p>
+
+      <h3>Essence — resolved</h3>
+      <p>Cyberware permanently costs Essence; Essence caps a mage's Magic attribute. That penalty runs one direction only: Essence loss costs Magic, never Matrix skill. There's no reason to build a symmetric penalty for a character trying to be both, because no single runner ever needs to be both — the roster has one decker and one mage, hired separately, each specialized in their own thing. That tension only ever existed as a holdover from a single-character framing where one person might have needed to do everything; it doesn't apply here.</p>
+      <p>Because runners are individually generated rather than built by the player, even a rare hybrid runner who does show up in the market pool doesn't need a managed system — their dossier just shows a lower Magic ceiling than a same-price pure mage would have, baked into their generation, evaluated the same way price or any other stat is.</p>
+      <p>A non-combatant Healer-mage — full-time support, zero kill contribution — is a real, valid roster role under this system. The specific mechanic worth building around: healing/Health spells take a dice-pool penalty scaled to how much Essence a target has lost from their own starting maximum. A heavily cybered runner is genuinely harder to magically sustain, because Health spells work by nudging the body back toward its "ideal" state, and heavy modification has moved that goalpost.</p>
+    </section>
+
+    <section id="matrix-design">
+      <div class="section-head"><span class="section-index">05</span><h2>The Matrix — Full Design</h2></div>
+      <p class="section-dek">§14 documents the source game's version. Ours is a node-traversal puzzle wrapping a deck-building combat/stealth layer, run by whichever decker is assigned to the job — using a deck the Johnson owns, not one the runner personally carries.</p>
+
+      <div class="card">
+        <h3 style="margin-top:0;">The deck is the Johnson's, not the decker's</h3>
+        <p>RAM, program loadout, and every deck stat belong to a piece of equipment the player builds and upgrades over time — part of the equipment armory described in §03 — and issues to whichever decker is running a given job. A player can own more than one deck. Two decker runners and one top-tier deck means a real choice about who gets the good hardware for a given job, which is exactly the kind of resource tension the rest of this design leans on.</p>
+      </div>
+
+      <h3>Four layers</h3>
+      <div class="run-grid">
+        <div class="run-card"><h4>1. Intel</h4><p>What's known about the system before committing — rough at first, earned in full through repeated runs.</p></div>
+        <div class="run-card"><h4>2. Loadout</h4><p>The deck locked in at mission start, built against that intel from a single shared RAM budget.</p></div>
+        <div class="run-card"><h4>3. Route</h4><p>Which path through the node graph is taken — a live trade between Alert exposure and card expenditure.</p></div>
+        <div class="run-card"><h4>4. Encounter</h4><p>The card resolution at each node — programs vs. ice, decided turn by turn.</p></div>
+      </div>
+
+      <h3>Intel is earned through repetition</h3>
+      <p>Astral scouting can't feed a decker intel — the Matrix is a wholly virtual space, so it earns its knowledge the hard way, through the assigned decker's own attempts:</p>
+      <ul class="qlist">
+        <li><b>First contact</b> is always rough — a briefing gives the shape of a system, never a precise map.</li>
+        <li><b>Every attempt teaches what was reached.</b> Nodes cleared or scouted stay known across separate attempts.</li>
+        <li><b>Failure has teeth, but isn't a dead end.</b> Getting dumped triggers a consequence — a timed lockout, hardened ice next attempt, or something contextual — and can poison a linked meatspace job on the same target the way a clean run sweetens one (see §06).</li>
+        <li><b>Nothing learned is guaranteed to stay true.</b> A system that's been broken into doesn't sit still.</li>
+      </ul>
+
+      <h3>Loadout: one shared budget, three kinds of cards</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th class="wrap">Behavior</th><th class="wrap">Example</th></tr></thead>
+          <tbody>
+            <tr><td>Permanent / reusable</td><td class="wrap">Always active once equipped — no charges — until an enemy program suppresses it for a window.</td><td class="wrap">Detection, Stealth / Masking</td></tr>
+            <tr><td>Impermanent / reusable</td><td class="wrap">Owned permanently; at loadout, choose how much RAM to spend on charges. Refillable mid-run at a cost.</td><td class="wrap">Blast, Heal, Wipe</td></tr>
+            <tr><td>Permanent / consumable</td><td class="wrap">True one-time use, no refill, ever. The payoff for precise intel.</td><td class="wrap">Mission-specific databombs, high-density Anti-ICE modules</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>Refilling:</b> one action remakes any quantity of one already-owned program's charges — cheap regardless of quantity. Each <em>distinct</em> program refilled costs its own action, and every action at a node ticks Alert. Suppressed nodes emit far less Alert, making a cleared hub a natural restocking base.</div>
+
+      <h3>Route: Alert vs. cards</h3>
+      <p>The long, stealthy route bleeds Alert (exposure scales with node count and, per node, with node <em>type</em> — an SPU barely registers, a DS or CPU ticks hard per turn spent there). The short, aggressive route bleeds cards punching through Barrier and Black Ice. The objective node always costs cards too, so no pure-stealth loadout skips paying at the finish line.</p>
+
+      <h3>Alert tiers &amp; Response Level — worked example</h3>
+      <div class="diagram">Alert   0 ─── 10 ─── 20 ─── 30 ─── 40 ─── 50
+Tier      1      2      3      4      5</div>
+      <p>An 18-Blast loadout on a route that breaches Alert 30 (Response 3) needs roughly a third more copies per fight than at Response 2. The real question is whether some of that RAM is better spent on Wipe — 9 Alert cleared per use, costing as much RAM as 10 Blast or 5 Heal — suppressing the curve itself instead of just fighting it head-on.</p>
+
+      <h3>CPU Cores — the mid/late-game unlock</h3>
+      <p>A deck hardware stat that lets a decker play multiple cards in one action, any combination — and applies to refill actions too, easing the "diverse loadout costs more logistics" tax as a reward for investment.</p>
+
+      <h3>Data: the run's second payday</h3>
+      <p>Beyond the contract objective, a decker can pull extra datafiles from datastore nodes on the way out — "grab all the data you can." Pulled data occupies the deck's <b>Storage</b> (a deck stat distinct from RAM loadout): a bigger deck carries a bigger haul, and a data-greedy run is capped by whatever storage you brought. Files sell to a fence for nuyen scaling with the system's tier and the data's quality, and a Search-leaning decker (§04) finds more and better. This is the Matrix's parallel to looting a physical site, and it can <em>exceed the contract fee</em> — the run's real profit is often the data, not the pay. That creates a clean risk/reward: the deeper and longer you stay to fill storage, the more Alert you eat, so profit trades directly against safety. It's the economy loop that makes a good decker self-funding — data buys the better deck that pulls deeper for more data.</p>
+
+      <h3>Signal distance</h3>
+      <p>A decker doesn't have to be physically on-site to jack into a system, but effective range is limited by signal strength and interference — the same constraint riggers work under (§07). Early on, a decker has to go on-site to hack, full stop, which makes them a real, protectable body on the mission — that's part of what solo specialist missions are for teaching (§07). A signal relay is a later-game equipment unlock that extends effective range, letting a decker work from off-site — which matters beyond convenience, because it frees up a crew slot for another fighter instead of spending one on a body that has to sit at a terminal.</p>
+
+      <h3>Mid-mission runs</h3>
+      <p>A <b>full jack-in</b> during a meatspace mission uses this same Matrix game at full depth, interleaved into the shared turn order per §07: the hot-sim decker gets ~4 Matrix actions per meatspace round (the canon 4-dice differential), taking their node-crawl turns while the fight advances and the enemy shoots their slumped body in between. The Matrix system itself never changes; only the pressure on it does — every action spent decking is a round the body sits undefended. A <b>quick hack</b> (§07's on-task table) never enters the node-crawl at all — it's a single combat action against one subsystem, no scene switch, faster and shallower by design.</p>
+
+      <div class="open-note"><b class="tag">Open — leaning against, still intrigued</b> — should a Matrix job ever support more than one decker at once, splitting or sharing a node graph? Current lean is no, mostly to protect the "lone hacker" identity and avoid a real complexity jump, but it's not closed.</div>
+    </section>
+
+    <section id="jobboard">
+      <div class="section-head"><span class="section-index">06</span><h2>Jobs, The Board &amp; Missions</h2></div>
+      <p class="section-dek">What a job actually is, how the board serves them up, and how a mission plays start to finish. The foundational meta-layer that turns the three pillars into a game with stakes.</p>
+
+      <h3>Jobs and missions are not the same thing</h3>
+      <p>A <b>job</b> is the contract: one hiring faction, one nuyen payout, paid once on completing the job's success criteria (generally "every included mission done"). A <b>mission</b> is the actual dispatch unit — the thing a crew is actually sent to do. A job bundles <b>one or more missions</b>, all for the same client — and <b>not inherently as a sequence</b>: by default its missions complete in any order, interleaved with whatever else the operation is running that week, and the only universal constraint is that they all land inside the job's window (the deadline below). But some contracts are genuine <b>chains</b> — "go get this item, take it to that place, and plug it in to hack their system" is three missions that only work in order — and a chained leg can't even be dispatched until its prerequisite is done. A prerequisite resolved earlier <em>the same day</em> opens the gate immediately: running an entire chain inside one action period is legal and actively desirable, because the target never gets a night to raise its security between legs — speed of execution is a reward, not an exploit. Order is per-job structure where the fiction demands it, never a blanket rule in either direction. A single job can have <b>multiple target factions</b> across those missions — the client stays constant, who you're sent against along the way doesn't have to.</p>
+      <p><b>Nuyen is a job-level event; Karma is a mission-level one.</b> Completing a mission's objective pays Karma to the runners who ran it, regardless of whether that mission was the job's actual contracted deliverable or just prep work along the way — sending a couple of runners to gather intel or take out a specific security post before the closing team goes in. Those runners earned their Karma; the client never contracted for that specific task, so it doesn't trigger payment. The player only gets paid once, when the job's actual deliverable is complete. This is what makes "soften up a hard target before committing the real team" a genuine tactical choice with a real cost (more runner-days spent) and a real benefit (an easier closing mission, and growth spread across more of the roster) — not a way to get paid twice for one contract.</p>
+      <p><b>Pay is priced off perception; Karma is earned off reality.</b> A client's fee reflects the <em>estimated</em> security picture relevant to the mission's domain — a site everyone believes is matrix-lite commands a lower fee for a data heist, whatever the truth turns out to be. Karma reflects the security threat the runners <em>actually faced</em>, keyed primarily to the site's live security values at the start of the mission — escalation a crew calls down on itself mid-run is a problem, not a growth opportunity. The gap between the two numbers is where scouting pays twice: a mission against a mismatched site (weak Matrix behind fearsome physical security) is cheap money but real experience — and cross-pillar play falls out for free: take over the Matrix security to gut the physical coverage, then walk in and see what they're hiding. Site reuse is deliberately Orientation-agnostic for exactly this reason: any site with the right anchor can host any mission, and the mismatch is a discovery, not a matchmaking error. And the player chooses with the same information the clients price off: every mission on the menu shows the <b>estimated</b> security picture in <b>true form — a 1-10 number per axis</b> — but only 60-70% of those numbers survive contact with reality. The rest are wrong or stale, sometimes by a little, sometimes wildly, and that BS rate is deliberate: it's the tuition that teaches the value of recon. The intended experience: "looks like low Matrix security, let's poke around there first... okay, a little hotter than we thought, but not too bad... and now I have the cameras... wait — there's <em>nobody</em> inside. Physical was supposed to be hot and it's ICE cold. We go in with stealth instead of armor." Recon replaces an estimate with a confirmed, day-stamped actual that goes stale on the §09 horizon; choosing on estimates or stale intel is always allowed, and always a knowing risk.</p>
+      <p><b>Deadline is a price axis.</b> Shorter job windows pay more for the same legs: a tight deadline forces committing more of the roster at once, in less time — raising the real odds of running out of resources mid-contract or eating a permanent wound to keep the schedule. The rush premium prices that risk; a generous window is the discount for being allowed to take it slow.</p>
+      <p><b>A job's total scope is what scales without bound, never a single site.</b> A site's Value is capped at 10 forever (§09) — that's by design, not a limitation to route around. The actual mechanism for a job's payout (and difficulty) to keep growing as the operation matures is <em>how many missions, across how many sites, get bundled into one job's window</em> — a mature operation can complete far more missions inside an allotted window than a fresh one, and that's what lets total pay scale, not any single site's ceiling moving.</p>
+      <div class="note"><b>Vocabulary contract — the layer test.</b> Jobs take contract verbs: <em>accepted, expired, completed, paid</em>. Missions take dispatch verbs: <em>assigned, sent, run, resolved</em>. A job is never dispatched and a mission never pays nuyen; a job completes only as a downstream consequence of missions achieving its objectives. An accepted job contributes <b>job-derived objectives</b> to the mission menu, alongside recon, crafting, and resource-gathering objectives — "job-derived objectives" is the correct phrase in any list of things runners get dispatched to do; "job completion" never belongs in such a list. Any sentence that attaches a dispatch verb to "job" or a contract verb to "mission" is wrong before its content is even considered.</div>
+      <p>A <b>mission</b> is generated from <b>an objective verb × a payload domain × a site × a tier</b> — the grammar that regenerates the 1994 seven, the astral catalog (§08), and more, without special-casing any of them.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Objective verb</th><th class="wrap">What the contract asks</th><th class="wrap">Natural fail state</th></tr></thead>
+          <tbody>
+            <tr><td>Acquire</td><td class="wrap">Get an object out of a secured site</td><td class="wrap">Object destroyed, or its carrier downed and it's lost</td></tr>
+            <tr><td>Extract</td><td class="wrap">Get a <em>person</em> out, willing or not</td><td class="wrap">The person dies</td></tr>
+            <tr><td>Eliminate</td><td class="wrap">Neutralize a target — person, gang, nest, spirit</td><td class="wrap">Target escapes</td></tr>
+            <tr><td>Sabotage</td><td class="wrap">Destroy or disable a thing (reactor, system, ritual)</td><td class="wrap">The thing survives intact</td></tr>
+            <tr><td>Intel</td><td class="wrap">Gather information and leave <em>unseen</em></td><td class="wrap">Detected — the one verb where being seen <em>is</em> the failure</td></tr>
+            <tr><td>Plant</td><td class="wrap">Place something — evidence, a bug, a charge, a frame</td><td class="wrap">Placement witnessed, or the plant found</td></tr>
+            <tr><td>Protect</td><td class="wrap">Keep a payload alive through a threat window</td><td class="wrap">Payload lost</td></tr>
+            <tr><td>Deliver</td><td class="wrap">Move a payload through hostile ground to a drop</td><td class="wrap">Payload lost en route</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The <b>payload domain</b> — physical, data, or astral — routes the same verb without changing it: Acquire+data is a Matrix heist, Acquire+physical a vault break-in, Eliminate+astral a banishing, Extract+physical a kidnapping. And the solution stays multi-path per plurality-not-parity (§09): a data heist can be a remote hack, an on-site jack, or a physical grab of the server itself.</p>
+
+      <h3>Three mission families — where the challenge lives</h3>
+      <div class="run-grid">
+        <div class="run-card"><h4>Infiltration</h4><p>Crack a secured, static site and do the objective inside. Up to 4 runners. The core loop — most Acquire / Extract / Eliminate / Sabotage / Intel / Plant missions.</p></div>
+        <div class="run-card"><h4>Gauntlet</h4><p>Defend a <em>moving</em> payload through a hostile route. Up to 4 runners. Protect and Deliver — the inverted challenge where you're the security, and the site model must support route-shaped sites, not just buildings.</p></div>
+        <div class="run-card"><h4>Remote</h4><p>A lone specialist works a pillar from safety — decker jacks in from the hub, mage projects from home, no site to breach. 1 runner. The pure-Matrix / pure-Astral mission, and what solo specialist missions (§07) teach.</p></div>
+      </div>
+      <p>A job can bundle missions of different families — an Infiltration recon mission to soften a target, then a Gauntlet mission to move the actual payload out, all one contract, one client, one payout at the end.</p>
+
+      <h3>The world is a persistent pool of targets</h3>
+      <p>The board doesn't generate jobs in a vacuum — each mission within a job generates <em>against</em> a durable pool of world entities: <b>sites</b> (§09, each with its seed, security ratings, and accumulated tags) and <b>factions</b> (corps, gangs, syndicates that own sites and hold grudges). These persist across days. Jobs and missions are transient; the targets they hit are not. That's the whole foundation of the tag system — "hack Renraku Downtown" and "infiltrate Renraku Downtown" can only be linkable if Renraku Downtown is one persistent site both missions point at.</p>
+
+      <h3>Every job has one client; every mission has its own target</h3>
+      <p>The Shadowrun structure: you're hired <em>by</em> someone to hit <em>someone else</em>. A job carries one <b>hiring faction</b> (hires you, pays you, you build standing with) for its whole duration. Each mission within that job carries its own <b>target faction</b> (the site/faction that mission is sent against, who accrues heat toward you) — usually drawn from the persistent faction pool, and never the same faction as the client. Hitting Renraku for Aztechnology raises your Aztechnology standing and your Renraku heat. This standing layer is light — two numbers on each faction entity (your standing, their heat) — and it mostly feeds modifiers already defined: target heat raises complication odds (the "hot target" modifier), client standing lowers them and unlocks better contracts. It's the plumbing that makes the pool feel political instead of random. (This per-faction <em>standing</em> is distinct from the Johnson's own single global <b>Reputation</b> trait, below — standing is "how this one faction feels about you," Reputation is "how good a Johnson you've proven to be, period.")</p>
+
+      <h3>Reputation: the Johnson's own trait, not a per-faction number</h3>
+      <p>Completing a job raises the Johnson's <b>Reputation</b> — a single, global trait representing negotiating power as a fixer: access to and discounts on the things a Johnson buys (gear, hires, upgrades), independent of any one faction's opinion of you. It's deliberately simple in shape (one number, goes up on job completion) so it can exist now and get real teeth later, once there's an armory/purchase system for it to actually modify. Exactly how much a job should be worth in Reputation, and exactly what Reputation unlocks or discounts, is intentionally not designed yet — a placeholder proving the trait exists, not a tuned number.</p>
+      <div class="open-note"><b class="tag">Planned extension</b> — enough heat can turn a former target into an aggressor: a "hit squad" complication on unrelated jobs, or a defensive Gauntlet job where <em>you're</em> the one being hit. Falls out of the same heat number for free, flagged as a planned escalation rather than core day-one.</div>
+
+      <h3>Generation: reuse vs. introduce</h3>
+      <p>Every time the board spawns a job, the generator either <b>reuses</b> an existing pool target or <b>introduces</b> a fresh one. Reuse creates persistence and combos — a target with a live tag, or two jobs sharing a target in overlapping windows. Introduce keeps the world varied. The ratio is a tuning dial. Critically, <b>combos are never telegraphed</b>: the generator doesn't label two jobs as linked. It just reuses targets often enough that overlaps occur — sometimes deliberately spawning a small <em>cluster</em> against one hot target — and the silent tag system rewards the player who notices. The magic is emergent, not scripted.</p>
+      <p><b>Security is a result of the site, not the other way around.</b> A job slot's target Value comes from the board's own tier-distribution policy (below) — a "stretch" slot is looking for a high-Value site, a "safe" slot a low-Value one — and its Orientation preference comes from the slot's payload domain (a Matrix-flavored slot wants a Matrix-leaning site, an astral job wants an Astral-leaning one). Reuse picks the closest existing pool match to that need; introduce generates a fresh site calibrated to it (§09). <b>A job's tier and pay are simply a readout of whichever site got matched</b> — never a separate independent roll. The match doesn't have to be exact, and it's meant to run a little harder or a little easier than the tier label implies sometimes — but that gap is discoverable, not hidden: it's exactly what scouting already exists to reveal. A Physical scout on a "safe" job that happened to match an unusually well-defended site turns up real guard counts and camera inventory that plainly don't fit a "safe" label, the same way any other static fact does — the label is a starting guess, the scout lens is the truth.</p>
+      <p><b>Not every introduced site earns a permanent home.</b> A freshly introduced site doesn't enter the persistent pool for free — it only graduates there once it actually accumulates a tag or a scouted intel snapshot. A one-off job that leaves no mark and was never scouted simply isn't worth storing in detail; it stays a bare seed, the same asymmetry that already governs unwatched runners (§03). The save grows with what the player actually touched, not with how many jobs were ever generated — this is what keeps "some locations recur and visibly evolve" true without every site the board ever spawned piling up in the save file forever.</p>
+
+      <h3>Board size, refresh &amp; scaling</h3>
+      <p>A handful of active contracts at once (4–8, a tuning number) — enough for real choice, not overwhelming. The board refreshes on <b>day-advance</b>, not a real-time clock: each day spent, expired jobs roll off and new ones spawn. Never empty, never static. Board capacity is a natural hub upgrade — a better fixer network surfaces more and better contracts — mirroring roster-board expansion. The tier distribution always offers three rungs: a <b>safe</b> low-tier job (cheap income, a place to blood disposable runners — the gangers-as-bait economy needs these to always exist), a <b>bread-and-butter</b> middle, and a <b>stretch</b> high-tier job. As the operation grows, the distribution's center shifts up — the difficulty treadmill climbing in lockstep with the gear treadmill — but the low tail never vanishes. The board scales to you, so there's always a next rung and always a safe fallback. Alongside tier, the board scales a second axis — <b>crew complexity</b>: early jobs suit a solo or a flexible pair, and over time it draws out multi-domain needs (two runners, then specific pairings, then three, and up), never hard-gating them per plurality-not-parity (the astral barrier is trivial for a mage and brutal to brute-force, so diversity is rewarded, not required). That ramp is what paces a player into the four-domain operation (§07) instead of dumping it on them.</p>
+
+      <h3>Crew size: intended, runnable, and solvable are three different things</h3>
+      <p>Every job generates with an <b>intended crew size</b> — sometimes a fixed number (a Remote job is always 1; certain sites will demand exactly 2 or exactly 3, for reasons a later polish pass names), sometimes a suggested range ("3–4 runners"). It's board-card metadata, visible before you commit, not a hidden fact scouting reveals.</p>
+      <p><b>Runnable is universal — any job accepts any crew from 1 to 4</b>, regardless of what it asks for. Nothing in dispatch hard-gates on headcount; sending fewer than intended, or all four when the job wanted one, is always allowed. Deviating from the intended size shifts difficulty, but it never blocks the attempt.</p>
+      <p><b>Runnable is not solvable.</b> Whether a crew succeeds is a question of which skills are present, not how many bodies are — a crew of the "right" size with the wrong composition fails exactly as hard as a crew of the wrong size. Send three mages and a physical adept at a site whose only way in requires cracking an air-gapped mainframe, and they do not succeed, no matter how strong any of them are individually — nobody in that crew holds an affordance that opens that door. This is load-bearing, not an edge case to guard against: it's what makes roster composition the actual decision, instead of "field your four highest-stat runners at everything."</p>
+
+      <h3>The card shows the shape, not the surprises</h3>
+      <p>A board card shows client, target, objective verb, family, tier, pay, intended crew size, and the expiry countdown — enough to choose. It does <b>not</b> show hidden complications; those are the static facts scouting exists to reveal (below). You pick a job on its visible shape and its price, and learn what you actually walked into by scouting or by bleeding.</p>
+
+      <h3>Time is spent, not elapsed</h3>
+      <p>The base unit is a day, and nothing advances except what's spent — running a job, scouting one, resting. Every job card shows a live countdown to its own expiry.</p>
+
+      <h3>The action period: one day, every eligible runner</h3>
+      <p>A day is an <b>action period</b>, and the unit of assignment is <em>per runner</em>, not per player-turn: every runner currently eligible to receive one gets one action for the period — craft, scout, run a mission, treat a patient, rest. This is the actual payoff of growing the roster: a two-runner operation gets two things done a day; a mature operation runs several missions, keeps a crafter at the bench, and has a scout in the field, all in the same period. Whatever the day-clock and job-board eventually meter out, it has to keep paying off a bigger roster with strictly more done per period — never a flat per-day cap the roster outgrows.</p>
+      <p><b>Two resolution paths, one period.</b> Actions the player doesn't need to play resolve automatically at the end of the period — a quick-resolved scout, a crafting tick, a rest. Actions the player wants to actually play are <b>queued</b> in a chosen order and resolved one scene at a time, in that order, even though every one of them is still "today."</p>
+      <p><b>Suppression — softening a target lasts the rest of the day.</b> Every successful mission against a site leaves its mark on the defenses it beat: recon suppresses the lens it swept (a <em>Matrix</em> sweep suppresses the <em>physical</em> grid — it's the cameras and maglocks the decker quietly looped), astral work cracks the wards, physical strikes and data payloads degrade the meat security. Suppression grants bonus dice against matching-projection obstacles for every later mission at that site <em>that same day</em>, stacks to a cap, and vanishes overnight — the night resets what the crew switched off. This is the mechanic that makes the day-queue the real game: spend a decker's action remotely tenderizing each target, then send the ground teams in behind — the softening is real, the cost is real (that decker isn't on the ground team today), and softening done <em>loudly</em> still feeds Alert even as it opens doors, so the ghost-quiet tenderize is the premium play. Karma stays keyed to the site's unsuppressed posture: softening lowers the risk, never the books.</p>
+      <p><b>Queue order creates real dependencies within the same period, not just flavor sequencing.</b> Queue a Matrix run first and a meatspace team second, and the meatspace crew benefits from whatever the remote run already accomplished — cameras dead, a door already open — despite both happening the same day. Queue a meatspace team to physically plant a relay, then queue the decker to remote in <em>after</em> that mission resolves, and the relay is a genuine prerequisite the hack couldn't happen without (§07's signal-range rule), not just an ordering preference. This is the management-level version of the same idea §07's focus/hot-rotate splitting expresses <em>inside</em> one mission — except here it spans separate runners on separate jobs across the whole board, not one crew split across fronts on one job.</p>
+
+      <h3>Scouting: pick your lens, play it or resolve it</h3>
+      <p>Pre-job scouting is a choice of scout type, each costing one day and requiring a roster runner with the relevant capability: <b>Matrix scout</b> (decker — the system's shape, ice composition, camera and maglock inventory), <b>Astral scout</b> (mage — wards, spirit presence, dual-natured guards, infection screening, lingering signatures), <b>Physical scout</b> (recon rigger or stealth runner — layout, patrol routes, and the task points that feed dispatch orders), <b>Social scout</b> (Face — schedules, shift rotations, badge protocols: the dynamic facts). Each lens reveals its own axis of the target; no single scout type reveals everything, so full coverage of a hard target costs multiple days and multiple specialists.</p>
+      <p>Every scout can be <b>played through</b> (a procedurally generated mission scoped to the task) or <b>quick-resolved</b>. The time cost is identical either way — automation is never punished with lost days. The difference is outcome quality: quick-resolve returns what the assigned runner's stats earn; playing it lets player skill beat the stat line, or fumble below it. Either way, scouting remains a sensor — it reveals what's true, it never changes it — though a scout who gets spotted can leave a tag of their own.</p>
+
+      <h3>Tags: jobs remember each other</h3>
+      <p>Completing a job can leave a state flag on its target — <em>Renraku Downtown: security softened</em> — that a later job on the same target checks for a bonus. A botched job can leave a negative flag the same way. Nothing is telegraphed up front; combos are found after the fact, which keeps the incentive on playing the job in front of you rather than stalling for a perfect lineup.</p>
+
+      <h3>Complications: static vs. dynamic facts</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Fact type</th><th class="wrap">Behavior</th><th class="wrap">Example</th></tr></thead>
+          <tbody>
+            <tr><td>Static</td><td class="wrap">Decided once at job creation, permanent for the life of the job. No staleness possible.</td><td class="wrap">Whether a rival crew was hired for this job at all; job tier; whether the location is trapped.</td></tr>
+            <tr><td>Dynamic</td><td class="wrap">Naturally time-indexed by ordinary fiction, not a reroll. A snapshot is only accurate for the moment it was taken.</td><td class="wrap">Which specific squad is on shift right now; how close an already-real rival crew is to physically arriving.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>Recon is a sensor, not a dial.</b> It reveals what's already true — it never changes the odds of what's true. Detection fails from insufficient skill, or because a dynamic fact hasn't produced observable evidence yet.</div>
+
+      <h3>Staleness has exactly one clock</h3>
+      <p>Only dynamic facts go stale, governed by one number: time since the most recent scout. Re-scouting resets it to zero.</p>
+
+      <h3>Speed never dodges a real complication</h3>
+      <p>Static complications are real from the moment the job exists, regardless of when it's executed. The one narrow exception: a complication explicitly modeled as another party's independent travel schedule might genuinely not overlap with an early execution — not because speed "dodged" it, but because two independent timelines simply didn't cross.</p>
+
+      <h3>Ghost runs are the ideal, not the default</h3>
+      <p>There is always security working against a crew — guards, cameras, patrols, the ordinary friction of hitting a place that doesn't want to be hit. A clean, unseen run is what happens when a crew is genuinely good — well-matched skills, fresh intel, the right gear — not what happens on an average day with average prep. Complication risk starts at a real, meaningful baseline that reflects that security is actually doing its job, and only good runners pull it down toward zero. It rises further from stale or absent intel, a "hot" tagged target, taking a job right before expiry, or higher job tiers. A bad outcome should always trace back to something the crew could have done better, never to background noise — but "average" should not be enough to guarantee a ghost run.</p>
+
+      <h3>Mission lifecycle: entry, exit, abort, wipe</h3>
+      <p><b>Entry</b> — assemble the crew (≤4, or 1 for Remote), issue armory gear, and pick an insertion point from the site's entry points; better intel reveals more of them. <b>Exit</b> — objective complete <em>and</em> the crew reaches an extraction point, though some Intel/Plant jobs complete the moment the deed is done-and-unseen.</p>
+      <p><b>Abort and wipe are the same event seen from two sides — who controls the exit.</b></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Outcome</th><th class="wrap">Condition</th><th class="wrap">Cost</th></tr></thead>
+          <tbody>
+            <tr><td>Abort</td><td class="wrap">At least one runner still standing to call the retreat</td><td class="wrap">The crew withdraws <em>with everything</em> — gear kept, downed teammates dragged out, everyone home. Wounds taken so far persist; no reward; possibly a minor negative tag. The responsible loss.</td></tr>
+            <tr><td>Wipe</td><td class="wrap">Every runner down — nobody left to carry anything</td><td class="wrap">Runners are recovered (they can't die) but take their wounds, and <b>every piece of issued gear is stripped and gone</b> — weapons, armor, a deck taken on-site, foci, drones. The armory hit is the real expense-risk.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Because each runner who drops both raises the wipe odds and thins the guns covering a clean withdrawal, "when do I fold" is a continuous read — the smart bail usually comes at one or two down, not the last stand. Two consequences the rest of the design was already reaching for fall out of this: <b>on-site decking becomes a real gamble</b> (a wipe forfeits the deck — the hard argument for working Remote or buying a relay so deck and body never enter the building), and <b>cheap gangers as bait get smarter still</b> (expendable runners carry expendable gear, so a wipe on the suicide role costs little while the veteran and the crafted rifle stay back).</p>
+      <p><b>Payload rules</b> (kept from the source game): a carried object drops when its carrier goes down — another runner must grab it or it's lost on a wipe; an escorted person is a protectable unit with its own health, and losing them fails an Extract or Protect job even if the crew walks out fine.</p>
+    </section>
+
+    <section id="meatspace-design">
+      <div class="section-head"><span class="section-index">07</span><h2>Meatspace — Full Design</h2></div>
+      <p class="section-dek">The embodied pillar, and the largest. Meatspace is <b>not combat</b> — combat is one layer of it, and the layer an ideal run never triggers. The pillar is a real-time traversal sim that drops into turn-based whenever the player wants to act deliberately — a coordinated interaction, or combat — and is forced there the moment hostilities go live.</p>
+
+      <h3>Four layers, combat is the last one</h3>
+      <div class="run-grid">
+        <div class="run-card"><h4>1. Traversal</h4><p>The formation moving through the site's room graph in real time. The substrate everything sits on.</p></div>
+        <div class="run-card"><h4>2. Detection &amp; Alert</h4><p>The persistent spine — driven by line-of-sight, noise, discovered bodies, and failed checks, not just gunfire. What a ghost run is actually managing, the whole mission long.</p></div>
+        <div class="run-card"><h4>3. Interaction</h4><p>Resolving each obstacle via its affordance list (§09): sneak past, talk through, pick, hack, palm a key, quietly drop a lone guard. Most of a mission lives here.</p></div>
+        <div class="run-card"><h4>4. Combat</h4><p>One affordance (the loud one) and the failure state of the other three. Turn-based. An ideal run never enters it.</p></div>
+      </div>
+
+      <h3>Traversal &amp; interaction (real-time)</h3>
+      <p>Assembled, the crew walks as one loose <b>formation</b> — you drive the lead, a <b>hot-rotate</b> key swaps who leads, and "formation" means only this travel arrangement, never a combat structure. Interaction has a fast path and a careful one. <b>Quick-play (real-time):</b> rotate the lead to the right runner, press <b>interact</b> near a target, and a contextual, skill-gated <b>On-Task menu</b> opens — walk the Face up to a guard and get Talk / Con / Pick Pocket, where Talk is straight Q&amp;A and Con is a specific lie (a deception check). One runner, uncontested, no mode switch. <b>Deliberate (turn-based):</b> when you want to coordinate — one runner cons while another holds overwatch, or you're setting an ambush — you drop into turn-based (below). The trade is real: quick-play is fast but unprepared, so a blown Con with nobody covering goes loud on the back foot; the deliberate path costs setup but has the overwatch already live. Detection (layer 2) accrues the whole time — a guard's cone, a camera's arc, a body in the open, a fumbled lock — feeding Alert, the meatspace pressure meter mirrored on the Matrix's (§05): it starts at a real baseline (ghost runs are earned) and rising tiers escalate the response.</p>
+
+      <h3>Entering turn-based: hostility, or your call</h3>
+      <p>Turn-based is where <em>all</em> deliberate action happens — combat, yes, but also any coordinated interaction — and it starts two ways. <b>Forced:</b> hostilities go live (a witnessed or failed takedown, a tripped alarm, a spotted crew). <b>Chosen:</b> the player drops in to coordinate — overwatch while someone works, or a strike. Choosing it <em>while still undetected</em> is the <b>ambush</b>: a surprise round where the crew positions and hits while the unaware enemy can't respond (the tabletop surprise rule); getting caught grants no surprise, everyone on equal initiative footing. In turn-based the formation dissolves — each runner is positioned individually (movement radius, below) and acts on their own turn. It ends and real-time travel resumes when hostilities cease. Why turn-based at all: fairness — in real time the player gives one order while the AI moves its whole side at once; turn-based alternation lets the crew act as a coordinated team, which the mind reads as simultaneous, the load-bearing fiction of the genre.</p>
+
+      <h3>Initiative: the Shadowrun engine, and the deep build axis</h3>
+      <p>Turn order is deterministic — perfect information, plannable, chess. Two lore-faithful numbers drive it:</p>
+      <ul class="qlist">
+        <li><b>Initiative Attribute = Agility + Intelligence</b> (the tabletop's Reaction + Intuition) sets order — flat, no roll.</li>
+        <li><b>Initiative dice = action count.</b> This is the mechanic worth building the combat economy around: the number of initiative dice you have is the number of actions you get per round. A mundane guard gets one. A samurai with Wired Reflexes gets three or four — acting, then everyone else acting, then acting <em>again</em>. Extra actions are bought through <b>Wired Reflexes</b> (cyber, Essence-priced, the Street Doc's surgery) or <b>Improved Reflexes</b> (adept magic, no Essence) — the cyber-vs-adept parallel attached to the single most powerful thing a combatant can have.</li>
+      </ul>
+      <p><b>Pass structure:</b> everyone acts once in initiative order (pass 1), then only units with 2+ actions act again (pass 2), then 3+ (pass 3). Because order within every pass is by initiative, fast units <em>lead every pass</em> — they keep reappearing at the top, reading as constantly in motion rather than clustered at the round's tail. Everyone is guaranteed their pass-1 action before anyone doubles, so slow units are never deleted before they move.</p>
+      <p><b>Action economy:</b> each action is <em>move + one thing</em> (shoot, task, cast, interact). Movement is a per-round budget shown as a <b>radius</b> around the runner (Agility-based) — move freely anywhere inside it, obstacles making ground cost more or blocking it outright, and the radius recomputes to the smaller remaining budget wherever you stop. No grid. That budget is shared across all a runner's actions, so extra initiative dice grant more <em>actions</em>, never more <em>distance</em> — total reach per round is the same whether you act once or four times. The blur-samurai <em>shoots</em> four times; they don't <em>sprint</em> four times as far. Speed dominates the action economy without making fast units uncatchable.</p>
+
+      <h3>Combat resolution: the three-gate chain</h3>
+      <p>Each attack resolves through three gates, lifted from the source game's Power/Damage split because it's the engine that kills the single-meta-weapon:</p>
+      <ul class="qlist">
+        <li><b>Hit</b> — attacker accuracy vs. target evasion (Agility) and <b>cover state</b>. A geometry check the player controls through positioning, not a reflex check.</li>
+        <li><b>Penetrate</b> — the weapon's <b>Power</b> vs. the target's <b>Armor</b>. A high-Damage, low-Power weapon does nothing to a plated tank; an armor-piercing rifle chews through it. This gate is why weapon variety on the roster matters.</li>
+        <li><b>Damage</b> — only if penetrated, applied to a health track.</li>
+      </ul>
+      <p><b>Dual health tracks:</b> Body drives the physical track, Willpower the stun track. Lethal weapons fill physical; stun weapons (gel rounds, batons, stun spells) fill stun. Either full = <b>down</b>. This gives non-lethal a real mechanical lane — capture jobs, no-kill contracts, live extractions — so a stun loadout is a legitimate build the roster can field. <b>Cover is positional:</b> whether a runner is protected is computed from where they actually stand relative to the shooter and the cover objects between them — so moving into hard cover against one threat can leave them open to another angle. This is where individual radius-positioning earns its keep: every runner's spot is a real decision against the specific enemies in play. Reinforcements <b>arrive</b> — they path in from entry points on rising Alert, giving a window to reposition or run rather than teleporting onto the crew.</p>
+
+      <h3>On-task orders: gated by skill, not archetype</h3>
+      <p>The dispatch verb works in both modes — a real-time interaction during traversal, or a unit's action on its turn in combat. <b>Which orders a runner can take is gated by their skills, not their archetype</b> — the table pairs each order with the archetype that exemplifies it, but any runner with the skill qualifies, which is exactly what lets a Generalist cover several of these from one of your four slots (§04). The mode column says what a runner is doing, not a separate timing system:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Archetype</th><th class="wrap">On-task order</th><th class="wrap">Nature</th></tr></thead>
+          <tbody>
+            <tr><td>Decker (full jack)</td><td class="wrap">Jack in at identified terminal — the whole node-crawl</td><td class="wrap">Interleaved scene (below)</td></tr>
+            <tr><td>Decker (quick hack)</td><td class="wrap">One targeted subsystem — kill <em>that</em> camera, pop <em>that</em> maglock. Real failure chance, Alert cost on a miss</td><td class="wrap">A single combat action, no scene switch</td></tr>
+            <tr><td>Mage</td><td class="wrap">Project from this spot</td><td class="wrap">Interleaved scene (below)</td></tr>
+            <tr><td>Mage (assense in formation)</td><td class="wrap">Cycle to them and hold assensing on the surrounding area — reveals wards, spirits, and dual-natured presence nearby without projecting or leaving the body</td><td class="wrap">Real-time interaction — a passive sense, not a scene switch</td></tr>
+            <tr><td>Marksman</td><td class="wrap">Set up on this vantage; fire from there</td><td class="wrap">Action — the task <em>is</em> shooting</td></tr>
+            <tr><td>Heavy Weapons</td><td class="wrap">Suppressive Fire down that lane — enemies in the arc are pinned. The player's own Suppressor</td><td class="wrap">Action</td></tr>
+            <tr><td>Tank</td><td class="wrap">Advance and Taunt — enemies retarget onto them</td><td class="wrap">Action</td></tr>
+            <tr><td>Melee</td><td class="wrap">Engage that specific enemy — the counter-Rusher</td><td class="wrap">Action(s)</td></tr>
+            <tr><td>Demolitions</td><td class="wrap">Plant/blow at this point — behavior defined by charge type</td><td class="wrap">Action, loud by definition</td></tr>
+            <tr><td>Stealth</td><td class="wrap">Silent takedown on this isolated target; or traverse a flagged alternate route — emerge behind, or open it from the far side</td><td class="wrap">Real-time interaction (or ambush setup)</td></tr>
+            <tr><td>Combat Medic / Doc</td><td class="wrap">Reach that downed runner and revive them where they lie</td><td class="wrap">Action</td></tr>
+            <tr><td>Face/Thief</td><td class="wrap">Context-sensitive: pickpocket, convince, distract, pick this lock</td><td class="wrap">Real-time interaction</td></tr>
+            <tr><td>Rigger</td><td class="wrap">Defined by equipped drone class — see below</td><td class="wrap">Both</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The Heavy/Tank/Melee verbs complete a pattern: each is the player-side mirror of an enemy archetype, so every combat read ("that Suppressor is the problem") has a corresponding order ("melee, go remove it").</p>
+
+      <h3>Encounter scale &amp; enemy archetypes</h3>
+      <p>Encounters are small — roughly 3–6 enemies — and legible, where a single Flanker repositioning is an event the player notices and answers. With 4 runners plus 3–6 enemies, a turn-based round stays a readable ten-unit board. Readability is also economic feedback in a roster game: distinct per-runner weapon signatures let the player see what the expensive specialist did that the cheap ganger couldn't — the hiring economy depends on that being visible.</p>
+      <div class="run-grid">
+        <div class="run-card"><h4>Rushers</h4><p>Close on the nearest or softest runner. Punish crews that plant and never reposition.</p></div>
+        <div class="run-card"><h4>Flankers</h4><p>Route to a runner's cover-exposed angle — literal geometry now, not an abstract slot. Punish a runner who sits too long in one spot.</p></div>
+        <div class="run-card"><h4>Suppressors</h4><p>Pin a runner caught in the open, denying the move. Punish standing exposed.</p></div>
+      </div>
+
+      <h3>Bodies: unconscious vs. projected</h3>
+      <p>Two different kinds of slumped body, two different rules:</p>
+      <ul class="qlist">
+        <li><b>Unconscious</b> (health track filled) — out of combat, off the initiative tracker, <b>untargetable</b> except by a revive.</li>
+        <li><b>Projected</b> (a decker jacked in, a mage in the astral) — still <b>on the initiative tracker</b> and actively relevant. The body is a targetable, vulnerable object the enemy can attack on their turns. On the projected runner's turn, the camera <b>switches to their scene</b> (Matrix or astral), they take their action there, and switches back.</li>
+      </ul>
+
+      <h3>Interleaved scenes — one initiative tracker, three worlds</h3>
+      <p>This replaces the old freeze-and-replay model with something cleaner, and it falls straight out of the initiative engine. The domain dice counts are canon — <b>meatspace 1, astral 2, Matrix hot-sim 4</b> — and that <em>is</em> the time differential: a jacked-in decker gets ~4 actions per meatspace round because that's what a hot-sim persona does. So a projected runner's Matrix or astral run interleaves into the one shared initiative order action by action — four Matrix turns to meatspace's one, with the enemy free to shoot the slumped body on the enemy's own turns in between. No separate replay, no turns-to-seconds conversion; the dice differential is the whole mechanism. It's also more interactive than a committed replay: the player makes live calls — one more node, or jack out before that Rusher reaches the body? The engine cost is real and worth naming: it must hot-swap up to three live scenes (meatspace, Matrix, astral), which astral-as-meatspace-with-a-filter helps keep tractable. Out of combat, a full jack has no live enemy pressure — the crew holds real-time position while the run plays; if hostilities break out mid-run, everything snaps to the shared tracker and the run continues interleaved.</p>
+
+      <h3>Splitting the crew: focus, hot-rotate, and many fronts</h3>
+      <p>The controllable unit is a <b>focus</b>, and a focus is either the assembled group or a detached piece. <b>Together</b>, the crew is one focus — the travel formation, moving as one. The instant someone splits off — jacks in and slumps, sends a drone ahead, projects astrally, or physically breaks away — that piece becomes its own focus, and now you drive <b>one focus at a time while the rest hold</b> (a slumped body is inert; a held runner waits in place). Hot-rotate cycles between focuses. You can't steer a slumped decker, a walking Sam, and a scouting drone at once, so you don't — you switch.</p>
+      <p>This is what lets a full four-domain operation run: a decker slumped at the door reading cameras through the Matrix, a rigger's drone unlocking the fast path, a mage projecting toward an astral barrier, a Sam advancing on the goal — four bodies in four places, three consciousnesses elsewhere, each slumped body carrying its own interruption exposure. It needs no new system: still three scene <em>types</em> (the drone is a meatspace unit, not a fourth scene), still one initiative tracker, the bands applied per body.</p>
+      <p><b>Hostilities anywhere flip the whole op to turn-based</b> — one tracker spanning every scene and location. A real-time front is never run beside a turn-based one; the moment any front goes hot, all of them do, and the player works the shared initiative order across the spread. The one honest cost is the unwatched front: while you drive one focus, the sim keeps running elsewhere, so a patrol can close on a slumped body you're not watching. The rule that keeps that tense rather than unfair — a threat closing on an unattended runner fires an alert and pulls the camera to it in time to react (jack out, or let it go loud). Splitting up is powerful and genuinely risky, which is exactly right.</p>
+
+      <h3>Interruption: three bands and a threshold</h3>
+      <p>What happens to the vulnerable projected body when a hit lands on the enemy's turn, on a graduated scale grounded in the tabletop rules (wound modifiers, condition monitors, dumpshock):</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Band</th><th class="wrap">What happens</th><th class="wrap">What widens it</th></tr></thead>
+          <tbody>
+            <tr><td>Soaked</td><td class="wrap">Damage the body's armor absorbs never reaches the run.</td><td class="wrap">Armor — subdermal armor for a jacked-in decker; a rigger's shield drone blocks the line of fire entirely.</td></tr>
+            <tr><td>Staggered</td><td class="wrap">A hit that gets through disrupts — it costs the projected runner (a lost action, extra Drain or tether, a forced defensive response) but they stay connected. Nothing already accomplished is undone.</td><td class="wrap">Willpower reduces the disruption per hit.</td></tr>
+            <tr><td>Dumped</td><td class="wrap">Past a cumulative threshold (or one massive hit): forcible disconnect. The run ends where it stands — whatever was accomplished holds, nothing further — and dumpshock lands: real damage plus a temporary disorientation debuff on waking.</td><td class="wrap">Body sets the threshold; Willpower and a Biofeedback Filter (armory upgrade) blunt the dumpshock.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The full ladder, each level with its own counterplay: <b>soaked → staggered → dumped → downed</b>. Dumpshock is temporary and in-mission; a wound (§03) only triggers if the runner actually goes down.</p>
+
+      <h3>Ghost runs are the ideal outcome</h3>
+      <p>Unless a job explicitly calls for a distraction, the run to aim for resolves entirely in layers 1–3 and never triggers layer 4 at all — see §06 for how complication odds work and why "ideal," not "default," is the right word for it. The best complication is a rival crew hired for a competing goal on the same target at the same time.</p>
+
+      <h3>Rigger: the drone class defines the mode</h3>
+      <p>A rigger's consciousness leaves their body but stays in physical reality — the drone is a second body in the same meatspace, same top-down perspective, different sprite. Which mode applies is a property of the equipped drone, not a stance the player toggles:</p>
+      <div class="grid-2">
+        <div class="card"><h3 style="margin-top:0;">Recon class: full jump-in</h3><p>Player-piloted, the rest of the crew held. Control switches entirely to the drone — the rigger's body slumps (a static object under the bodies rule) and the player personally flies the vent, crawls under the door, and <b>sees the floor</b>: guard positions, camera arcs, terminals, vantages. The pass paints the dispatch map — everything the drone lays eyes on becomes an identified task point for on-task orders, and a planted relay can let the decker jack in from cover instead of walking to the terminal. Jack out anytime; if trouble finds the parked crew, the player gets the interrupt and the choice. Destruction while jumped in costs neural feedback — recon risks the rigger.</p></div>
+        <div class="card"><h3 style="margin-top:0;">Combat class: remote, force multiplication</h3><p>Two bodies from one crew slot. The rigger acts as a normal crew unit and fights like any member — they're only remote-controlling — while the platform is a free-standing extra combatant with its own persistent order: <b>post up at this point, focus fire on that lane or target.</b> Independent position, independent priority, same pause→point UI; between orders it follows the formation. It's a machine: simple condition track, no interruption bands, and destruction costs the wallet, not the rigger's nerves. A dead drone mid-fight just ends the multiplication — leaving a one-body rigger in a seat a Street Samurai would have filled better.</p></div>
+      </div>
+      <div class="card" style="margin-top:14px;"><h3 style="margin-top:0;">Medic class: fragile support</h3><p>An extra healing body from one seat — follows the formation, patches runners with the same post-and-tend order pattern, contributes nothing to damage. The catch: it's fragile, and when destroyed it is <b>permanently lost</b> — no repair track, unlike combat platforms. Force multiplication for keeping people standing, priced in glass.</p></div>
+      <p style="margin-top:14px;">The player never pilots a drone alongside other focuses — recon jump-in holds the rest of the crew so only one focus is ever under control (same as a solo mission), and combat platforms execute orders autonomously. Both modes are constrained by signal range and interference, making <em>where to stage the rigger's real body</em> a real spatial decision. Posted-drone fire contributes damage; it doesn't pin — lockdown stays the Heavy Weapons runner's job, so the two never overlap.</p>
+
+      <h3>Signal distance as a shared constraint</h3>
+      <p>Riggers and deckers both work under real range/interference limits, and mages may too — Wards, the tabletop mechanic for magical security, are a dual-natured barrier that blocks astral vision and movement across it, scaled by the caster's Magic attribute, and will fight back if pushed through. A signal relay (for riggers and deckers) extends effective range as a purchasable, upgradeable equipment unlock; the mage's equivalents are the anchor talisman (extends the tether, §08) and ward-picking (§08) — wards are gates to be worked, not distances to be relayed across. As relay tech improves, a specialist who no longer needs to physically occupy a crew slot frees it for another fighter — a gear-driven expansion of what a mission's crew can look like.</p>
+
+      <h3>Face / Thief: reducing Alert without a hacker</h3>
+      <p>A Face's specialty is coercion and misdirection reducing Alert/Response — the same resource the Matrix pillar manages, through in-person social means, requiring no hacker slot at all. Broadened toward Thief with lockpicking (a skill-based alternative to buying maglock passkeys) and sleight of hand / pickpocketing (lifting a badge instead of needing one issued), this clears Distinct, Frequent, and Versatile on its own.</p>
+      <div class="open-note"><b class="tag">Open</b> — gambling was proposed as part of the Thief broadening but has no confirmed mechanical translation yet (side income? a social set-piece? pure flavor?).</div>
+
+      <h3>Solo specialist missions — starter content, not a parallel mode</h3>
+      <p>These exist specifically to teach a new player what each archetype can and can't do, using the same meatspace ruleset scaled down to a focused, low-noise arena — not a separate genre. What they teach, concretely: a decker without relay tech has to go on-site to hack, which is genuinely tough and teaches why that body needs protecting. A mage can fight and can project astrally, but can't do anything about a security system — that limit is worth learning early, not discovering mid-heist. A Street Samurai's real strengths and weaknesses come from their skill focus (§04) — a demolitions-focused Sam throws grenades, which is not remotely stealthy, and that tradeoff should be obvious the first time a player runs one solo, not a surprise three squad missions later.</p>
+      <p><b>Solo runs pay Karma-rich but nuyen-poor</b> — a day spent growing one runner with little cash to show for it. Early, when you're small and learning and don't need much money, that feels great: bump a promising rookie fast. But every solo day is a day not earning toward gear and roster, so as ambitions grow the opportunity cost quietly kills the solo run's appeal — it self-obsoletes through the time-is-scarce economy (§03), no artificial cutoff. It interlocks with the retainer audition (§03): retain a promising runner, solo them to both grow them and watch their true archetype emerge (§04), then decide on the permanent buy. And the board's crew-complexity ramp (§06) carries a player up from solo, through two- and three-runner jobs, to the four-domain operation only once they've learned each piece — so the cognitive load of a full split-crew op arrives paced, never dumped.</p>
+    </section>
+
+    <section id="astral">
+      <div class="section-head"><span class="section-index">08</span><h2>The Astral Realm</h2></div>
+      <p class="section-dek">Played solo by whichever mage runner is assigned, the same way a Matrix job is played by one decker — turn-exchange encounters over a painted mirror of the physical world, priced in Drain, tether, and attention.</p>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Why "Van Gogh" isn't just a mood board pick</h3>
+        <p>Per the sourcebooks, astral perception <b>isn't sight</b> — mages describe reading a "third eye" impression of emotion and intent rather than light and surfaces. Mirrors are blank. Living things blaze with color; the corrupted read as sick, dim, or wrong. That's a description of an impressionist painting, not a photograph.</p>
+      </div>
+
+      <h3>Rendering: astral subtracts detail, it never adds it</h3>
+      <p>The astral renderer takes the <b>same map data</b> meatspace already generated and renders it as murky silhouette — dark, low-detail shadow-shapes — then paints the only things astral perception actually sees on top: auras (living beings as bright painterly figures), emotional stains (a murder site burns red, a sterile office reads grey-dead), wards (walls of light), signatures (glowing traces). The look is a palette, a small library of aura sprites, and a stroke/swirl post-effect over mostly-darkness — cheaper to produce than meatspace, not more expensive, and lore-faithful for exactly that reason.</p>
+
+      <h3>Traversal: movement is free, vision is constrained</h3>
+      <p>Astral forms pass through walls — but walls cast opaque astral shadows, so you can't <em>see</em> through them. The inverse of meatspace: go anywhere, navigate murk where only living and magical things shine. Two exceptions define the level design: <b>earth is solid</b> (the ground is the map's hard edge), and <b>wards block movement</b> — the one wall that works both ways. Which yields the pillar's nastiest situation for free: a ward between you and your body blocks the way <em>home</em>. Slipping into warded space gates your exit too — budgeting the way out is part of going in.</p>
+
+      <h3>The pressure triangle</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Pressure</th><th class="wrap">What it is</th><th class="wrap">Managed by</th></tr></thead>
+          <tbody>
+            <tr><td>Drain</td><td class="wrap">The action cost — every cast, ward-break, and fight, scaled by the <b>Force dial</b>: push soft (weak, cheap) or hard (strong, draining). Drain full = dumped back to the body, KO'd — the soft fail.</td><td class="wrap">Force discipline; fetishes (armory consumables) absorb drain — the astral ammo economy.</td></tr>
+            <tr><td>Tether</td><td class="wrap">A budget of astral <b>turns</b>, sized by the mage's Magic stat — every move, assense, and encounter exchange ticks it uniformly; pausing ticks nothing. Tether out = forced snap-back <b>plus downed</b> (a wound, §03) — the hard fail.</td><td class="wrap">Efficiency; an anchor talisman (armory) extends the budget.</td></tr>
+            <tr><td>Attention</td><td class="wrap">The Alert-mirror: loud actions raise it through tiers — quiet → watchers curious → guardian spirits hunting → the site's own mage projects in to find you.</td><td class="wrap">Masking (aura-shrouding — the Illusion focus specialty).</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Drain is how hard you push; the tether is how long you've been out. A fast loud run burns drain but few ticks; a slow careful run conserves drain but eats the tether — the same duality that makes the Matrix's cards-vs-Alert tension work, wearing different clothes. And because the tether is denominated in turns, it drops straight into the shared initiative order when a mage projects mid-mission (§07): astral runs at 2 dice to meatspace's 1, so the mage takes two astral turns per meatspace round, each ticking the tether, while the body sits exposed.</p>
+
+      <h3>Loadout: spells are skills, foci are equipment</h3>
+      <p>Spells live on the mage's dossier — they're what you hired. Foci, talismans, and fetishes are armory equipment the operation buys, crafts (§03), and issues per job, exactly like decks: a focus boosts a spell category, and which mage gets the good power focus when two could use it is the same allocation tension the deck economy already has.</p>
+
+      <h3>Encounters: sense, then resolve, in turn-exchange</h3>
+      <p>Assensing reads a target in layers — something's here → its type → its condition → its weakness — and identification <b>gates effectiveness</b>: banishing resolves a spirit cleanly only if you know what kind it is, and the wrong tool wastes drain and spikes attention. Engagements resolve as turn-exchanges — pick action and Force, the entity responds — deliberately reusing the Matrix encounter <em>skeleton</em> (exploration punctuated by loadout-limited turn encounters) with completely different content: same engineering bones, different game. Wards get the same fork Matrix routes have: break one fast (loud, drainy, leaves your signature at the scene) or pick it slow (quiet, but the clock eats the savings).</p>
+
+      <h3>Who's out there</h3>
+      <div class="run-grid">
+        <div class="run-card" style="border-left-color:var(--danger);">
+          <h4>Insect Spirits (Invae)</h4>
+          <p>Hive-minded spirits that "invest" a living host. A "Good Merge" leaves the host looking completely normal while fully hive-controlled — the classic hidden-infiltrator threat.</p>
+        </div>
+        <div class="run-card" style="border-left-color:var(--danger);">
+          <h4>Toxic Spirits</h4>
+          <p>Ordinary nature/elemental spirits corrupted by a polluted or morally poisoned place — a toxic dump, the worst blocks of the Barrens, even a sterile corporate facility.</p>
+        </div>
+        <div class="run-card" style="border-left-color:var(--danger);">
+          <h4>HMHVV Infected</h4>
+          <p>A real retrovirus, not the undead. The Krieger strain always makes ghouls — dual-natured, meaning they exist on the astral plane and can be assensed, and are stated in the lore to favor tight, enclosed spaces specifically to avoid a projecting mage's snipe.</p>
+        </div>
+      </div>
+
+      <h3>The job catalog</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Job</th><th class="wrap">What it is</th><th class="wrap">Whose specialty</th></tr></thead>
+          <tbody>
+            <tr><td>Hunt</td><td class="wrap">Find the hidden Infected or Good-Merge infiltrator among people who all look normal</td><td class="wrap">Health, Detection</td></tr>
+            <tr><td>Cleanse</td><td class="wrap">Banish a toxic spirit before it manifests physically</td><td class="wrap">Combat, Conjuring</td></tr>
+            <tr><td>Scout</td><td class="wrap">The §06 astral lens, playable — map wards, spirits, dual-natured guards</td><td class="wrap">Any projector</td></tr>
+            <tr><td>Ward-break</td><td class="wrap">Strip a site's astral defenses ahead of a physical job — leaves a <em>wards down</em> tag: Astral softens meatspace jobs exactly the way a Matrix hack does</td><td class="wrap">Combat</td></tr>
+            <tr><td>Tail</td><td class="wrap">Follow a target invisibly for days</td><td class="wrap">Detection</td></tr>
+            <tr><td>Forensics</td><td class="wrap">Read the signatures at a scene — who cast what, here, when</td><td class="wrap">Detection</td></tr>
+            <tr><td>Scrub</td><td class="wrap">Erase your own crew's signatures after a magical job — the cleanup contract</td><td class="wrap">Detection, Enchanting</td></tr>
+            <tr><td>Extract-support</td><td class="wrap">Anchor a possessed victim's aura so the ritual team can pull them back</td><td class="wrap">Health</td></tr>
+            <tr><td>Harvest</td><td class="wrap">Reagent gathering at mana sites — the raw input for enchanter crafting (§03)</td><td class="wrap">Enchanting</td></tr>
+            <tr><td>Hive-break</td><td class="wrap">Confirm a Queen's presence without waking the hive — the expert tier</td><td class="wrap">Illusion, Detection</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Failure stakes</h3>
+      <p>Drain-out is the soft fail: dumped back to the body, KO'd, mission over for the mage, no lasting harm. Tether-out is the hard fail: forced snap-back plus <b>downed</b> — a wound (§03). The tabletop's coma-and-death threat becomes our worst-outcome-short-of-nothing, which keeps the tether genuinely scary without breaking the no-deaths-on-missions rule.</p>
+    </section>
+
+    <section id="foundation">
+      <div class="section-head"><span class="section-index">09</span><h2>The Data Foundation</h2></div>
+      <p class="section-dek">The three models everything else gets built on: the runner record, the site object, and the save file. Design rule across all three: attributes are universal, skills are the differentiator, and nothing generated is ever stored when a seed can regenerate it.</p>
+
+      <h3>Runner model: five attributes, two resources</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Attribute</th><th class="wrap">What it drives</th></tr></thead>
+          <tbody>
+            <tr><td>Body</td><td class="wrap">Physical health track size; interruption Band-1 soak and Band-3 threshold. (Strength is deliberately folded in — at this scope the distinction buys nothing.)</td></tr>
+            <tr><td>Agility</td><td class="wrap">Move speed; real-time task speed (plant, climb, pick); stealth base</td></tr>
+            <tr><td>Willpower</td><td class="wrap">Drain resistance; dumpshock resistance; Band-2 stagger rate; mental health track</td></tr>
+            <tr><td>Intelligence</td><td class="wrap">Perception; scout/intel quality; assense layer depth; Matrix action effectiveness</td></tr>
+            <tr><td>Charisma</td><td class="wrap">Social verbs; spirit negotiation (Conjuring pairs with it)</td></tr>
+            <tr><td>Magic <span class="pill pill-simple">special</span></td><td class="wrap">Caps Force; sizes the tether; 0 for mundanes; capped by Essence</td></tr>
+            <tr><td>Essence <span class="pill pill-simple">resource</span></td><td class="wrap">Starts 6.0; spent by implants, never recovered; gates therapy cost and magical-healing penalty</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The skill registry: 19 skills, every one a verb</h3>
+      <p>A skill with no verb column doesn't get to exist — this is the Frequent test enforced at the schema level. Most skills are universal; a handful are <b>family-gated</b> to who can actually perform them: Hacking is decker-only (a mage can write code, but can't jack in and run a deck live), Rigging is rigger-only (a technician can maintain a drone chassis, but can't jump in and pilot), and all four magic skills are mage-only (an adept has Magic but isn't a spellcaster).</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Skill</th><th class="wrap">Verbs it powers</th></tr></thead>
+          <tbody>
+            <tr><td>Firearms</td><td class="wrap">Standard formation fire — the most common contribution, not a universal one</td></tr>
+            <tr><td>Heavy Weapons</td><td class="wrap">Suppressive Fire (pin lane)</td></tr>
+            <tr><td>Marksmanship</td><td class="wrap">Vantage overwatch</td></tr>
+            <tr><td>Melee</td><td class="wrap">Engage-target; Killing Hands via adept origin</td></tr>
+            <tr><td>Demolitions</td><td class="wrap">Plant/breach (loud)</td></tr>
+            <tr><td>Stealth</td><td class="wrap">Silent takedown, ghost movement, physical scouting</td></tr>
+            <tr><td>Athletics</td><td class="wrap">2nd-story entry routes</td></tr>
+            <tr><td>Medicine</td><td class="wrap">Field revive; stim healing; implant surgery (Street Doc)</td></tr>
+            <tr><td>Presence</td><td class="wrap">Taunt — the tank's hold-the-line value</td></tr>
+            <tr><td>Con</td><td class="wrap">Convince, distract, talk-past, social scouting</td></tr>
+            <tr><td>Larceny</td><td class="wrap">Lockpick, pickpocket, palming</td></tr>
+            <tr><td>Computer</td><td class="wrap">Code and software work; program crafting — universal, anyone can write code</td></tr>
+            <tr><td>Hacking</td><td class="wrap">Live deck verbs — the Matrix run itself, remote unlocks, killing cameras. Decker-only</td></tr>
+            <tr><td>Electronics</td><td class="wrap">Physical-device work: maglocks by tool, cameras, relays</td></tr>
+            <tr><td>Rigging</td><td class="wrap">Drone operation, jump-in performance; drone-kit crafting</td></tr>
+            <tr><td>Sorcery</td><td class="wrap">Spellcasting and counterspelling</td></tr>
+            <tr><td>Conjuring</td><td class="wrap">Summon, banish, spirit handling</td></tr>
+            <tr><td>Enchanting</td><td class="wrap">Focus/fetish crafting, reagent harvest</td></tr>
+            <tr><td>Assensing</td><td class="wrap">Astral perception layers, signature forensics</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>Formation contribution is kit-defined, not Firearms-defined.</b> Most runners contribute standard fire; a melee build counter-punches what reaches the formation; the healer mage, Street Doc, and medic drone contribute healing and zero damage. A zero-DPS dossier is a real, legitimate shape, and the formation's output is the sum of what each kit actually does — never an assumed gun per seat.</div>
+
+      <h3>The record</h3>
+      <p><b>Identity:</b> name, metatype (human / elf / dwarf / ork / troll — shifting base attribute ranges for lore-correct variety at near-zero cost), portrait seed, personality line, aims line. <b>Classification:</b> family, focus, origin + subtype, decker affinity tag (Masking / Attack / Search — one Hacking skill, tilted, not three skills), spell formulas known (mages), the <b>Discipline label</b> (visible — Generalist or a named Specialist focus; the price lens and growth forecast), and the <b>true archetype</b> (hidden — drives growth allocation, matches the label 80/10/10). <b>State:</b> attributes, skills, Essence current/max, wound count, accrued Karma, market state (the §03 machine), shelf timer (visible — the pick-or-pass clock), days-on-market, contract tier and missions remaining.</p>
+      <p><b>Effective stat = base + growth + implant modifiers − wounds, computed at read time.</b> Wounds are stored as a count, never baked into the base — that's what keeps therapy (remove a wound) and implants (add a modifier) clean ledger operations. Each focus template names a <b>key stat</b>; wounds (−1) point at it, and Karma-driven growth (§04) is auto-allocated along the true archetype — Specialists concentrate it, Generalists spread it. Price is derived from the visible skills through the Discipline lens (§04) — never stored, so it recomputes as skills change and can legitimately sit above or below raw skill value depending on the label.</p>
+      <p><b>Implants are abstracted to stat deltas.</b> A piece of cyberware is an armory item until surgery; implantation consumes it, applies its stat modifier and Essence cost, and leaves only a dossier log line ("Subdermal Armor: +2 Armor, −0.5 Essence"). No per-implant special effects, no implant inventory on the runner, and — the one exception to reassignable equipment — no taking it back out.</p>
+
+      <h3>Site model: one object, three projections</h3>
+      <p>A site is a single generated structure; the top-down map, the astral mirror, and the Matrix node graph are renderings of it, never separate things. The Cameras SM in the node graph and the camera on the wall are two views of one record — that binding is what makes a decker's interleaved-scene actions land on the right doors in the meatspace fight.</p>
+      <p><b>Identity &amp; axes:</b> district, owning faction, and two hidden-but-legible drivers — <b>Value</b> (how big a deal this target actually is: low for a corner gang den, high for a corp's downtown headquarters) and <b>Orientation</b> (a lean toward Physical, Astral, or Matrix, or a Balanced spread). Value and Orientation together roll the three security ratings — <b>Physical</b> (guards, cameras, locks), <b>Astral</b> (wards, spirits, dual-natured), <b>Matrix</b> (system depth) — rather than an independent roll: Value sets the overall level, Orientation skews which axis carries it. The high-tech lab bristling with ice but astrally naked, and the gang lodge that's a shack inside a fortress ward, are Value+Orientation working as intended, not three unrelated numbers landing on an interesting combination by chance. These derived ratings are the <em>capability ceilings</em>, not the live numbers — each axis actually carries a Min/Current/Max triple, and there is a per-site Alert pool driving movement between them (see "Security is live" below). There is no separate site "tier" — a job's tier is derived from the site it's matched to (above), not stored on the site itself. <b>Layout:</b> a room/corridor graph with cover flags, entry points (door, window, roof, vent-drone-only, loading dock), and anchor points where job payloads land (safe, target person, DS objective, spirit nest, reagent node, vantage, terminal). <b>Population:</b> guard squads per shift (the dynamic fact scouting snapshots), patrol routes, dual-natured guards rendered in both projections, astral watchers and spirits.</p>
+      <p><b>Obstacles are affordance lists.</b> Every obstacle instance is a type + tier + a list of interaction affordances from the verb registry. A maglock door: Electronics-pick · Larceny-pick · Demolitions-breach (loud) · Matrix SM unlock · pickpocketed key. A guard: avoid · Con talk-past · silent takedown · fight · Taunt-draw. A ward: route-around · pick (slow) · break (loud).</p>
+      <div class="note">
+        <b>Generator invariants:</b> (1) Brute force is always <em>available</em> — no site is ever locked to any composition — but available is not viable: it carries full price in Alert and wounds, and can simply exceed a crew. (2) Every site must have at least one additional distinct solution chain, executable by ≤ 4 runners. (3) No obstacle may have all its affordances in one skill. The guarantee is <b>plurality, not parity</b> — solution paths are deliberately unequal, better answers exist per puzzle, and finding them is the game.
+      </div>
+      <h3>Security is live: Min / Current / Max</h3>
+      <p><b>Each security axis is a Min/Current/Max triple, not one number.</b> <b>Max</b> is the Value+Orientation derivation above — the site's actual capability ceiling, what its budget, staff, and infrastructure can field. <b>Min</b> is the resting posture the site relaxes back to when nobody's been hitting it — a per-site design knob, not a flat floor: a sleepy warehouse sits far below its ceiling and only surges under threat, while a tough-nut-on-a-good-day site has a Min close to (or equal to) its Max and never really relaxes. <b>Current</b> is the live posture — the number obstacles, resolution difficulty, and Karma awards actually read.</p>
+      <p><b>Current is "how much room are we giving for bullshit today."</b> That framing is the whole layer: Min is the resting posture, Max is what could be fielded if it came to that, and Current is the standing decision about how much slack today gets.</p>
+
+      <h3>Threat read: what your actions credibly reveal</h3>
+      <p><b>In front of the response sits the assessment.</b> Every action carries an intrinsic threat class — not derived from whether it succeeded, but from what the act itself reveals about intent — and it only registers if something <em>witnessed</em> it. Reaching for a wireless signal on an air-gapped box reveals nothing, because there was nobody on the other end to form an opinion.</p>
+      <ul>
+        <li><b>Normal</b> — belongs here, nothing to see.</li>
+        <li><b>Awkward</b> — offputting, not harmless. A guard who clocks your fast-talk doesn't file you under "harmless," he files you under <em>what is wrong with you</em>; someone caught guessing a password isn't charming, they're a person who'd compromise an account. No mechanical bite, and no goodwill either.</li>
+        <li><b>Questionable</b> — an innocent explanation exists, barely. Sneaking. Being somewhere you shouldn't be.</li>
+        <li><b>Threatening</b> — no innocent reading available. A hand in a guard's pocket. Tampering with a lock. A shotgun — a threatening moron is still threatening, while a taunt is loud without being dangerous, because a belligerent asshole doesn't need shooting.</li>
+      </ul>
+      <p><b>Three stacking awkwards make you questionable.</b> Once questionable, security is sure enough and merely waiting for an excuse: any further witnessed awkward <em>or</em> questionable act tips you to threatening. <b>Nothing changes mechanically below threatening</b> — those tiers are the tripwire's bookkeeping, and the hooks that later drive behavior: turrets tracking, maglocks sealing as you approach, guards with different dialogue.</p>
+      <p><b>Approaches carry attempt budgets, and running one out is not automatically escalation.</b> Social engineering gets one shot per obstacle — you cannot work the same room twice, and adjacent guards are one audience. Credential guessing gets several tries and then the account locks out, which removes the option <em>without</em> an alarm: the lockout already ended whatever credible threat existed, so nobody needs calling. <b>Exceptional success cuts the other way</b> — bamboozle a guard thoroughly enough and he hands over his ID because you "lost yours" and he definitely remembers you, buying real headroom back.</p>
+      <p><b>The read resets nightly, along with obstacle knowledge.</b> You can farm normal at a site that shot at you yesterday — balanced by the security ratchet starting higher, and by having to re-engage each obstacle the first time each day to re-confirm what it currently is. And <b>identity is never remembered</b>: a site knows it was hit, never by whom. Light up a node today and tomorrow's walls are higher, but nobody is looking for <em>you</em>.</p>
+
+      <h3>Alert: the response, once you're actually a threat</h3>
+      <p><b>Alert engages only at threatening, and there are three of them — one per axis.</b> Each is bounded by its own <b>[Current, Max]</b>: never below the posture already chosen for the day, never above what that axis can actually field. A site answers with everything it has, but each asset is only as good as that axis really is — a P:2 A:8 M:2 site meeting a physical intrusion sends two guards to do their unimpressive best while something with an eight behind it comes off the astral.</p>
+      <p><b>Alert is the counter that decides when to escalate the quality and quantity of what you're facing.</b> Each engaged axis fields a challenge at its current alert tier, in its own idiom — guards and turrets physically, spirits astrally, sealing doors and hostile ice on the Matrix. Survive, and it climbs: the more of their response you outlast, the more they throw. When every axis pins at Max they are out of budget — that is the site's entire answer, and the run becomes whether you can outlast it or get out. Withdrawing stays available throughout, which is what keeps escalation a decision rather than a death spiral.</p>
+      <p><b>Only threatening incidents ratchet Current across days; pinned pressure grows Max.</b> Awkward and questionable were, by definition, managed inside the existing budget — nobody approves more guards because a weirdo asked for a tour. Force a real response repeatedly and Current tightens; keep forcing it while Current is pinned at Max and the two climb together, slowly, as the operation expands actual capacity. <b>Max never decreases.</b> When the heat dies off Current cools back toward Min, but the expanded ceiling is permanent — the site remembers what it took to get hit that hard.</p>
+      <p><b>Worth and difficulty are now different numbers.</b> Value is frozen economic identity: it drives nuyen pay, board-tier matching, and the initial security seeding, and then it's done — a site that fortifies itself is still producing the same product, worth the same contract money. The live security layer is difficulty: obstacles, thresholds, and Karma read Current at run time. Hitting a site that's ratcheted itself into a fortress pays the runners <em>more Karma</em> for what they actually faced — and the Johnson exactly the same nuyen. Farming a hot site is bad business but good training, on purpose.</p>
+      <div class="note"><b>The emergent behavior is equilibrium-seeking.</b> Lean on a site and it escalates until you stop; back off and it tapers toward its floor until you start getting away with things again. Sites "test the waters" toward whatever level of real trouble they actually experience — no script, just the read/response/ratchet loop running. Two confirmed corollaries: a run that never reads as threatening generates no pressure at all — the site can't respond to what it never witnessed, which is exactly why the ghost run is a mission's ideal outcome — and under long sustained pressure a lopsided site converges toward balanced, because its orientation-weak axes pin at their small ceilings early and grow from there. Heavily farmed sites are precisely the ones that invest in overall improved security.</div>
+      <p><b>The site list — sites are watchable, like runners.</b> A site becomes <em>known</em> when a job the player accepted introduces it, or when the player discovers it (resource gathering); known sites join a persistent list the player can revisit — go back and farm a place without waiting for a contract to point at it — and <b>watch</b>: a watched site surfaces a notification whenever a new contract's mission targets it, and its list entry shows the handed estimate with recon-confirmed, staleness-flagged actuals overlaid (§06). Compression is the same asymmetry runners already obey: a known site with no watch, no tags, no intel, and no security history compresses to a bare universe index plus its handed estimate, and revives byte-identically from the universe seed — while a site that's currently hot (elevated Alert, raised posture, grown Max) refuses to compress until it has genuinely cooled. The save grows with attachment, not with time.</p>
+      <p><b>Persistence on a site is deltas only:</b> tags (with expiry days), the player's intel snapshots per scouting lens (each stamped with the day taken — staleness is just today minus that stamp), and security adjustments (hardened ice, restaffing timers). The astral layer is derived, not authored: same geometry, plus wards, reagent nodes, and emotional stains generated from the site's own tag history — the paintbrush feeds off play for free. Layout itself always regenerates from seed.</p>
+
+      <h3>Save model: seeds and deltas, never content</h3>
+      <div class="diagram">save {
+  meta      { schemaVersion, currentDay, rootSeed }
+  johnson   { money, reputation, hubUpgrades, boardCapacity }
+  roster    { watchedRunners[ full records ], contracts[] }
+  armory    { items[ {template, customParams, condition} ], craftQueue[] }
+  market    { unwatchedSlots[ {seed, shelfTimer} ] }          <span class="key">← seeds only</span>
+  world     { sitePool[ {seed, deltas: tags[], intel[], adjustments[]} ],
+              activeJobs[ {hiringFaction, missions[ {siteRef, objectiveVerb, payloadDomain,
+                           family, tier, intendedCrew} ], pay, successCriteria,
+                           expiryDay, staticFacts, dynamicFacts} ] }
+}</div>
+      <p><b>The save grows with player attachment, not with time played.</b> Unwatched runners are a seed and a timer. Full records exist only for Watched/Hired runners — capped by board capacity, which the player pays to expand. Sites with no tags, no intel, and no history compress back to bare seeds; tags expire; stale intel past the horizon is worthless by the game's own rules and prunes itself by the same logic. A thousand-day save and a fifty-day save differ mainly in how many runners you've loved and how many sites you've scarred — which is exactly what should persist.</p>
+      <p><b>Save timing comes free from the time model:</b> the day only advances when spent, so every day-spend is an autosave point. Missions are atomic — quitting mid-mission resolves as an abort; nothing mid-mission is ever serialized. IndexedDB for the browser target, schema version stamped from day one.</p>
+      <h3>Where randomness lives: the four layers</h3>
+      <p><b>Layer 1 — the universe (pure seed, deterministic, lazy).</b> Every new game rolls a fresh universe seed, and the universe's <em>cast and geography</em> derive from it by index: runner #42 and site #123 are pure functions of the universe seed, identical every time anyone asks, in any save of that universe. Nothing is ever pre-generated — the registry is a function, not a list, so the space is infinite and scalable by construction; a site exists the moment something first needs it, pulled from the universe seed on demand. District and owning faction come from <b>shuffle-bags keyed to the index</b>, never uniform rolls: every consecutive block of sites visits every district exactly once (reshuffled per block, no fixed rotation), and factions ride their own independently shuffled bag — so "everything is in Tacoma," "Mitsuhama owns every building," and "every building in Tacoma is Mitsuhama's" are all structurally impossible, not just unlikely. Runner street handles ride the same bag mechanism over a ~190-name base pool with per-runner styling (sparing leet substitutions, varied suffixes), so two near-identical handles ("Static_32"/"Static_42") can't coexist until an entire pool's worth of runners has minted between them. And every site carries a unique <b>Adverb-Color-Adjective-Noun-#### name</b> ("Finally-Coral-Ivory-Arrow-5413", ~4.2 billion combinations) where <b>the name is the complete seed and its words encode the site's qualities</b>: Color means the owner (the seven factions plus Unowned), Adjective means the district (the seven urban districts plus the Salish Wilds and Snoqualmie Forest), Noun means value × orientation, and the Adverb + digits are pure uniquifier. When the universe randomly needs a site, the governor <em>selects</em> the qualities it needs and <em>constructs</em> the name that means them — selection, never modification — so the dealt site is its full canonical self everywhere. Decoding the same name in any universe reproduces the entire place: identity, visual theme, security posture, and its loot probability chart. A name is a portable address across playthroughs — call one in from the site list and the word checks out — and veterans who learn to read the code are exercising street knowledge, not breaking anything: everything encoded is information the UI already shows on known sites.</p>
+      <p><b>Layer 2 — history (saved deltas).</b> Whatever has happened — accepted jobs, intel, ratcheted security, karma, contracts — is state in the save, restored exactly on reload. This is what protects the dumb-mistake retry: reloading puts the <em>situation</em> back precisely; only the unrolled future is open.</p>
+      <p><b>Layer 3 — arrivals (universe seed + real-world timestamp).</b> Job generation seeds off the wall clock at the moment it fires. A generated job is saved data and survives any reload back to it — but reload to <em>before</em> it generated and that exact contract is gone forever. Board-scumming is dead by physics, not by rule. The elegant consequence: the mint counter is saved state, so the next job needing a fresh site reveals the same next universe index — <em>the building behind the next door is universe-fixed; the deal offered against it is not.</em></p>
+      <p><b>Layer 4 — live action (fresh entropy, never replayable).</b> Every dice pool, every NPC decision, every "10% chance they call backup" is a fresh draw each time it happens, wherever you saved. Reload until the guard likes your pitch if you want — that's tolerated — but you can never inch through a fight on memorized dice, because there are no memorized dice: screwing up and restarting replays the situation, never the rolls. Market-cycle rolls (KIA included) live here too — reloading to dodge a beloved runner's death is, for now, an accepted use of the same tolerance.</p>
+    </section>
+
+    <section id="hub">
+      <div class="section-head"><span class="section-index">10</span><h2>The Hub Console</h2></div>
+      <p class="section-dek">Where the player lives between missions: the Johnson's admin terminal, built in Arcaegium's established worker-console visual language (cyan-on-black CRT, framed widgets with ID codes and live status readouts, a telemetry frame). One screen, three levels of zoom.</p>
+
+      <h3>Three levels of zoom</h3>
+      <div class="run-grid">
+        <div class="run-card"><h4>0 · The console</h4><p>The full dashboard, every widget in collapsed summary — the whole operation at a glance.</p></div>
+        <div class="run-card"><h4>1 · A subsystem</h4><p>Click a widget to open its full interface — open Runners, get the whole roster board.</p></div>
+        <div class="run-card"><h4>2 · An item</h4><p>Drill into one entry — a single runner opens their own dossier card, itself a worker-profile terminal.</p></div>
+      </div>
+
+      <h3>Frame vs. widget</h3>
+      <p>Two questions decide where information lives, and "is it global?" is not one of them. The <b>frame</b> (top bar + telemetry stream) carries compact state you <em>monitor but can't operate</em> — results of what you've done, nothing to act on: money, current day, aggregate heat, operation status. A <b>widget</b> is earned two ways — it's either a subsystem you <em>operate</em>, or it's simply <em>too voluminous to fit the frame</em>. Faction standings are the second case: as un-actionable as heat, but far too many to glance at, so they break into their own Contacts widget while aggregate heat stays a frame number.</p>
+
+      <h3>The widget set</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Widget</th><th class="wrap">Role</th><th class="wrap">Gated by</th><th class="wrap">Collapsed summary</th></tr></thead>
+          <tbody>
+            <tr><td>Job Board</td><td class="wrap">operate</td><td class="wrap">always open</td><td class="wrap">active contracts, soonest expiry, tier spread</td></tr>
+            <tr><td>Runners</td><td class="wrap">operate</td><td class="wrap">always open</td><td class="wrap"># hired / watched / spaces, 5 most-used portraits</td></tr>
+            <tr><td>Armory</td><td class="wrap">operate</td><td class="wrap">buy always; the forge needs a weaponsmith on staff</td><td class="wrap">weapon &amp; armor counts, # deployed / at-risk</td></tr>
+            <tr><td>Drone Bay</td><td class="wrap">operate</td><td class="wrap">appears with drones; fabrication needs a rigger</td><td class="wrap">drones owned, kits building</td></tr>
+            <tr><td>Deck Building</td><td class="wrap">operate</td><td class="wrap">appears with a deck; the program forge needs a Computer-skilled runner</td><td class="wrap">decks owned, flagship stats, programs cooking</td></tr>
+            <tr><td>Grimoire</td><td class="wrap">operate</td><td class="wrap">appears with a mage; spell design needs the mage + a lodge</td><td class="wrap">formulas known, foci/fetish stock, lodge Force, spells in design</td></tr>
+            <tr><td>Medicae</td><td class="wrap">operate</td><td class="wrap">wounds always shown; therapy needs a healer mage, cyberware/surgery a Street Doc</td><td class="wrap">wounded count, worst wound, work underway, Essence warnings</td></tr>
+            <tr><td>Contacts</td><td class="wrap">monitor</td><td class="wrap">appears once you hold standings</td><td class="wrap">standout standings, hottest targets</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The console grows with the operation</h3>
+      <p><b>Buying is always open; crafting is gated by staff.</b> You can purchase finished programs, weapons, or spells from day one, but a subsystem's <em>forge</em> stays dark until a runner who can work it is on your roster — the program forge lights up the day you sign a programmer, the Grimoire's design bench the day you retain a mage. The console visibly comes alive as you build out your specialists, which is the "see your empire grow" payoff rendered as the terminal itself filling with active production.</p>
+      <p>And because crafting occupies a runner for the job's duration and scales with the relevant skill, the <b>bench specialist becomes a real roster archetype</b> — the runner with a 9 Computer and nothing else isn't a field decker, they're your full-time programmer, earning a permanent slot without ever going on a mission. Not everyone you hire is for the field. It's another payoff for retaining and permanent-hiring, and it adds a second axis of runner worth — field value and bench value — which the generator produces independently (a maestro at the workbench, hopeless in a firefight).</p>
+
+      <h3>Deploy is a flow, not a widget</h3>
+      <p>Launching a mission spans widgets rather than living in one: from Job Board, pick a contract → pull a crew from Runners → issue gear from Armory / Drone Bay / Deck Building / Grimoire → go. Completing it drops the player out of the clean console into the pillar's immersive world (top-down street, cyberspace, astral canvas) and back to the terminal on return — sterile command desk versus in-the-field, a deliberate structural rhythm.</p>
+    </section>
+
+    <section id="translation">
+      <div class="section-head"><span class="section-index">11</span><h2>Open Questions</h2></div>
+      <p class="section-dek">Everything genuinely unresolved, gathered in one place.</p>
+      <ul class="qlist">
+        <li><b>01</b> <b>Solo vs. multi-decker Matrix jobs.</b> Current lean is solo-only, not closed.</li>
+        <li><b>02</b> <b>Gambling's mechanical home.</b> Proposed as part of Face/Thief, no confirmed translation into an actual system yet.</li>
+        <li><b>03</b> <b>Active roster size.</b> Should the number of runners a player can have Hired at once carry a soft cap, or is unlimited fine since per-job assignment is already the real decision?</li>
+        <li><b>04</b> <b>The "why be a Johnson" question.</b> Deliberately unsolved — the game has no plot, but some light, non-narrative framing for why the player is doing this at all is still an open thread.</li>
+        <li><b>05</b> <b>Crafting template catalogs.</b> The mechanic is settled (§03); the actual parameter spaces — which program, spell, weapon, drone-kit, and cyberware templates exist, and which knobs each exposes — are content still to be authored.</li>
+        <li><b>06</b> <b>Exact tuning constants.</b> Every worked number in this document (RAM costs, Alert tiers, complication percentages, job fuse lengths, hiring multiples, initiative-dice grants per augment, interruption band widths, drain/tether/attention budgets, crafting costs) is a first-pass proposal showing the right shape, not final balance.</li>
+      </ul>
+    </section>
+
+    <div class="part-divider">
+      <div class="part-kicker">Part Two</div>
+      <h2>Source Research — the 1994 Sega Genesis Original</h2>
+      <p>Reference material only. It informed the design above, but several of its assumptions — chief among them a single growing player character — were not carried forward.</p>
+    </div>
+
+    <section id="loop">
+      <div class="section-head"><span class="section-index alt">12</span><h2>The Contract Loop (1994)</h2></div>
+      <p class="section-dek">The part worth stealing wholesale — simple, almost no friction, every other system fed it.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Getting a job</h3>
+          <p>Mr. Johnsons — fixers, one per district, found in the back booth of a specific bar — offered a fixed menu of run types at a fixed base rate. A Negotiation stat nudged the offer. Only one contract could be held at a time; canceling cost nothing.</p>
+        </div>
+        <div class="card">
+          <h3>Doing the job</h3>
+          <p>No timer. No penalty for a wipe beyond having to re-take the run. Most runs paid out back at the Johnson afterward; Bodyguard and Courier paid on delivery instead.</p>
+        </div>
+      </div>
+
+      <div class="note" style="margin-top:18px;">
+        <b>Why it held up:</b> zero failure punishment beyond time — the only thing gating harder jobs was whether you could survive them and whether you had the right unlocks. Gear progression was the actual difficulty curve, not the missions themselves.
+      </div>
+    </section>
+
+    <section id="runs">
+      <div class="section-head"><span class="section-index alt">13</span><h2>Run Types (1994)</h2></div>
+      <p class="section-dek">Seven job types. Three (Matrix, Acquisition, Extraction) scaled through Simple / Moderate / Expert tiers tied to which corp building or system you were sent into.</p>
+
+      <div class="run-grid">
+        <div class="run-card"><h4>Bodyguard</h4><p>Escort a client A to B. Paid directly by the client, not the Johnson.</p><span class="pay">45¥–200¥ · 1 karma</span></div>
+        <div class="run-card"><h4>Courier</h4><p>Carry a package point to point. The simplest run in the game.</p><span class="pay">35¥–190¥ · 1 karma</span></div>
+        <div class="run-card"><h4>Ghoul Bounty</h4><p>Clear an infested building. Paid per-kill — can't technically be failed.</p><span class="pay">10¥–60¥ / kill · 1 karma</span></div>
+        <div class="run-card"><h4>Enforcement</h4><p>Rough up a gang hideout. Always resolves as a fight against 4–5 members.</p><span class="pay">160¥–230¥ · 1–2 karma</span></div>
+        <div class="run-card"><h4>Acquisition <span class="pill pill-moderate">tiered</span></h4><p>Infiltrate a corp building and pull a package from a wall safe.</p><span class="pay">550¥–4,500¥ · 2–6 karma</span></div>
+        <div class="run-card"><h4>Extraction <span class="pill pill-moderate">tiered</span></h4><p>Same infiltration shape as Acquisition, but the target is a person.</p><span class="pay">450¥–4,000¥ · 2–6 karma</span></div>
+        <div class="run-card"><h4>Matrix <span class="pill pill-expert">tiered</span></h4><p>Hack a system to pull, plant, delete data, or crash a CPU. No travel required.</p><span class="pay">425¥–6,350¥+ · 2–6 karma</span></div>
+      </div>
+
+      <h3>The infiltration rules (Acquisition &amp; Extraction)</h3>
+      <p>Find a security terminal first (kills cameras, reveals target floor); silenced weapons avoided alarms, unsilenced weapons and shotguns always triggered them; alarms locked every elevator until cleared from inside or the building's Matrix system was crashed remotely. Difficulty tier mapped directly to <em>which corp</em> you were sent into, not randomized modifiers.</p>
+    </section>
+
+    <section id="matrix">
+      <div class="section-head"><span class="section-index alt">14</span><h2>The Matrix (1994)</h2></div>
+      <p class="section-dek">A parallel minigame with its own economy: a deck, loadable programs, and a node graph. Widely considered the best-designed part of the original game.</p>
+
+      <h3>Node types</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Node</th><th>Shape</th><th class="wrap">Role</th></tr></thead>
+          <tbody>
+            <tr><td>SAN</td><td>Rectangle</td><td class="wrap">Entry point from a public terminal.</td></tr>
+            <tr><td>CPU</td><td>Hexagon-in-hexagon</td><td class="wrap">The system's brain — cancels alerts, teleports, or crashes the system.</td></tr>
+            <tr><td>DS</td><td>Square</td><td class="wrap">Datastore — where files live and objectives target.</td></tr>
+            <tr><td>SPU</td><td>Hexagon</td><td class="wrap">Structural filler connecting other nodes.</td></tr>
+            <tr><td>SM</td><td>Circle</td><td class="wrap">Slave module — controls cameras or maglocks.</td></tr>
+            <tr><td>IOP</td><td>Triangle</td><td class="wrap">Landing point when jacking in from inside a building.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Ice</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ice</th><th>Beaten by</th><th class="wrap">Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Access</td><td>Deception</td><td class="wrap">Common, low threat.</td></tr>
+            <tr><td>Barrier / Black Ice</td><td>Attack only</td><td class="wrap">Must be fought; Black Ice hits the decker's real body.</td></tr>
+            <tr><td>Tar Paper / Tar Pit</td><td class="wrap">n/a — avoid triggering</td><td class="wrap">Deletes the program being run and force-escalates alert on failure.</td></tr>
+            <tr><td>Trace &amp; Burn / Dump</td><td>Deception or Relocate</td><td class="wrap">A probe crawls the screen; reaching the edge dumps you.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Every node was approached the same way: try Deception first, fall back to Attack only when forced. Alerts escalated Passive → Active → dumped; only a captured CPU could reset them.</p>
+    </section>
+
+    <section id="districts">
+      <div class="section-head"><span class="section-index alt">15</span><h2>Seattle Districts (1994)</h2></div>
+      <p class="section-dek">A small handful of connected maps, not an open world. Each district had its own Johnson and its own flavor of job.</p>
+      <div class="districts">
+        <div class="district"><h4>Downtown Seattle</h4><p>Corp-dense, home turf for Fuchi and Mitsuhama.</p></div>
+        <div class="district"><h4>Penumbra District</h4><p>Club Penumbra and a second corp branch.</p></div>
+        <div class="district"><h4>Puyallup Barrens</h4><p>Low-rent, ghoul-infested; home of the Crime Mall.</p></div>
+        <div class="district"><h4>Redmond Barrens</h4><p>Tutorial-tier jobs, cheap and repetitive.</p></div>
+        <div class="district"><h4>Renraku Arcology</h4><p>The endgame corp — hardest system, hardest building.</p></div>
+        <div class="district"><h4>Salish-Shidhe Wilderness</h4><p>The non-urban zone, distinct tone from the corp sprawl.</p></div>
+      </div>
+    </section>
+
+    <section id="gear">
+      <div class="section-head"><span class="section-index alt">16</span><h2>Gear &amp; Progression (1994)</h2></div>
+      <p class="section-dek">Two parallel gear tracks — street gear for meatspace, cyberdeck gear for the Matrix.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Deck</th><th class="num-cell">MPCP</th><th class="num-cell">Hardening</th><th class="num-cell">Base price</th></tr></thead>
+          <tbody>
+            <tr><td>Allegiance Alpha</td><td class="num-cell">3</td><td class="num-cell">0</td><td class="num-cell">— (starter)</td></tr>
+            <tr><td>Cyber Shack PCD-500</td><td class="num-cell">4</td><td class="num-cell">1</td><td class="num-cell">5,000¥</td></tr>
+            <tr><td>SEGA CTY-360</td><td class="num-cell">8</td><td class="num-cell">3</td><td class="num-cell">60,000¥</td></tr>
+            <tr><td>Fuchi Cyber-7</td><td class="num-cell">10</td><td class="num-cell">4</td><td class="num-cell">125,000¥</td></tr>
+            <tr><td>Fairlight Excalibur</td><td class="num-cell">12</td><td class="num-cell">5</td><td class="num-cell">250,000¥</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid-2" style="margin-top:18px;">
+        <div class="card"><h3>What actually mattered</h3><p>Masking and Deception dominated over raw attack power — roughly two-thirds of all nodes could be beaten without a fight at all.</p></div>
+        <div class="card"><h3>Street-side gear</h3><p>Maglock passkeys and corp badges gated infiltration; silenced weapons traded raw damage for alarm-avoidance.</p></div>
+      </div>
+    </section>
+
+    <div class="foot">Part Two compiled from the StrategyWiki Shadowrun (Sega Genesis) guide (FAQ by The_Key_of_E) and supporting web sources · not final balance, a living document.</div>
+  </main>
+</div>
+
+</body></html>
