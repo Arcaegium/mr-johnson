@@ -486,6 +486,13 @@
       }
     }
 
+    // Payroll, before the day rolls over.
+    const wages = MJ.payUpkeep(session.save, session.roster);
+    if (wages.owed > 0) {
+      logLine(session, "payroll: " + wages.paid + " to permanent staff" +
+        (wages.shortfall ? " — SHORT " + wages.shortfall + ", they noticed" : ""));
+    }
+
     for (const site of session.knownSites) {
       if (site.securityState) MJ.advanceSiteDay(site.securityState);
     }

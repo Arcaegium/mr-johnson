@@ -100,6 +100,42 @@
   const RETAINER_DISCOUNT = 0.7;    // "a contracted block... at a discount off current price"
   const PERMANENT_MULTIPLIER = 10;  // "a lump sum relative to current price"
 
+  // Permanent staff draw a wage. A one-time buyout with no running
+  // cost meant a mature operation banked nuyen with nothing pulling
+  // it back out — the endgame leak is an ACTIVE elite crew earning
+  // without limit, not a full bench. Charged per day and scaled off
+  // the runner's own market value, so an elite costs more to keep
+  // than a ganger.
+  //
+  // Deliberately small: the tier ladder must still hold, so a
+  // permanent hire stays the cheapest way to field someone you
+  // actually use. At 2% of a freelance dispatch per day it takes
+  // ~50 idle days to burn what one freelance mission costs, against
+  // a buyout that pays for itself in 10 dispatches.
+  //
+  // Retainers pay NOTHING. An undispatched bench-warmer is not the
+  // problem this solves, and the bible blesses the untouched
+  // retainer on purpose (§03).
+  const PERMANENT_UPKEEP_RATE = 0.02;
+
+  function dailyUpkeep(runner) {
+    const hired = runner.market.hired;
+    if (!hired || hired.tier !== "permanent") return 0;
+    return Math.round(MJ.computePrice(runner) * NUYEN_PER_VALUE * PERMANENT_UPKEEP_RATE);
+  }
+
+  // The whole payroll for one day. Returns what was owed and what
+  // was actually paid — a short operation still owes the wage, so
+  // the shortfall is reported rather than silently forgiven.
+  function payUpkeep(save, roster) {
+    let owed = 0;
+    for (const r of roster) owed += dailyUpkeep(r);
+    if (owed <= 0) return { owed: 0, paid: 0, shortfall: 0 };
+    const paid = Math.min(owed, save.johnson.money);
+    save.johnson.money -= paid;
+    return { owed: owed, paid: paid, shortfall: owed - paid };
+  }
+
   function hireCost(runner, tier) {
     const base = MJ.computePrice(runner) * NUYEN_PER_VALUE; // one mission at market price
     if (tier === "freelance") return Math.round(base);
@@ -222,6 +258,8 @@
   MJ.spend = spend;
   MJ.earn = earn;
   MJ.collectJobPay = collectJobPay;
+  MJ.dailyUpkeep = dailyUpkeep;
+  MJ.payUpkeep = payUpkeep;
   MJ.hireCost = hireCost;
   MJ.hireRunnerWithCost = hireRunnerWithCost;
   MJ.upgradeCredit = upgradeCredit;
