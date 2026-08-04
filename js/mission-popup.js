@@ -177,6 +177,15 @@
     if (run.walkedIntoResponse && run.walkedIntoResponse.length) {
       lines.push(no("Already up from earlier: ") + run.walkedIntoResponse.map(esc).join(", ") + no(" — waiting at the door"));
     }
+    // The tether only exists on an astral run, and when it does it
+    // is the most urgent number on the screen — it is how long until
+    // they are ripped back into their body.
+    if (run.tether !== null && run.tether !== undefined) {
+      lines.push('<span class="dimmed">tether </span>' + num(run.tether) +
+        '<span class="dimmed"> of </span>' + num(run.tetherMax) +
+        '<span class="dimmed"> turns left</span>' +
+        (run.tether <= 2 ? " " + no("— the pull is getting hard") : ""));
+    }
     const band = run.site && run.site.securityState ? MJ.threatBand(run.site.securityState, run.day) : "normal";
     if (band !== "normal") {
       lines.push('<span class="dimmed">they are reading you as </span>' +

@@ -114,6 +114,10 @@
       // site's HOST, not its corridors. Two routes: quiet takes the
       // fewest nodes, greedy detours through datastores for a bigger
       // haul and eats the extra ice for it.
+      // An astral run is one mage projecting — walls are irrelevant,
+      // so it is short, but wards gate it at BOTH ends and the tether
+      // is always running.
+      acts.push({ v: "astral", label: "Astral run — project in" });
       if (site.host && site.host.nodes.length > 1) {
         acts.push({ v: "matrix:quiet", label: `Matrix run — quiet (${site.host.nodes.length} nodes)` });
         acts.push({ v: "matrix:data", label: "Matrix run — grab all the data you can" });
@@ -163,6 +167,9 @@
     if (act.indexOf("recon:") === 0) {
       const lens = act.split(":")[1];
       return { mission: MJ.createReconMission(site, lens), label: `recon ${lens} @ ${siteTag(site)}` };
+    }
+    if (act === "astral") {
+      return { mission: MJ.createAstralMission(site), label: `astral run @ ${siteTag(site)}` };
     }
     if (act.indexOf("matrix:") === 0) {
       const greedy = act.split(":")[1] === "data";

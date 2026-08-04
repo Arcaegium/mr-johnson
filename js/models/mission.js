@@ -204,6 +204,18 @@
     return { files: files, storage: storage, nodesLooted: reached.length };
   }
 
+  // An astral run: one mage, projecting. No crew walks in, no walls
+  // matter, and the only things in the way are wards and whatever
+  // lives there. Fast and short — and gated at both ends by any ward
+  // it had to cross.
+  function createAstralMission(site) {
+    return {
+      kind: "astralRun",
+      site: site,
+      objective: { verb: "Intel", domain: "astral" },
+    };
+  }
+
   function createReconMission(site, lens) {
     return { kind: "recon", lens: lens, site: site, locationType: "site", resolved: false, karmaAward: null };
   }
@@ -405,6 +417,92 @@
     return { path: path, obstacles: obstacles.slice(0, MAX_ROUTE_OBSTACLES), dataNodes: dataNodes, host: host };
   }
 
+  // ── The astral run ─────────────────────────────────────────────
+  // The inverse of a break-in. §08: "movement is free, vision is
+  // constrained" — an astral form passes through walls, so the whole
+  // room graph the meatspace crew has to solve is simply irrelevant.
+  // A corridor of guards is nothing to a projecting mage.
+  //
+  // Two things constrain them instead, and they are the level design:
+  //   1. WARDS. "The one wall that works both ways." A ward seals an
+  //      area; nothing else stops astral movement at all.
+  //   2. WHAT LIVES THERE. Spirits, in their zones.
+  //
+  // Which yields the pillar's nastiest situation for free, straight
+  // from §08: "a ward between you and your body blocks the way home."
+  // Every ward crossed on the way in has to be crossed again on the
+  // way out — going in is only half the budget, and a mage who
+  // spends everything reaching the objective is stranded inside it.
+  function astralRoute(site) {
+    const objective = site.layout.rooms[0]; // room 0 is always the objective
+    const inbound = [];
+    for (const ward of objective.astralObstacles || []) {
+      ward.rooms = ["astral-objective"];
+      inbound.push(ward);
+    }
+    for (const zone of site.layout.spiritZones || []) {
+      if ((zone.roomIds || []).indexOf(objective.id) === -1) continue;
+      for (const spirit of zone.astralObstacles || []) {
+        spirit.rooms = ["astral-objective"];
+        inbound.push(spirit);
+      }
+    }
+    // The way home. Only WARDS gate the exit — a spirit you slipped
+    // past is not standing between you and your body, but a wall of
+    // light is.
+    const outbound = inbound
+      .filter((o) => o.type === "ward")
+      .map((ward) => Object.assign({}, ward, {
+        label: ward.label + " (the way back)",
+        affordances: ward.affordances.map((a) => Object.assign({}, a)),
+        rooms: ["astral-objective"],
+        isExitWard: true,
+      }));
+    return { inbound: inbound, outbound: outbound, obstacles: inbound.concat(outbound) };
+  }
+
+  // ── The tether ─────────────────────────────────────────────────
+  // §08's second pressure: "a budget of astral turns, sized by the
+  // mage's Magic stat — every move, assense, and encounter exchange
+  // ticks it uniformly." Running out is the HARD fail: "forced
+  // snap-back plus downed (a wound)."
+  //
+  // Where Drain asks how hard you pushed, the tether asks how long
+  // you have been out — a fast loud run burns Drain but few ticks, a
+  // slow careful one conserves Drain and eats the tether. Same
+  // duality as the Matrix's cards-versus-Alert, different clothes.
+  const TETHER_PER_MAGIC = 2; // astral runs at 2 dice to meatspace's 1
+
+  function tetherFor(runners) {
+    let best = 0;
+    for (const r of runners) best = Math.max(best, (r.attributes.magic || 0) * TETHER_PER_MAGIC);
+    return best;
+  }
+
+  function tickTether(run) {
+    if (run.tether === undefined || run.tether === null) return null;
+    run.tether -= 1;
+    if (run.tether > 0) return null;
+    // Snapped back. Whoever was projecting takes it, exactly like any
+    // other way of going down mid-run.
+    const projector = run.runners.reduce((a, b) =>
+      ((a.attributes.magic || 0) >= (b.attributes.magic || 0) ? a : b));
+    if (!run.downed) run.downed = new Set();
+    if (run.downed.has(projector)) return null;
+    run.downed.add(projector);
+    run.failed = true;
+    run.aborted = true;
+    const casualty = resolveTakedown(run, {
+      source: projector, physical: 0, physicalMax: 1, stun: 1, stunMax: 1,
+    });
+    run.tasks.push({
+      obstacle: "—", tier: 0,
+      result: "the tether ran out — " + projector.identity.handle + " was snapped back into their body",
+      tetherOut: true, casualty: casualty,
+    });
+    return casualty;
+  }
+
   function reconObstacles(site, lens) {
     const all = MJ.allObstacles(site);
     const pool = lens === "matrix"
@@ -475,6 +573,7 @@
     const site = mission.site;
     const kind = missionKind(mission);
     const matrixRun = kind === "matrixRun" ? hostRoute(site, { wantData: !!mission.wantData }) : null;
+    const astralRun = kind === "astralRun" ? astralRoute(site) : null;
     if (!site.securityState) MJ.initSecurityState(rng, site);
     const state = site.securityState;
     // Karma keys off the START of the mission — snapshot first.
@@ -493,7 +592,13 @@
       intelBonus: hasFreshIntel(site, day) ? INTEL_BONUS_DICE : 0,
       obstacles: kind === "recon" ? reconObstacles(site, mission.lens)
         : kind === "matrixRun" ? matrixRun.obstacles
+        : kind === "astralRun" ? astralRun.obstacles
         : routeObstacles(site),
+      // Sized by the strongest projector on the crew. Null for every
+      // other kind of run — only an astral form is on a tether.
+      tether: kind === "astralRun" ? tetherFor(runners) : null,
+      tetherMax: kind === "astralRun" ? tetherFor(runners) : null,
+      astralRun: astralRun,
       // Matrix runs carry their route so the readout can say WHERE
       // in the host the decker is, and what is still worth grabbing.
       hostRoute: matrixRun,
@@ -623,16 +728,39 @@
   const RESPONDER_TYPES = {
     physical: ["guard", "camera"],
     astral: ["spirit"],
-    matrix: ["maglock", "camera"],
+    // Ice, now that the Matrix pillar exists. This used to spawn
+    // maglocks and cameras — the note above said it did so rather
+    // than "inventing ice the unbuilt Matrix pillar would have to
+    // contradict later." The pillar is built, so the response is
+    // what a host actually sends.
+    matrix: ["patrolIce", "blackIce"],
   };
+
+  // Which world this run is happening in. A projecting mage is not
+  // in the building and a decker is not in the room, so what can
+  // actually get in their way is not the same list.
+  function runPlane(run) {
+    if (run.kind === "astralRun") return "astral";
+    if (run.kind === "matrixRun") return "matrix";
+    return "physical";
+  }
 
   function spawnResponders(run, atIndex) {
     const spawned = [];
+    const plane = runPlane(run);
     for (const axis of MJ.SECURITY_AXES) {
       const tier = MJ.alertLevel(run.state, axis);
       if (tier < 1) continue;
+      // The site mobilises on every axis — that is the alert model,
+      // and it stays true. But only what shares the runner's PLANE
+      // can physically get in their way: a camera cannot stop a
+      // projecting mage and ice cannot stop a man in a corridor.
+      // Spawning all three regardless put Black ICE in the path of
+      // an astral form, which is nonsense the plane system exists to
+      // prevent.
+      if (axis !== plane) continue;
       const typeId = run.rng.pick(RESPONDER_TYPES[axis]);
-      const projection = axis === "astral" ? "astral" : "physical";
+      const projection = axis === "astral" ? "astral" : axis === "matrix" ? "matrix" : "physical";
       const ob = MJ.generateObstacleInstance(run.rng, typeId, Math.min(10, tier), projection);
       ob.responder = axis;
       spawned.push(ob);
@@ -979,6 +1107,7 @@
     }
 
     MJ.extendedTestStep(run.rng, w.test);
+    tickTether(run); // working slowly out there costs the same clock
     // Every interval is time on the clock. If they are already being
     // hunted, standing still working a lock is the worst thing you
     // can do, and the response keeps building while you do it.
@@ -1208,6 +1337,9 @@
     if (outcome.success && affordance && affordance.neutralizes) {
       run.neutralized.add(obstacle);
     }
+    // Every exchange out there is time on the tether.
+    tickTether(run);
+
     // What did that reveal, and did anything see it?
     const key = attemptKey(run.index, approach);
     run.attempts[key] = (run.attempts[key] || 0) + 1;
@@ -1659,6 +1791,9 @@
   MJ.isDispatchable = isDispatchable;
   MJ.createReconMission = createReconMission;
   MJ.createMatrixMission = createMatrixMission;
+  MJ.createAstralMission = createAstralMission;
+  MJ.astralRoute = astralRoute;
+  MJ.tetherFor = tetherFor;
   MJ.hostRoute = hostRoute;
   MJ.hostPaths = hostPaths;
   MJ.createCraftingMission = createCraftingMission;

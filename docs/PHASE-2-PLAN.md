@@ -5,7 +5,8 @@ order. Phase 1 is complete. **This is the current work.**
 
 Companion documents (living, canonical):
 
-- **Design bible** — https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8
+- **Current understanding** — https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8
+  (records decisions; it does not make them — if a call changes, the document changes)
 - **Build plan** — https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d
 - **This plan, formatted** — https://claude.ai/code/artifact/ae02034e-d2a1-4496-9828-fc84d275eba3
 
@@ -40,15 +41,17 @@ replaces that or was blocked by it.
 |----|------|--------|-------|
 | **P2.0** | Attributes into the dice pool | **DONE** | Pool = Skill + Attribute. Strength restored (7 attributes); metatype sets ceilings; Awakened reweighted to a third; `presence` split into leadership + intimidation. |
 | **P2.1** | Extended tests | **DONE** | Hits accumulate toward a tier-scaled threshold, pool drops each interval, a glitch ends it and takes the progress. Replaces `attempts: N` on technical work, and gives a difficulty axis with no ceiling. |
-| **P2.2** | Turn-based mode | **ENGINE DONE**, not wired | Deterministic initiative (Agility + Intelligence, no roll), initiative dice as action count, pass structure, surprise round. `js/models/combat.js`. |
-| **P2.3** | Combat, health, Drain, death | **PARTLY DONE** | Three-gate chain, dual Body/Willpower tracks, stances, fire modes and ammunition all built and benched. **Still to do: Drain, scaled wounds, death-on-takedown, and wiring combat into the mission stepper.** |
-| **P2.4** | Planes and witnessing | **PARTLY DONE** | Witnessing by what else has eyes is built. **Still to do: the plane split** — an act happens on a plane and only perceivers on that plane witness it, plus `dualNatured`. |
-| **P2.5** | Pillar scene-text | to do | Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve. |
+| **P2.2** | Turn-based mode | **DONE** | Deterministic initiative (Agility + Intelligence, no roll), initiative dice as action count, pass structure, surprise round — and wired into missions, so a violent approach opens an actual fight. `js/models/combat.js`. |
+| **P2.3** | Combat, health, Drain, death | **DONE** | Three-gate chain, dual tracks, stances, fire modes, ammunition, Force/Drain with overcasting, scaled wounds, and death on a full takedown (1 in 20). |
+| **P2.4** | Planes and witnessing | **DONE** | `senses` is a list of planes; each affordance carries the plane its act happens on; spirits are `dualNatured`. Responders now spawn only on the runner's own plane. |
+| **P2.5** | Pillar scene-text | **MOSTLY DONE** | Matrix node-crawl (hosts, ice, routes, data haul) and astral sense-and-resolve (wards both ways, the tether) both built. Meatspace was already the default. **Remaining: simultaneity / multi-front ops**, gated on UI. |
 | **P2.6** | Retire the scaffolding | to do | `attempts: N` comes off violent affordances once combat is wired. Obstacles become situations, not checks. |
 
 **Shipped so far:** `4c7efc8` attributes into the pool · `95366a4` extended
-tests · `88c417d` the combat engine. Suite at 77,846 assertions, 0 failures,
-plus a dedicated combat bench.
+tests · `88c417d` the combat engine · `fc68f3a` combat wired into missions ·
+`0da8942` personal kit + enemy retune · `d6eb96e` crafted quality ·
+`e2f8dc3` planes + Drain · `646117c` the Matrix pillar. Suite at 82,733
+assertions, 0 failures, plus a dedicated combat bench.
 
 ---
 
