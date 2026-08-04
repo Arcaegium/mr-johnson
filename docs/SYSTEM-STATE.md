@@ -41,8 +41,14 @@ js/models/site.js    1030  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
                            encodeSiteName decodeSiteName siteIdentityFromIndex
                            CONDITIONS CONDITION_IDS CONDITION_WORDS
                            -- condition is the name's FIRST word and a real
-                              quality: shifts the security triple before it is
-                              spent, plus cover/patrols/zones/entries/loot/theme
+                              quality. Its main lever is COMPOSITION: `weights`
+                              multiply each obstacle type's chance of being what
+                              a slot buys, so a derelict block fields bodies
+                              where a posh tower fields cameras, at comparable
+                              strength. `security` moves only where the
+                              condition destroys or creates capability.
+                              Orthogonal to theme -- every theme under every
+                              condition.
                            allObstacles findPaths usableNonLoudWays
 js/models/alert.js    274  THE THREAT READ. initSecurityState threatBand witnessAct
                            grantHeadroom engageAlert alertLevel alertEngaged
@@ -99,7 +105,7 @@ js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
                            MJ.missionPopup (drives the mission stepper through it)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)
-js/stress.js          ~1.6k 14 probe classes. ~86k assertions, 0 failures.
+js/stress.js          ~1.7k 14 probe classes. ~83k assertions, 0 failures.
                            Deterministic by construction: no live entropy, so a
                            failure always reproduces.
 ```

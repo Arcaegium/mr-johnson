@@ -388,10 +388,19 @@
     // earlier in the period opens the gated leg immediately — with a
     // second crew, since each runner still only acts once.
     let gateProved = false;
-    for (let i = 0; i < 200 && !gateProved; i++) {
+    for (let i = 0; i < 600 && !gateProved; i++) {
       const rng = MJ.makeRNG("stress-gate-" + i);
       const { job } = MJ.generateJob(rng.fork("j"), [], 1, { missionCount: 2 });
-      if (!job.chained || !job.missions.every((m) => m.site.identity.value <= 2)) continue;
+      // Filter on the SECURITY the crew actually has to beat, not on
+      // Value. Since a site's condition shifts the triple, a value-2
+      // site can be a fortified one with real teeth — selecting on
+      // Value alone was selecting on a number that no longer predicts
+      // whether the control run succeeds, which is what makes a probe
+      // depend on luck instead of on the thing it is testing.
+      if (!job.chained) continue;
+      const soft = job.missions.every((m) =>
+        m.site.security.physical <= 2 && m.site.security.astral <= 2 && m.site.security.matrix <= 2);
+      if (!soft) continue;
       const crewA = makeRoster(rng.fork("ca"), 2, ["fighter", "decker"]);
       const crewB = makeRoster(rng.fork("cb"), 2, ["fighter", "mage"]);
       for (const r of [...crewA, ...crewB]) {
@@ -1470,7 +1479,7 @@
 
     // No dead dials. A key on a condition that nothing reads is a
     // number a player could discover does not matter.
-    const READ_DIALS = ["label", "security", "cover", "patrols", "zones", "entries", "loot", "themes"];
+    const READ_DIALS = ["label", "security", "weights", "cover", "patrols", "zones", "entries", "loot"];
     for (const id of MJ.CONDITION_IDS) {
       const cond = MJ.CONDITIONS[id];
       check(!!cond, "C14: condition " + id + " must have a definition");
@@ -1480,8 +1489,14 @@
           "C14: condition " + id + " declares \"" + key + "\", which the generator never reads");
       }
       // Every condition must actually DO something beyond its name.
-      const moves = Object.keys(cond).filter((k) => k !== "label" && k !== "themes");
+      const moves = Object.keys(cond).filter((k) => k !== "label");
       check(moves.length > 0, "C14: condition " + id + " changes nothing");
+      // A weight may only name an obstacle type that exists, or it
+      // is a lean on nothing.
+      const KNOWN_TYPES = ["maglock", "guard", "camera", "ward", "spirit"];
+      for (const t of Object.keys(cond.weights || {})) {
+        check(KNOWN_TYPES.indexOf(t) !== -1, "C14: " + id + " weights unknown obstacle type \"" + t + "\"");
+      }
     }
 
     // Words: eight conditions, and every word unique within the table
@@ -1535,15 +1550,67 @@
     check(single === 0, "C14: no condition may leave a site with one route in (" + single + "/" + checked + ")");
     check(outOfRange === 0, "C14: condition shifts must clamp security to 1-10 (" + outOfRange + " out of range)");
 
-    // And it must MOVE things: the softest and hardest conditions on
-    // the same address should differ in what the crew walks into.
-    const derelict = MJ.mintSiteByName("Derelict" + tail);
-    const fortified = MJ.mintSiteByName("Fortified" + tail);
-    check(MJ.allObstacles(derelict).length < MJ.allObstacles(fortified).length,
-      "C14: a derelict site must field less than a fortified one (" +
-      MJ.allObstacles(derelict).length + " vs " + MJ.allObstacles(fortified).length + ")");
-    check(derelict.security.physical < fortified.security.physical,
-      "C14: derelict must be physically softer than fortified");
+    // ── Composition, not amount ───────────────────────────────────
+    // The point of a condition is that it changes WHAT defends a
+    // place, not merely how much. A derelict block and a posh tower
+    // of the same rating must ask a crew for different skills — the
+    // derelict one full of bodies, the posh one full of systems —
+    // and the derelict one must NOT simply be the easier of the two.
+    const mixFor = (id, seedLabel) => {
+      const r = MJ.makeRNG("mix-" + seedLabel);
+      const tally = { guard: 0, camera: 0, maglock: 0, ward: 0, spirit: 0 };
+      let total = 0, physical = 0, sites = 0;
+      for (let i = 0; i < 150; i++) {
+        const q = { condition: id, district: r.pick(MJ.SITE_DISTRICTS), owner: r.pick(MJ.OWNERS),
+          value: r.int(6, 10), orientation: "physical" };
+        const site = MJ.mintSiteByName(MJ.encodeSiteName(q, r.fork("m" + i)));
+        sites += 1; physical += site.security.physical;
+        for (const o of MJ.allObstacles(site)) {
+          const t = o.typeId || o.type;
+          if (tally[t] !== undefined) { tally[t] += 1; total += 1; }
+        }
+      }
+      const share = (k) => (total ? tally[k] / total : 0);
+      return { share, total, perSite: total / sites, physical: physical / sites };
+    };
+    const der = mixFor("derelict", "der");
+    const posh = mixFor("posh", "posh");
+    const wired = mixFor("wired", "wired");
+
+    check(der.share("guard") > 0.5, "C14: a derelict site is held by BODIES (guards " + (100 * der.share("guard")).toFixed(0) + "%)");
+    check(der.share("camera") + der.share("maglock") < 0.2,
+      "C14: derelict electronics must be mostly dead (" + (100 * (der.share("camera") + der.share("maglock"))).toFixed(0) + "%)");
+    check(posh.share("camera") + posh.share("maglock") > 0.5,
+      "C14: a posh site is held by SYSTEMS (" + (100 * (posh.share("camera") + posh.share("maglock"))).toFixed(0) + "%)");
+    check(wired.share("guard") < der.share("guard"),
+      "C14: an automated site fields fewer bodies than a derelict one");
+    // The crucial one: derelict is DIFFERENT, not softer.
+    check(der.physical > posh.physical * 0.8,
+      "C14: a derelict site must not be a pushover — P" + der.physical.toFixed(1) + " vs posh P" + posh.physical.toFixed(1));
+    check(der.perSite > posh.perSite * 0.7,
+      "C14: a derelict site must still field real opposition (" +
+      der.perSite.toFixed(1) + " vs " + posh.perSite.toFixed(1) + " per site)");
+
+    // Theme and condition are orthogonal — every theme must be
+    // reachable under every condition. A sealed-off arcology floor
+    // is a location, not a contradiction.
+    const themesByCondition = {};
+    for (const id of MJ.CONDITION_IDS) {
+      const r = MJ.makeRNG("theme-" + id);
+      const seenThemes = new Set();
+      for (let i = 0; i < 300; i++) {
+        const q = { condition: id, district: "Downtown", owner: "Ares",
+          value: r.int(1, 10), orientation: r.pick(["physical", "astral", "matrix", "balanced"]) };
+        seenThemes.add(MJ.mintSiteByName(MJ.encodeSiteName(q, r.fork("t" + i))).identity.theme);
+      }
+      themesByCondition[id] = seenThemes;
+      check(seenThemes.size >= 10,
+        "C14: " + id + " must reach the whole urban theme pool (saw " + seenThemes.size + ")");
+    }
+    check(themesByCondition.derelict.has("arcology floor"),
+      "C14: an arcology floor must be able to fall derelict");
+    check(themesByCondition.flooded.has("datacenter"),
+      "C14: a datacenter must be able to flood");
   }
 
   // ── Class 13: the combat modifier layer ─────────────────────────

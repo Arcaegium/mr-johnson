@@ -447,11 +447,17 @@
   // draw.) The fractional remainder of the coverage target resolves
   // by weighted coin flip, so the long-run average matches the exact
   // percentage even though any single site rounds to a whole number.
-  function distributeObstacles(rng, allSlots, mobileSlotSet, securityValue, staticTypes, mobileTypes, fieldName, projection) {
+  // `cond` leans WHICH type each slot buys. The budget decides how
+  // much a site fields; the weights decide what it fields, which is
+  // where a derelict block and a corporate tower of the same rating
+  // stop resembling each other.
+  function distributeObstacles(rng, allSlots, mobileSlotSet, securityValue, staticTypes, mobileTypes, fieldName, projection, cond) {
     const target = allSlots.length * (securityValue / 10);
     const base = Math.floor(target);
     const remainder = target - base;
     let budget = base + (rng.chance(remainder) ? 1 : 0);
+    const staticWeighted = weightedTypes(staticTypes, cond);
+    const mobileWeighted = weightedTypes(mobileTypes, cond);
 
     let guardLoop = 0;
     while (budget > 0 && guardLoop++ < 200) {
@@ -459,7 +465,7 @@
       for (const slot of pass) {
         if (budget <= 0) break;
         const isMobile = mobileSlotSet.has(slot);
-        const typeId = rng.pick(isMobile ? mobileTypes : staticTypes);
+        const typeId = rng.weighted(isMobile ? mobileWeighted : staticWeighted);
         slot[fieldName].push(generateObstacleInstance(rng, typeId, rng.int(1, securityValue), projection));
         budget--;
       }
@@ -641,7 +647,7 @@
       ...rooms.flatMap((r) => r.postSlots),
       ...patrols,
     ];
-    distributeObstacles(rng, physicalSlots, new Set(patrols), security.physical, PHYSICAL_OBSTACLE_TYPES, PHYSICAL_PATROL_TYPES, "physicalObstacles", "physical");
+    distributeObstacles(rng, physicalSlots, new Set(patrols), security.physical, PHYSICAL_OBSTACLE_TYPES, PHYSICAL_PATROL_TYPES, "physicalObstacles", "physical", cond);
 
     // Astral spirit zones: 0-2 per site, roaming 2-3 rooms with no
     // adjacency requirement (walls don't stop them).
@@ -655,7 +661,7 @@
     // hold a stationed spirit) + spirit zones, funded by
     // security.astral — its own slot pool, not physical's.
     const astralSlots = [...rooms, ...spiritZones];
-    distributeObstacles(rng, astralSlots, new Set(spiritZones), security.astral, ASTRAL_ROOM_TYPES, ASTRAL_ZONE_TYPES, "astralObstacles", "astral");
+    distributeObstacles(rng, astralSlots, new Set(spiritZones), security.astral, ASTRAL_ROOM_TYPES, ASTRAL_ZONE_TYPES, "astralObstacles", "astral", cond);
 
     return { rooms, edges, entryPoints, patrols, spiritZones };
   }
@@ -688,27 +694,14 @@
     "squatter encampment", "forest shrine", "crash site",
   ];
 
-  // Some conditions rule places in and out. A gutted building can be
-  // a tenement or a parking structure; it is not an arcology floor.
-  // A half-built one is a shell of whatever it will become.
-  const CONDITION_THEMES = {
-    decayed: [
-      "tenement block", "warehouse complex", "parking structure", "street clinic",
-      "shipping depot", "nightclub", "temple",
-    ],
-    raw: [
-      "arcology floor", "corporate tower", "tenement block", "warehouse complex",
-      "parking structure", "datacenter",
-    ],
-  };
-
-  function themePoolFor(isWild, cond) {
-    // The wilds have their own vocabulary and ignore condition
-    // steering — a flooded cavern system is still a cavern system.
-    if (isWild) return WILD_THEMES;
-    const steer = cond && cond.themes;
-    return (steer && CONDITION_THEMES[steer]) || URBAN_THEMES;
-  }
+  // Condition and theme are ORTHOGONAL. Any building can fall into
+  // disrepair, flood, or fill up with squatters — an arcology floor
+  // that was sealed off rather than dealt with is a better location
+  // than a tenement, not a disallowed one. Gating themes by
+  // condition would quietly delete the most interesting half of the
+  // space: the derelict datacenter, the flooded corporate tower, the
+  // haunted arcology. Every theme is available under every
+  // condition, and the pairing is the flavour.
 
   function generateLootTable(rng, value, orientation, cond) {
     // The probability chart of what can be found here: harvest draws
@@ -751,7 +744,7 @@
     const population = generatePopulation(r, security);
     const district = options.district || r.pick(DISTRICTS);
     const isWild = WILD_DISTRICTS.indexOf(district) !== -1;
-    const theme = r.pick(themePoolFor(isWild, CONDITIONS[condition]));
+    const theme = r.pick(isWild ? WILD_THEMES : URBAN_THEMES);
     const lootTable = generateLootTable(r, value, orientation, CONDITIONS[condition]);
 
     return {
@@ -877,32 +870,77 @@
     raw:       ["Raw", "Unfinished", "Scaffolded", "Skeletal", "Framed", "Bare", "Halfbuilt", "Rough"],
   };
 
-  // What each condition DOES. `security` shifts the triple before
-  // anything is bought with it, so the condition changes how much
-  // opposition the site can afford rather than being repainted on
-  // top of a fixed budget. Value is untouched: a derelict tier-9
-  // target is still a tier-9 payday, defended like less — and the
-  // player can read that off the first word of the address, so it
-  // is intel rather than a trap.
+  // What each condition DOES.
+  //
+  // The main lever is COMPOSITION, not amount. A derelict building is
+  // not an undefended one — it is one defended by whoever moved in.
+  // The corporate systems are dead (no power, no maintenance, water
+  // in the risers), and the bodies holding the place are squatters,
+  // gangers, things that eat people. A posh building is the reverse:
+  // fewer bodies, and cameras and maglocks everywhere the money
+  // reached. Both can be ferociously hard; they are hard in ways
+  // that ask a crew for completely different skills.
+  //
+  // So `weights` multiplies each obstacle type's chance of being what
+  // a slot buys, and `security` moves the BUDGET only where the
+  // condition genuinely destroys or creates capability — water and
+  // neglect really do kill a host; money really does buy more of
+  // everything. Value is untouched throughout: a derelict tier-9
+  // target is still a tier-9 payday, and the player reads what kind
+  // of fight it is off the first word of the address.
   const CONDITIONS = {
-    derelict:  { label: "derelict",  security: { physical: -3, astral: 1, matrix: -2 }, cover: 1, patrols: -1, zones: 1, loot: -1, themes: "decayed" },
-    posh:      { label: "posh",      security: { physical: 1, astral: 0, matrix: 2 },  cover: -1, loot: 1 },
+    // The systems are dead; the population is the security.
+    derelict:  { label: "derelict",  security: { physical: 0, astral: 1, matrix: -3 },
+                 weights: { maglock: 0.2, camera: 0.2, guard: 2.2, ward: 0.3, spirit: 1.8 },
+                 cover: 1, patrols: -1, zones: 1, loot: -1 },
+    // Money buys systems, and systems mean fewer people on the floor.
+    posh:      { label: "posh",      security: { physical: 1, astral: 0, matrix: 2 },
+                 weights: { maglock: 1.6, camera: 1.8, guard: 0.7, ward: 1.6, spirit: 0.6 },
+                 cover: -1, loot: 1 },
     // Fortified hardens the ways in; it does not brick them up.
     // Removing an entry point costs the site its second distinct
     // route to the objective (generator invariant 2), which is the
-    // player's whole ability to plan an approach. The physical
-    // bump and the extra patrol are what "hardened" means here.
-    fortified: { label: "fortified", security: { physical: 3, astral: 0, matrix: 1 },  patrols: 1 },
-    haunted:   { label: "haunted",   security: { physical: -1, astral: 3, matrix: -1 }, zones: 1, themes: "decayed" },
+    // player's whole ability to plan an approach.
+    // +2 rather than +3: fortified already stacks an extra patrol and
+    // a lean toward guards, and at +3 a value-9 site pinned physical
+    // at 10 — a wall rather than a hard job. The identity is in the
+    // composition and the patrol, not in the size of the number.
+    fortified: { label: "fortified", security: { physical: 2, astral: 0, matrix: 1 },
+                 weights: { maglock: 1.3, camera: 1.2, guard: 1.5, ward: 1.2, spirit: 1.0 },
+                 patrols: 1 },
+    // Thin on the ground, thick on the other side of it.
+    haunted:   { label: "haunted",   security: { physical: -1, astral: 3, matrix: -1 },
+                 weights: { maglock: 0.7, camera: 0.7, guard: 0.5, ward: 0.7, spirit: 2.0 },
+                 zones: 1 },
     // No hostNodes dial: node count already tracks matrix security,
-    // so the +3 grows the crawl on its own. A second knob pointed at
-    // the same number would be a dial that looks like it does
-    // something and does it twice.
-    wired:     { label: "wired",     security: { physical: 0, astral: -1, matrix: 3 } },
-    bustling:  { label: "bustling",  security: { physical: 1, astral: 0, matrix: 0 },  cover: 1, patrols: 1 },
-    flooded:   { label: "flooded",   security: { physical: -2, astral: -1, matrix: -2 }, cover: 1, themes: "decayed" },
-    raw:       { label: "raw",       security: { physical: -1, astral: 0, matrix: -2 }, entries: 1, cover: 1, themes: "raw" },
+    // so the +3 grows the crawl on its own.
+    wired:     { label: "wired",     security: { physical: 0, astral: -1, matrix: 3 },
+                 weights: { maglock: 1.7, camera: 1.9, guard: 0.5, ward: 0.8, spirit: 0.7 } },
+    // People everywhere — cover, witnesses, and hands to grab you.
+    bustling:  { label: "bustling",  security: { physical: 1, astral: 0, matrix: 0 },
+                 weights: { maglock: 0.7, camera: 1.0, guard: 1.9, ward: 0.9, spirit: 0.9 },
+                 cover: 1, patrols: 1 },
+    // Water is what actually kills a building's electronics.
+    flooded:   { label: "flooded",   security: { physical: 0, astral: 0, matrix: -3 },
+                 weights: { maglock: 0.3, camera: 0.3, guard: 1.4, ward: 0.8, spirit: 1.4 },
+                 cover: 1 },
+    // Nothing is installed yet; the security is the site crew.
+    raw:       { label: "raw",       security: { physical: -1, astral: 0, matrix: -2 },
+                 weights: { maglock: 0.4, camera: 0.5, guard: 1.6, ward: 0.5, spirit: 1.0 },
+                 entries: 1, cover: 1 },
   };
+
+  // Baseline chance of each obstacle type before a condition leans
+  // on it. A condition's `weights` multiply these.
+  const TYPE_WEIGHTS = { maglock: 3, guard: 4, camera: 3, ward: 3, spirit: 3 };
+
+  function weightedTypes(types, cond) {
+    const mult = (cond && cond.weights) || {};
+    return types.map((id) => ({
+      item: id,
+      weight: Math.max(0.01, (TYPE_WEIGHTS[id] || 1) * (mult[id] === undefined ? 1 : mult[id])),
+    }));
+  }
 
   // Each district owns its adjectives outright. Adding a word to a
   // district widens that district's names and nothing else.

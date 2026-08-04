@@ -683,22 +683,50 @@ the name, it round-trips, and it drives generation.
 
 `derelict` `posh` `fortified` `haunted` `wired` `bustling` `flooded` `raw`
 
-It shifts the security triple **before anything is bought with it**, so it
-changes what the site can afford to post rather than being repainted over a fixed
-roster of guards. It also nudges cover, patrol count, spirit zones, entry points,
-loot and the theme pool.
+**The lever is COMPOSITION, not amount.** A derelict building is not an
+undefended one — it is one defended by whoever moved in. The corporate systems
+are dead (no power, no maintenance, water in the risers) and the bodies holding
+the place are squatters, gangers, things that eat people. A posh building is the
+reverse: fewer bodies, cameras and maglocks everywhere the money reached. Both
+can be ferociously hard; they are hard in ways that ask a crew for completely
+different skills.
 
-**Value is untouched.** A derelict tier-9 target is still a tier-9 payday,
-defended like less — and the player reads that off the first word of the address,
-so it is intel rather than a trap.
+So each condition carries `weights` that multiply an obstacle type's chance of
+being what a slot buys, and moves `security` only where the condition genuinely
+destroys or creates capability — water and neglect really do kill a host, money
+really does buy more of everything. It also nudges cover, patrols, spirit zones,
+entry points and loot.
 
-Same address, one word changed (Renton / Ares / matrix-leaning, value 10):
+Measured over physical-leaning sites, value 6–10:
 
-| condition | security | obstacles | ways in |
-|---|---|---|---|
-| `Derelict` | P1 A5 M8 | 9 | 2 |
-| `Fortified` | P7 A4 M10 | 29 | 2 |
-| `Raw` | P3 A4 M8 | 15 | 3 |
+| condition | avg P | obstacles/site | guards | cameras+maglocks | spirits |
+|---|---|---|---|---|---|
+| `derelict` | 8.2 | 18.4 | **70%** | 10% | 14% |
+| `posh` | 8.7 | 20.5 | 18% | **60%** | 3% |
+| `wired` | 8.0 | 19.6 | 12% | **62%** | 3% |
+| `bustling` | 8.8 | 20.6 | 53% | 33% | 5% |
+| `haunted` | 6.9 | 18.0 | 23% | 47% | **19%** |
+| `flooded` | 8.0 | 17.9 | 65% | 19% | 7% |
+
+A derelict site is **as physically defended as a posh one** and fields as much —
+it just fields bodies where the posh one fields systems. That is the whole point:
+the crew you send is a different crew.
+
+**Value is untouched**, and the player reads what kind of fight it is off the
+first word of the address, so it is intel rather than a trap.
+
+**Condition and theme are orthogonal.** Any building can decay, flood, or fill
+with squatters — a sealed-off arcology floor is a *better* location than a
+tenement, not a disallowed one. Gating themes by condition would quietly delete
+the most interesting half of the space, so every theme is reachable under every
+condition and the pairing is the flavour:
+
+```
+Crumbling-Patient-Jade-Bell-5378   derelict arcology floor · P8 A4 M1 · 15 guard, 2 spirit, 1 camera
+Opulent-Electric-Jade-Bell-4998    posh datacenter · P9 A3 M5 · 12 camera, 5 maglock, 3 guard
+Drowned-Humble-Amber-Bell-5866     flooded datacenter · P8 A3 M1 · 14 guard, 2 spirit, 1 camera
+Cursed-Loyal-Amber-Bell-5730       haunted datacenter · P7 A6 M2 · 10 maglock, 5 spirit, 4 camera
+```
 
 **Two rules a condition may never break**, both held by probes: security clamps
 to 1–10, and no condition may leave a site with fewer than two distinct routes to
