@@ -36,15 +36,19 @@ replaces that or was blocked by it.
 
 ## 1. The work, in dependency order
 
-| id | item | notes |
-|----|------|-------|
-| **P2.0** | Attributes into the dice pool | Blocks everything. Pool = Skill + Attribute. Includes metatype/Awakened reweight and the `presence` split. |
-| **P2.1** | Extended tests | Multi-roll tasks; hits accumulate toward a threshold, pool drops each pass, glitch ends it. Canonical case: on-prem hacking mid-mission. |
-| **P2.2** | Turn-based mode | The container. Forced on hostilities, or chosen; chosen-while-undetected is the ambush. |
-| **P2.3** | Combat, health, Drain, death | Three-gate chain, dual tracks, Drain, scaled wounds, death. Ammo later in the phase. |
-| **P2.4** | Planes and witnessing | An act happens on a plane; only perceivers on that plane witness it. |
-| **P2.5** | Pillar scene-text | Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve. |
-| **P2.6** | Retire the scaffolding | `attempts: N` comes off violent affordances. Obstacles become situations, not checks. |
+| id | item | status | notes |
+|----|------|--------|-------|
+| **P2.0** | Attributes into the dice pool | **DONE** | Pool = Skill + Attribute. Strength restored (7 attributes); metatype sets ceilings; Awakened reweighted to a third; `presence` split into leadership + intimidation. |
+| **P2.1** | Extended tests | **DONE** | Hits accumulate toward a tier-scaled threshold, pool drops each interval, a glitch ends it and takes the progress. Replaces `attempts: N` on technical work, and gives a difficulty axis with no ceiling. |
+| **P2.2** | Turn-based mode | **ENGINE DONE**, not wired | Deterministic initiative (Agility + Intelligence, no roll), initiative dice as action count, pass structure, surprise round. `js/models/combat.js`. |
+| **P2.3** | Combat, health, Drain, death | **PARTLY DONE** | Three-gate chain, dual Body/Willpower tracks, stances, fire modes and ammunition all built and benched. **Still to do: Drain, scaled wounds, death-on-takedown, and wiring combat into the mission stepper.** |
+| **P2.4** | Planes and witnessing | **PARTLY DONE** | Witnessing by what else has eyes is built. **Still to do: the plane split** — an act happens on a plane and only perceivers on that plane witness it, plus `dualNatured`. |
+| **P2.5** | Pillar scene-text | to do | Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve. |
+| **P2.6** | Retire the scaffolding | to do | `attempts: N` comes off violent affordances once combat is wired. Obstacles become situations, not checks. |
+
+**Shipped so far:** `4c7efc8` attributes into the pool · `95366a4` extended
+tests · `88c417d` the combat engine. Suite at 77,846 assertions, 0 failures,
+plus a dedicated combat bench.
 
 ---
 
