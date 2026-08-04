@@ -1540,6 +1540,85 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 15: the shared frame — modes and the world seam ───────
+  // All three pillars run inside one mode structure: free flow like
+  // the Genesis game, with the player able to drop into turn-based
+  // whenever they want a decision made carefully, and combat forcing
+  // it regardless. Two rules hold this together and both are load-
+  // bearing: mode changes granularity and never math, and the
+  // world-advance seam counts without affecting anything, because a
+  // real-time clock must not reach a player whose interface still
+  // reads as turn-based.
+  function class15_tempo() {
+    const t = MJ.newTempo();
+    check(t.mode === "free", "C15: a run starts in free flow, like the Genesis loop");
+    check(MJ.setMode(t, "turnBased") && t.mode === "turnBased", "C15: the player may choose turn-based");
+    check(MJ.toggleMode(t) && t.mode === "free", "C15: the toggle returns to free");
+
+    // Combat owns the mode while it lasts.
+    MJ.enterCombat(t);
+    check(t.mode === "turnBased", "C15: combat must force turn-based");
+    check(MJ.describeTempo(t).locked && MJ.describeTempo(t).lockedBy === "combat",
+      "C15: a readout must be able to say WHY the mode is locked");
+    check(MJ.setMode(t, "free") === false && t.mode === "turnBased",
+      "C15: the mode cannot be changed out from under a firefight");
+    MJ.exitCombat(t);
+    check(t.mode === "free", "C15: leaving combat restores the player's own choice");
+
+    // A preference expressed during combat is remembered, not dropped.
+    const p = MJ.newTempo();
+    MJ.enterCombat(p);
+    MJ.setMode(p, "turnBased");
+    MJ.exitCombat(p);
+    check(p.mode === "turnBased", "C15: a choice made during combat takes effect when it ends");
+
+    // Nested/repeated combat entries must not strand the mode.
+    const nest = MJ.newTempo();
+    MJ.setMode(nest, "free");
+    MJ.enterCombat(nest); MJ.enterCombat(nest);
+    MJ.exitCombat(nest);
+    check(!nest.inCombat && nest.mode === "free", "C15: repeated combat entry must not strand the mode");
+    MJ.exitCombat(nest);
+    check(!nest.inCombat && nest.mode === "free", "C15: exiting combat twice must be inert");
+
+    // The seam counts, and the counting is all it does.
+    const c = MJ.newTempo();
+    check(MJ.advanceWorld(c, 0) === 0, "C15: advancing zero ticks moves nothing");
+    MJ.advanceWorld(c, 4);
+    MJ.setMode(c, "turnBased");
+    MJ.advanceWorld(c, 6);
+    check(c.tick === 10 && c.ticksInFree === 4 && c.ticksInTurnBased === 6,
+      "C15: the seam must account for ticks by the mode they happened in");
+    MJ.enterCombat(c); MJ.advanceWorld(c, 2);
+    check(c.ticksInCombat === 2, "C15: combat ticks are counted separately");
+
+    // The load-bearing one: a real run's outcome must not depend on
+    // the seam. Same seed, same everything, with the world advanced
+    // aggressively in between — the result has to be identical.
+    const play = (extraTicks) => {
+      const rng = MJ.makeRNG("stress-tempo-run");
+      const site = MJ.mintSite("stress-tempo-u", 6);
+      const crew = makeRoster(rng.fork("crew"), 3);
+      for (const r of crew) { MJ.watchRunner(r, rng); MJ.hireRunner(r, "permanent"); }
+      const run = MJ.beginMission(rng.fork("m"), { site: site, kind: "jobObjective", objective: {} }, crew, 1);
+      let guard = 0;
+      while (!MJ.missionDone(run) && guard++ < 200) {
+        if (extraTicks) MJ.advanceWorld(run.tempo, extraTicks);
+        const prompt = MJ.missionPrompt(run);
+        if (!prompt) break;
+        if (prompt.extended) { MJ.missionExtendedStep(run, true); continue; }
+        const usable = prompt.options.filter((o) => o.available);
+        MJ.missionChoose(run, usable.length ? usable[0] : null);
+      }
+      return snap({
+        index: run.index, failed: run.failed, aborted: run.aborted,
+        tasks: (run.tasks || []).map((t) => [t.obstacle, t.result, t.hits, t.success]),
+      });
+    };
+    check(play(0) === play(7), "C15: advancing the world must not change a single outcome");
+    check(play(0) === play(50), "C15: advancing it hard must not change a single outcome either");
+  }
+
   // ── Class 14: site condition — the first word of the address ────
   // The condition is the one quality a player can flip by hand to see
   // the same place in a different life, so it has to be REAL: every
@@ -1825,6 +1904,7 @@
       ["12. Injury carries, exhaustion does not", class12_injury],
       ["13. The combat modifier layer", class13_effects],
       ["14. Site condition — the first word of the address", class14_conditions],
+      ["15. The shared frame — modes and the world seam", class15_tempo],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

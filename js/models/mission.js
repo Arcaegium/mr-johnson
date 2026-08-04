@@ -664,6 +664,10 @@
       // Held by object identity, not route index: responders splice
       // into the middle of the route and would shift any index key.
       // Per-run, so putting a guard down never leaks into tomorrow.
+      // The shared frame (core/tempo.js): the player's granularity
+      // choice, and the tick counter the eventual real-time street
+      // hangs off. Clocking only for now — see PILLAR-PLAN.md §2.
+      tempo: MJ.newTempo(),
       neutralized: new Set(),
       // Everything that hides the crew adds dice here: a spell,
       // darkness, a distraction, and eventually just standing where
@@ -1409,7 +1413,11 @@
       // already read you as threatening there is no surprise to have.
       const band = MJ.threatBand(run.state, run.day);
       const surprise = band === "normal" && !MJ.alertEngaged(run.state);
+      // Combat forces turn-based in every pillar, and hands the
+      // player's own choice back when the shooting stops.
+      MJ.enterCombat(run.tempo);
       const fight = runCombat(run, obstacle, { surprise: surprise });
+      MJ.exitCombat(run.tempo);
 
       run.anyLoud = true;
       countTry(run, obstacle, approach);
@@ -2061,6 +2069,12 @@
   MJ.createAstralMission = createAstralMission;
   // The three pillars' routes, all the same shape ({path, obstacles})
   // so anything that draws a run can draw any of them.
+  // The player's granularity control, exposed so a renderer can
+  // offer the toggle. Refused during combat and remembered.
+  MJ.missionSetMode = function (run, mode) { return MJ.setMode(run.tempo, mode); };
+  MJ.missionToggleMode = function (run) { return MJ.toggleMode(run.tempo); };
+  MJ.missionTempo = function (run) { return MJ.describeTempo(run.tempo); };
+
   MJ.streetRoute = routeObstacles;
   MJ.astralRoute = astralRoute;
   MJ.tetherFor = tetherFor;
