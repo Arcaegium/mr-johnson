@@ -463,6 +463,133 @@
     return `read:${MJ.threatBand(state, day)}  ${ax}`;
   }
 
+  // ── Combat (§07): initiative, the pass structure, three gates ──
+  function testCombat() {
+    clear();
+    const seed = document.getElementById("seed").value || "mr-johnson";
+    const rng = MJ.makeRNG(seed + "-combat");
+    let fails = 0;
+    const must = (cond, label) => { if (!cond) { fails++; log("  ✗ " + label); } };
+
+    const body = (n, ag, int, dice, extra) => MJ.makeCombatant({
+      identity: { handle: n },
+      attributes: { agility: ag, intelligence: int, body: 5, willpower: 5, strength: 4 },
+      skills: { firearms: 6, marksmanship: 6, melee: 6 },
+    }, Object.assign({ side: "crew" }, extra || {}, { initiativeDice: dice }));
+
+    log("INITIATIVE — flat Agility + Intelligence, no roll (§07)");
+    const slow = body("Slow", 2, 2, 1), mid = body("Mid", 4, 3, 2), fast = body("Fast", 6, 4, 4);
+    const order = MJ.buildRound({ combatants: [slow, mid, fast] });
+    log("  " + order.map((s) => "p" + s.pass + ":" + s.actor.name).join("  "));
+    must(order.slice(0, 3).every((s) => s.pass === 1), "everyone acts in pass 1 before anyone doubles");
+    must([1, 2, 3, 4].every((p) => {
+      const inPass = order.filter((s) => s.pass === p);
+      return !inPass.length || inPass[0].actor.name === "Fast";
+    }), "the fastest unit leads every pass");
+    must(order.filter((s) => s.actor.name === "Fast").length === 4, "initiative dice ARE action count");
+    must(order.filter((s) => s.actor.name === "Slow").length === 1, "one die, one action");
+    log("");
+
+    log("THE PENETRATE GATE — Power vs Armour is what kills the meta weapon");
+    const shot = MJ.weaponProfile("shotgun"), rifle = MJ.weaponProfile("rifle");
+    log(`  shotgun P${shot.power} AP${shot.ap} vs rifle P${rifle.power} AP${rifle.ap} — same Power, different AP`);
+    const bounce = (weaponId, armour) => {
+      let bounced = 0, landed = 0;
+      for (let i = 0; i < 150; i++) {
+        const a = body("A", 5, 4, 1, { weaponId: weaponId, ammo: 999 });
+        const d = MJ.makeCombatant({ identity: { handle: "D" },
+          attributes: { agility: 3, intelligence: 3, body: 5, willpower: 5, strength: 3 }, skills: {} },
+          { side: "enemy", armour: armour });
+        const c = MJ.beginCombat(rng, [a], [d], {});
+        let g = 0;
+        while (!MJ.combatOver(c) && g++ < 12) MJ.combatAct(c, { target: d, stance: "open" });
+        for (const e of c.log) {
+          if (e.event !== "attack") continue;
+          if (e.result === "no penetration") bounced++;
+          else if (e.damage !== undefined) landed++;
+        }
+      }
+      return { bounced, landed };
+    };
+    const shotVs11 = bounce("shotgun", 11), rifleVs11 = bounce("rifle", 11);
+    log(`  vs armour 11 — shotgun landed ${shotVs11.landed}, bounced ${shotVs11.bounced}`);
+    log(`  vs armour 11 — rifle    landed ${rifleVs11.landed}, bounced ${rifleVs11.bounced}`);
+    must(shotVs11.landed === 0, "a high-DV low-Power weapon must do nothing to a plated target");
+    must(rifleVs11.landed > 0 && rifleVs11.bounced === 0, "an AP weapon must chew through the same armour");
+    log("");
+
+    log("DUAL TRACKS — Body drives physical, Willpower drives stun; either full = down");
+    const gunner = body("Gunner", 4, 3, 1, { weaponId: "gel", ammo: 999 });
+    const mark = MJ.makeCombatant({ identity: { handle: "Mark" },
+      attributes: { agility: 3, intelligence: 3, body: 5, willpower: 6, strength: 3 }, skills: {} },
+      { side: "enemy", armour: 1 });
+    const cg = MJ.beginCombat(rng, [gunner], [mark], {});
+    let g2 = 0;
+    while (!MJ.combatOver(cg) && g2++ < 40) MJ.combatAct(cg, { target: mark, stance: "open" });
+    log(`  gel rounds -> physical ${mark.physical}, stun ${mark.stun} (tracks ${mark.physicalMax}/${mark.stunMax}) — downed by ${mark.downedBy}`);
+    must(mark.physical === 0, "a stun weapon must never fill the physical track");
+    must(mark.down && mark.downedBy === "stun", "a full stun track must drop the target");
+    must(MJ.physicalTrack({ attributes: { body: 6 } }) === 11, "physical track = 8 + ceil(Body/2)");
+    must(MJ.stunTrack({ attributes: { willpower: 3 } }) === 10, "stun track = 8 + ceil(Willpower/2)");
+    log("");
+
+    log("STANCE — the scene-text stand-in for position, feeding the Hit gate");
+    const hitRate = (stance) => {
+      let hits = 0, att = 0;
+      for (let i = 0; i < 400; i++) {
+        const a = body("A", 4, 3, 1, { weaponId: "pistol", ammo: 999 });
+        const d = MJ.makeCombatant({ identity: { handle: "D" },
+          attributes: { agility: 4, intelligence: 3, body: 5, willpower: 5, strength: 3 }, skills: {} },
+          { side: "enemy", armour: 0, stance: stance });
+        const c = MJ.beginCombat(rng, [a], [d], {});
+        MJ.combatAct(c, { target: d, stance: "open" });
+        const e = c.log.filter((x) => x.event === "attack")[0];
+        if (e) { att++; if (e.result !== "miss") hits++; }
+      }
+      return hits / att;
+    };
+    const openR = hitRate("open"), coverR = hitRate("cover"), fdR = hitRate("fullDefence");
+    log(`  target in the open ${(openR * 100).toFixed(0)}% · behind cover ${(coverR * 100).toFixed(0)}% · full defence ${(fdR * 100).toFixed(0)}%`);
+    must(coverR < openR, "cover must make a target harder to hit");
+    must(fdR < coverR, "full defence must beat cover");
+    log("");
+
+    log("AMMUNITION — rate of fire buys accuracy and spends magazine");
+    const burst = body("Burst", 4, 3, 1, { weaponId: "smg", ammo: 7 });
+    const tgt = MJ.makeCombatant({ identity: { handle: "T" },
+      attributes: { agility: 3, intelligence: 3, body: 8, willpower: 8, strength: 3 }, skills: {} },
+      { side: "enemy", armour: 0 });
+    const ca = MJ.beginCombat(rng, [burst], [tgt], {});
+    MJ.combatAct(ca, { target: tgt, mode: "FA", stance: "open" });
+    const after = burst.ammo;
+    // Turn order includes the target, so stepping once lands on THEM
+    // — walk forward until it is the shooter's turn again.
+    let dryEntry = null, guard = 0;
+    while (guard++ < 12 && !MJ.combatOver(ca)) {
+      const slot = MJ.combatActor(ca);
+      if (!slot) break;
+      const e = MJ.combatAct(ca, { target: slot.actor === burst ? tgt : burst, mode: "FA", stance: "open" });
+      if (slot.actor === burst) { dryEntry = e; break; }
+    }
+    dryEntry = dryEntry || { event: "none" };
+    log(`  full auto burned 6 of 7 rounds (${after} left), next burst: ${dryEntry.event}`);
+    must(after === 1, "full auto must spend six rounds");
+    must(dryEntry.event === "dry", "a magazine that cannot cover the burst must refuse it");
+    log("");
+
+    log("SURPRISE — chosen while undetected, the crew acts before anyone reacts");
+    const c1 = body("C1", 4, 3, 1), c2 = body("C2", 4, 3, 1);
+    const e1 = MJ.makeCombatant({ identity: { handle: "E1" },
+      attributes: { agility: 9, intelligence: 9, body: 5, willpower: 5, strength: 3 }, skills: {} }, { side: "enemy" });
+    const amb = MJ.beginCombat(rng, [c1, c2], [e1], { surprise: true });
+    log("  surprise round order: " + amb.order.map((s) => s.actor.name).join(", "));
+    must(amb.order.every((s) => s.actor.side === "crew"), "no enemy may act in the surprise round");
+    must(amb.order.length === 2, "every crew member acts in the surprise round");
+    log("");
+
+    log(fails === 0 ? "VERDICT: combat engine holds — 0 failures." : `VERDICT: ${fails} FAILURE(S).`);
+  }
+
   function testAlert() {
     clear();
     const seed = document.getElementById("seed").value || "mr-johnson";
@@ -873,6 +1000,7 @@
     document.getElementById("btn-market-cycle").addEventListener("click", testMarketCycle);
     document.getElementById("btn-economy").addEventListener("click", testEconomy);
     document.getElementById("btn-alert").addEventListener("click", testAlert);
+    document.getElementById("btn-combat").addEventListener("click", testCombat);
     document.getElementById("btn-dispatch").addEventListener("click", testDispatch);
     document.getElementById("btn-sitelist").addEventListener("click", testSiteList);
     document.getElementById("btn-new-game").addEventListener("click", newGame);

@@ -732,8 +732,13 @@
         if (out[skill] !== undefined && out[skill] > 0) out[skill] += implant.skillMods[skill];
       }
     }
-    const key = runner.classification.focusKeySkill;
-    if (runner.wounds > 0 && out[key] !== undefined) {
+    // Not every combatant is a roster runner — a guard, a spirit or
+    // a security spider has skills and attributes but no career, no
+    // focus and no dossier. The wound penalty keys off the focus's
+    // key skill, so anything without a classification simply has no
+    // key skill to degrade.
+    const key = runner.classification && runner.classification.focusKeySkill;
+    if (key && runner.wounds > 0 && out[key] !== undefined) {
       out[key] = Math.max(0, out[key] - runner.wounds);
     }
     return out;
