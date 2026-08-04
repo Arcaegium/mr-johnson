@@ -161,11 +161,24 @@
   }
 
   // ── Panel renderers ─────────────────────────────────────────────
+  // The statline stays in the header for messages; the HUD is the
+  // same four numbers pinned to the right rail, so the day's money
+  // and capacity stay readable while you scroll a long log.
   function renderStat() {
-    if (!S) { $("statline").textContent = "No game running — enter a seed (or leave blank) and hit New Game."; return; }
+    const hud = $("hud");
+    if (!S) {
+      $("statline").textContent = "No game running — enter a seed (or leave blank) and hit New Game.";
+      if (hud) hud.innerHTML = "";
+      return;
+    }
     const j = S.save.johnson;
-    $("statline").textContent =
-      `Day ${S.day}   ¥${j.money}   Reputation ${j.reputation}   Capacity ${j.boardCapacity}   Universe "${S.universeSeed}"`;
+    $("statline").textContent = `Universe "${S.universeSeed}"`;
+    if (!hud) return;
+    hud.innerHTML =
+      `<div class="hud-row"><span class="hud-k">Day</span><b class="w-num">${S.day}</b></div>` +
+      `<div class="hud-row"><span class="hud-k">Nuyen</span><b class="w-num">¥${j.money}</b></div>` +
+      `<div class="hud-row"><span class="hud-k">Rep</span><b class="w-num">${j.reputation}</b></div>` +
+      `<div class="hud-row"><span class="hud-k">Capacity</span><b class="w-num">${j.boardCapacity}</b></div>`;
   }
 
   function renderBoard() {

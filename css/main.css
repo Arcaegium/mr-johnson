@@ -220,10 +220,45 @@ button.opt.dead:hover { background: #0d131a; border-color: var(--line); }
 button.warn-btn { border-color: #d4735e; color: #d4735e; }
 button.warn-btn:hover { background: #d4735e; color: var(--bg); }
 
+/* ── The HUD: the day's four numbers, pinned to the right rail ───
+   Fixed rather than sticky so it never leaves the viewport while a
+   long log scrolls. It sits in the gutter beside the 1400px wrap;
+   below that width there is no gutter, so the media query at the
+   end of this file drops it back inline. */
+.hud {
+  position: fixed;
+  top: 96px;
+  right: max(12px, calc((100vw - 1400px) / 2 - 130px));
+  width: 118px;
+  z-index: 20;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.hud:empty { display: none; }
+.hud-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 3px 0; }
+.hud-k { color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
+
+/* No gutter left to float in (1400 wrap + 130 either side): tuck the
+   HUD against the viewport edge instead of beside the content. */
+@media (max-width: 1660px) {
+  .hud { right: 10px; top: 10px; }
+}
+
 /* ── Phone / tablet: one column, finger-sized controls ───────────
    Last in the file on purpose: these override the desktop sizes
    above, and same-specificity rules are decided by source order. */
 @media (max-width: 900px) {
+  /* Nothing to float beside on a phone — put it back in the flow so
+     it never covers the controls. */
+  .hud {
+    position: static; width: auto; margin: 0 0 10px;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .hud-row { padding: 0; gap: 6px; }
   .game-wrap { padding: 14px 12px 48px; }
   .panels { grid-template-columns: 1fr; }
   .panel { font-size: 13.5px; }
