@@ -1,7 +1,7 @@
 /* ============================================================
    Mr. Johnson — models/mission.js
    The mission dispatch system: the one mechanism every kind of
-   runner assignment goes through (design bible §06). Recon,
+   runner assignment goes through (current understanding §06). Recon,
    crafting, resource gathering, and job-derived objectives are
    all the same thing — a mission — differing only in what the
    objective is and whether a site is involved.
@@ -697,12 +697,7 @@
 
   function crewCombatants(run) {
     return run.runners.filter((r) => !run.downed || !run.downed.has(r)).map((r) =>
-      MJ.makeCombatant(r, {
-        side: "crew",
-        weaponId: MJ.combatWeaponFor(r),
-        armour: MJ.armourRatingFor(r),
-        ammo: 30,
-      }));
+      MJ.makeCombatant(r, Object.assign({ side: "crew", ammo: 30 }, MJ.combatLoadoutFor(r))));
   }
 
   // Going down is where mission risk finally has teeth. The bible's
@@ -1313,7 +1308,17 @@
     return {
       kind: "crafting", success: success, karmaAward: karmaAward,
       tasks: [{ obstacle: `workbench — ${label}`, tier: tier, runner: bestRunner.identity.handle, skill: bestSkill, pool: outcome.poolSize, hits: outcome.hits, threshold: outcome.threshold, success: success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch }],
-      yield: success ? (template ? { item: MJ.makeItem(mission.templateId) } : { kind: "craftedItem", amount: 1 }) : undefined,
+      // A crafted item is never merely equal to the shop's. Quality
+      // starts at 1 and rises with the margin, so a great crafter
+      // makes a genuinely better thing — which is what makes keeping
+      // a specialist at the bench worth a roster slot, and what makes
+      // building a new deck for a decker who already owns the best
+      // one on the market a sensible use of days.
+      yield: success
+        ? (template
+          ? { item: MJ.markCrafted(MJ.makeItem(mission.templateId), MJ.craftQualityFromMargin(outcome.margin), rng) }
+          : { kind: "craftedItem", amount: 1 })
+        : undefined,
     };
   }
 

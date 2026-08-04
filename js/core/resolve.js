@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — core/resolve.js
-   The task/skill resolution system (design bible §02's
+   The task/skill resolution system (current understanding §02's
    "quick-resolve": one aggregate roll, instant). V1 scope is a
    single task at a time: pick a runner, a target obstacle, one of
    its affordances, resolve. Chaining tasks into a whole mission's

@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — core/clock.js
-   The day clock (design bible §06): time is spent, not elapsed.
+   The day clock (current understanding §06): time is spent, not elapsed.
    A day is an action period. Nothing advances except what's
    spent — running a job, scouting, resting, crafting — so there
    is no real-time ticking, only advanceDay, called whenever the

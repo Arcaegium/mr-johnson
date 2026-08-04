@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — models/site.js
-   The site record: generation from a seed, per design bible §09
+   The site record: generation from a seed, per current understanding §09
    ("Site model: one object, three projections") and §07/§08's
    "obstacles are affordance lists" rule.
 
@@ -97,7 +97,7 @@
   // Derives the three security ratings from Value + Orientation —
   // security is a RESULT, never rolled on its own. The leaned axis
   // carries Value directly; the other two take a steep discount, so
-  // a strongly-leaned site reads as genuinely lopsided (the bible's
+  // a strongly-leaned site reads as genuinely lopsided (the current understanding's
   // "astrally naked" example), not just "usually a bit lower."
   // Balanced sites instead spread all three around Value evenly.
   function deriveSecurity(rng, value, orientation) {
@@ -112,7 +112,7 @@
   }
 
   // ── The verb registry: every obstacle's affordance options ──────
-  // Matches the design bible's own worked examples (§09) directly.
+  // Matches the current understanding's own worked examples (§09) directly.
   // Every template carries 2+ distinct non-loud skill-bearing
   // affordances (or a skill-less "always available" option like
   // route-around) plus exactly one loud brute-force fallback, which

@@ -1,7 +1,7 @@
 /* ============================================================
    Mr. Johnson — models/economy.js
    The nuyen ledger and the sinks/sources that already connect to
-   real systems (design bible §03 "The economy: sources, sinks, and
+   real systems (current understanding §03 "The economy: sources, sinks, and
    the binding constraint").
 
    In scope this pass — the ledger itself, plus the sources/sinks
@@ -29,7 +29,7 @@
        mission resolution).
 
    NOTE — scale: NUYEN_PER_VALUE and every multiplier below are
-   first-pass placeholders (the design bible's own open note flags
+   first-pass placeholders (the current understanding's own open note flags
    the hiring-tier ratios as "needs revalidation"), not calibrated
    numbers. They give the right *shape* (freelance cheapest per-use,
    retainer discounted-but-block-priced, permanent an expensive lump
@@ -120,7 +120,7 @@
   // a buyout that pays for itself in 10 dispatches.
   //
   // Retainers pay NOTHING. An undispatched bench-warmer is not the
-  // problem this solves, and the bible blesses the untouched
+  // problem this solves, and the current understanding blesses the untouched
   // retainer on purpose (§03).
   const PERMANENT_UPKEEP_RATE = 0.02;
 

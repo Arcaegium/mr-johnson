@@ -90,7 +90,7 @@
 
 <div class="wrap">
   <div class="cover">
-    <div class="cover-tag">● build plan · companion to the design bible</div>
+    <div class="cover-tag">● build plan · companion to the current understanding</div>
     <h1>Build Plan</h1>
     <p class="subtitle">How a two-person team — you and Claude — ships an enormous systems game without drowning in it. The spine is simulation-first: prove the systems bare, add the skin later.</p>
     <div class="cover-meta">
@@ -147,7 +147,7 @@
       <table>
         <thead><tr><th>Phase</th><th class="wrap">What gets built</th><th class="wrap">Ends when</th></tr></thead>
         <tbody>
-          <tr><td><b>0</b><br>Foundation<span class="status">✓ done</span></td><td class="wrap">The three data models (runner, site, save), seeded RNG, the day clock, save/load to IndexedDB. Bedrock from §09 of the bible. A dev harness to inspect generated state.</td><td class="wrap">We can generate runners and sites from seeds, save and reload them.</td></tr>
+          <tr><td><b>0</b><br>Foundation<span class="status">✓ done</span></td><td class="wrap">The three data models (runner, site, save), seeded RNG, the day clock, save/load to IndexedDB. Bedrock from §09 of the current understanding. A dev harness to inspect generated state.</td><td class="wrap">We can generate runners and sites from seeds, save and reload them.</td></tr>
           <tr><td><b>1</b><br>Management Game<span class="status">✓ done</span></td><td class="wrap">Hub console (adapt Profile), job board, roster/market, hire/watch/retain, gear armory, <b>quick-resolve missions</b> (Discipline pricing, Karma growth, wounds, wipes, the economy), the market state machine.</td><td class="wrap"><span class="gate">GO / NO-GO GATE</span><br>A complete, playable management game. Is the roster loop fun? If not, we learned it cheap.</td></tr>
           <tr><td><b>2</b><br>Text Missions<span class="status now">◀ current</span></td><td class="wrap">All three pillars as <b>scene-text</b>: read the site's affordances, offer skill-rolls, resolve, advance. Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve, the multi-front ops. Play-through vs. quick-resolve becomes a real choice.<br><br>Sequenced work, dependencies and open questions live in the <b>Phase 2 work plan</b>. Headline items: attributes into the dice pool, extended tests, turn-based mode, the combat/health/Drain systems, witnessing by plane, and <b>simultaneity</b> — multi-front ops needing several teams at once, scheduled after the pillars and gated on UI that can convey it.</td><td class="wrap">The <b>whole game</b> is playable in text — every pillar, every system, proven fun or revised.</td></tr>
           <tr><td><b>3+</b><br>Visual Layer</td><td class="wrap">Rendering laid over the proven core, one pillar at a time (Matrix cheapest to visualize first). Then depth &amp; content: crafting benches, full tag/combo, faction-heat escalation, job variety, the framing/McGuffin, balance, art pass.</td><td class="wrap">Never — this is the "infinite game" content, added at leisure from a position of a working, fun game.</td></tr>
@@ -181,7 +181,7 @@
           <tr><td>The loop might not be fun</td><td class="wrap">Simulation-first means we find out at Phase 1, in the cheapest possible medium, before any polish investment.</td></tr>
           <tr><td>Solo + AI sustainability</td><td class="wrap">Each phase is self-contained and leaves a working build. Pauses cost nothing; there's no fragile half-finished monolith.</td></tr>
           <tr><td>Art cost / time</td><td class="wrap">Deferred entirely to Phase 3+, placeholder-and-procedural until then, and only ever spent on a game that's already proven.</td></tr>
-          <tr><td class="wrap">A placeholder gets mistaken for the design</td><td class="wrap">Cost us most of a session once: quick-resolve was extended as if it were the target, and an invented attempt-budget hardened into a rule. Re-read the bible and this plan before extending anything; if a constraint isn't written down, don't invent one to make a scaffold behave — say the system is missing.</td></tr>
+          <tr><td class="wrap">A placeholder gets mistaken for the design</td><td class="wrap">Cost us most of a session once: quick-resolve was extended as if it were the target, and an invented attempt-budget hardened into a rule. Re-read the current understanding and this plan before extending anything; if a constraint isn't written down, don't invent one to make a scaffold behave — say the system is missing.</td></tr>
         </tbody>
       </table>
     </div>
@@ -205,5 +205,5 @@
     <div class="note" style="margin-top:14px;"><b>Why deferred, not dropped:</b> none of this blocks any system from being provably fun in simulation mode — a placeholder pool exercises the generator exactly as well as a large one. Expanding it is pure content volume, cheapest to do in a dedicated pass rather than piecemeal while the mechanical foundation is still moving.</div>
   </section>
 
-  <div class="foot">Companion to the design bible · text-first is the spine · Phase 2 is where we are</div>
+  <div class="foot">Companion to the current understanding · text-first is the spine · Phase 2 is where we are</div>
 </div>

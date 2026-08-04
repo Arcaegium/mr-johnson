@@ -1,6 +1,6 @@
 # Build Plan — Mr. Johnson
 
-*Companion to the design bible. How a two-person team — you and Claude — ships
+*Companion to the current understanding. How a two-person team — you and Claude — ships
 an enormous systems game without drowning in it. The spine is
 simulation-first: prove the systems bare, add the skin later.*
 
@@ -81,7 +81,7 @@ visual polish over a proven core. It is always playable from Phase 1 on.
 
 | phase | what gets built | ends when |
 |---|---|---|
-| **0** Foundation | The three data models (runner, site, save), seeded RNG, the day clock, save/load to IndexedDB. Bedrock from §09 of the bible. A dev harness to inspect generated state. | We can generate runners and sites from seeds, save and reload them. **✅ DONE** |
+| **0** Foundation | The three data models (runner, site, save), seeded RNG, the day clock, save/load to IndexedDB. Bedrock from §09 of the current understanding. A dev harness to inspect generated state. | We can generate runners and sites from seeds, save and reload them. **✅ DONE** |
 | **1** Management Game | Hub console, job board, roster/market, hire/watch/retain, gear armory, **quick-resolve missions** (Discipline pricing, Karma growth, wounds, wipes, the economy), the market state machine. | **GO / NO-GO GATE.** A complete, playable management game. Is the roster loop fun? **✅ DONE** |
 | **2** Text Missions | All three pillars as **scene-text**: read the site's affordances, offer skill-rolls, resolve, advance. Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve, the multi-front ops. Play-through vs. quick-resolve becomes a real choice. | The **whole game** is playable in text — every pillar, every system, proven fun or revised. **◀ CURRENT — see `PHASE-2-PLAN.md`** |
 | **3+** Visual Layer | Rendering laid over the proven core, one pillar at a time (Matrix cheapest first). Then depth & content: crafting benches, full tag/combo, faction-heat escalation, job variety, the framing/McGuffin, balance, art pass. | Never — this is the "infinite game" content, added at leisure from a position of a working, fun game. |
@@ -133,7 +133,7 @@ building a single screen on top of it.
 ## 7. Deferred polish backlog
 
 Work that's explicitly not a current-pass blocker — flagged so it doesn't get
-lost. Most is inert flavor per the bible's own rule (§03) that only the
+lost. Most is inert flavor per the current understanding's own rule (§03) that only the
 Discipline line is a legible market signal; a couple are mechanical tuning
 deferred until the systems around them settle.
 

@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — models/market.js
-   The roster/market state machine (design bible §03).
+   The roster/market state machine (current understanding §03).
 
    Core rules this file implements:
      - Unwatched runners have one hidden shelf-life timer and
@@ -20,7 +20,7 @@
        dispatch, retainer a block of them, permanent is forever.
        Contracts end via consumeContractMission, never by the daily
        tick.
-     - Growth is explicitly NOT this file's job (design bible §03,
+     - Growth is explicitly NOT this file's job (current understanding §03,
        corrected): a Watched-but-not-hired runner cycling through
        these phases never grows from it — these states are about
        availability and risk, never a hidden leveling clock. Nothing

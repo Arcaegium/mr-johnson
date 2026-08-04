@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — models/alert.js
-   Live security in three layers (design bible §09):
+   Live security in three layers (current understanding §09):
 
      1. THE BAND — Min/Current/Max per axis. Current is "how much
         room are we giving for bullshit today."

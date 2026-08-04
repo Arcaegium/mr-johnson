@@ -699,6 +699,7 @@
       materials: JSON.parse(JSON.stringify(session.save.armory.materials || {})),
       items: session.save.armory.items.map((it) => ({
         id: it.id, templateId: it.templateId, label: it.label, tier: it.tier,
+        crafted: !!it.crafted, quality: it.quality || 0, mark: it.mark || null,
         issuedToRoster: it.issuedTo ? rosterIndex(it.issuedTo) : -1,
       })),
       roster: session.roster.map(runnerRecord),
@@ -793,7 +794,8 @@
     }
     // Items: rebuild the two-way gear refs.
     session.save.armory.items = record.items.map((ir) => {
-      const item = { id: ir.id, templateId: ir.templateId, label: ir.label, tier: ir.tier, issuedTo: null };
+      const item = { id: ir.id, templateId: ir.templateId, label: ir.label, tier: ir.tier,
+        crafted: !!ir.crafted, quality: ir.quality || 0, mark: ir.mark || null, issuedTo: null };
       if (ir.issuedToRoster >= 0 && session.roster[ir.issuedToRoster]) {
         const holder = session.roster[ir.issuedToRoster];
         item.issuedTo = holder;

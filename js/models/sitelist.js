@@ -2,7 +2,7 @@
    Mr. Johnson — models/sitelist.js
    The site list: known sites are watchable, like runners (§09).
 
-   Core rules this file implements (design bible §09 "The site
+   Core rules this file implements (current understanding §09 "The site
    list" + the retention asymmetry established in §09's save
    model):
      - A site becomes KNOWN when a job the player accepted

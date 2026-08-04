@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — models/armory.js
-   Equipment: the operation's second roster (design bible §09
+   Equipment: the operation's second roster (current understanding §09
    "Equipment belongs to the operation, not to any one runner").
 
    Core rules this file implements:
@@ -261,6 +261,61 @@
     return kit;
   }
 
+  // ── Crafted quality: why you build one you could just buy ──────
+  // A crafted item is ALWAYS better than the shop version of the
+  // same thing. Not cheaper — better. That is what keeps the bench
+  // worth using at every tier: a top-end decker who walked in with
+  // the best deck money buys is still worth building a new deck
+  // FOR, because yours will be tuned in a way the shop's is not.
+  //
+  // The edge is paid for in the one currency that never
+  // replenishes: a runner's days. Someone is at the bench instead
+  // of on a job while the board keeps turning. That is why crafted
+  // being strictly better does not kill the shop — the shop sells
+  // you TIME, which is the scarce thing.
+  //
+  // Quality is a small integer on top of the item's tier, so it
+  // feeds everything tier already feeds — bonus dice, armour
+  // rating, weapon Power — without a parallel stat system. It
+  // starts at 1 (a crafted item is never merely equal) and rises
+  // with how well the craft roll went.
+  const MAX_CRAFT_QUALITY = 3;
+
+  function craftQualityFromMargin(margin) {
+    return Math.max(1, Math.min(MAX_CRAFT_QUALITY, 1 + Math.floor((margin || 0) / 2)));
+  }
+
+  // Effective tier: what the item behaves as. Everything that reads
+  // tier for a mechanical effect must read this instead, or crafted
+  // quality would be a label with no teeth.
+  function effectiveTier(item) {
+    return (item.tier || 0) + (item.quality || 0);
+  }
+
+  // The named edge, for the dossier. Mechanically it is all the same
+  // quality number; the label is what tells the player WHY this one
+  // is better, and it is drawn from what the item actually does.
+  const CRAFT_MARKS = {
+    weapon: ["balanced", "tuned", "hand-loaded"],
+    armor: ["reinforced", "layered", "form-fitted"],
+    deck: ["overclocked", "cold-booted", "custom-firmware"],
+    program: ["optimised", "hardened", "streamlined"],
+    drone: ["trimmed", "rebalanced", "silent-running"],
+    focus: ["deep-bonded", "resonant", "true-cut"],
+    consumable: ["concentrated", "pure", "double-dosed"],
+    cyberware: ["low-rejection", "nerve-matched", "clean-seated"],
+  };
+
+  function markCrafted(item, quality, rng) {
+    const t = ITEM_TEMPLATES[item.templateId];
+    item.crafted = true;
+    item.quality = quality;
+    const pool = CRAFT_MARKS[t.category] || ["well-made"];
+    item.mark = rng ? rng.pick(pool) : pool[0];
+    item.label = t.label + " (" + item.mark + ")";
+    return item;
+  }
+
   // ── Issue / reclaim: exclusive, always-consistent both ways ─────
   function issueItem(item, runner) {
     const t = ITEM_TEMPLATES[item.templateId];
@@ -305,7 +360,7 @@
       if (!t || t.skill !== skillId) continue;
       if (t.category === "consumable") continue;
       if (t.requires && !carriesCategory(runner, t.requires)) continue;
-      best = Math.max(best, gearBonusForTier(item.tier));
+      best = Math.max(best, gearBonusForTier(effectiveTier(item)));
     }
     return best;
   }
@@ -316,7 +371,7 @@
     for (const item of runner.gear || []) {
       if (item.consumed) continue;
       const t = ITEM_TEMPLATES[item.templateId];
-      if (t && t.category === "armor") best = Math.max(best, gearBonusForTier(item.tier));
+      if (t && t.category === "armor") best = Math.max(best, gearBonusForTier(effectiveTier(item)));
     }
     return best;
   }
@@ -337,10 +392,36 @@
       if (!t || t.category !== "weapon" || !t.combat) continue;
       const rank = skills[t.skill] || 0;
       if (rank <= 0) continue; // cannot use what they were never taught
-      const score = rank * 100 + t.tier;
+      const score = rank * 100 + effectiveTier(item);
       if (!best || score > best.score) best = { score: score, profile: t.combat, label: t.label };
     }
     return best ? best.profile : "unarmed";
+  }
+
+  // The whole combat loadout in one read: which weapon profile, how
+  // good the specific instance is, and what they are wearing. One
+  // call so the weapon and its quality can never be fetched from
+  // different items.
+  function combatLoadoutFor(runner) {
+    const skills = MJ.getEffectiveSkills(runner);
+    let best = null;
+    for (const item of runner.gear || []) {
+      if (item.consumed) continue;
+      const t = ITEM_TEMPLATES[item.templateId];
+      if (!t || t.category !== "weapon" || !t.combat) continue;
+      const rank = skills[t.skill] || 0;
+      if (rank <= 0) continue;
+      const score = rank * 100 + effectiveTier(item);
+      if (!best || score > best.score) {
+        best = { score: score, weaponId: t.combat, quality: item.quality || 0, label: item.label };
+      }
+    }
+    return {
+      weaponId: best ? best.weaponId : "unarmed",
+      weaponQuality: best ? best.quality : 0,
+      weaponLabel: best ? best.label : "bare hands",
+      armour: armourRatingFor(runner),
+    };
   }
 
   // Armour rating for the Penetrate gate. Tier maps straight across:
@@ -351,7 +432,7 @@
     for (const item of runner.gear || []) {
       if (item.consumed) continue;
       const t = ITEM_TEMPLATES[item.templateId];
-      if (t && t.category === "armor") best = Math.max(best, t.tier);
+      if (t && t.category === "armor") best = Math.max(best, effectiveTier(item));
     }
     return best;
   }
@@ -425,6 +506,11 @@
   MJ.personalTierFor = personalTierFor;
   MJ.PERSONAL_TIER_CAP = PERSONAL_TIER_CAP;
   MJ.combatWeaponFor = combatWeaponFor;
+  MJ.combatLoadoutFor = combatLoadoutFor;
+  MJ.effectiveTier = effectiveTier;
+  MJ.craftQualityFromMargin = craftQualityFromMargin;
+  MJ.markCrafted = markCrafted;
+  MJ.MAX_CRAFT_QUALITY = MAX_CRAFT_QUALITY;
   MJ.armourRatingFor = armourRatingFor;
   MJ.findConsumable = findConsumable;
   MJ.consumeItem = consumeItem;

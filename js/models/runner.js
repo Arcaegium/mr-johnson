@@ -2,7 +2,7 @@
    Mr. Johnson — models/runner.js
    The runner record: generation from a seed, and the
    Generalist/Specialist shape-vs-label-vs-price system
-   (design bible §04 / §09).
+   (current understanding §04 / §09).
 
    Core rule this file implements:
      - Every runner has a TRUE ARCHETYPE (Specialist or
@@ -29,7 +29,7 @@
 (function () {
   window.MJ = window.MJ || {};
 
-  // ── The 19-skill registry (design bible §09 + the gated-skill split) ─
+  // ── The 19-skill registry (current understanding §09 + the gated-skill split) ─
   // Every skill maps to real verbs elsewhere in the design; this
   // list is the canonical set every runner's skill map is keyed by.
   const SKILLS = [
@@ -43,7 +43,7 @@
   // The dice pool is Skill + Attribute. Mapped off the tabletop's
   // own links, collapsed where our attribute set is narrower than
   // the source's: Reaction folds into Agility and Intuition into
-  // Intelligence (the bible fixes both by defining Initiative as
+  // Intelligence (the current understanding fixes both by defining Initiative as
   // Agility + Intelligence), and Logic joins Intuition there.
   //
   // Strength is NOT folded into Body. No attack roll is Strength-
@@ -160,7 +160,7 @@
   // adept/mage, full Essence kept, Magic attribute granted; infected:
   // HMHVV-flavored, mundane stats, distinct flavor only.
   // This table is the whole "systems are expensive, rows are
-  // cheap" bet — every archetype in the bible is just a row here.
+  // cheap" bet — every archetype in the current understanding is just a row here.
   const FOCUSES = [
     // Fighters
     { id: "heavyWeapons", label: "Heavy Weapons", family: "fighter", keySkill: "heavyWeapons", origins: ["cyber", "magic"] },

@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — models/combat.js
-   Turn-based resolution, per design bible §07.
+   Turn-based resolution, per current understanding §07.
 
    This is the layer the whole mission system was missing. Until
    now an obstacle was a check: one roll, pass or fail, and the
@@ -135,6 +135,12 @@
       skills: source.skills || {},
       armour: opts.armour !== undefined ? opts.armour : (source.armour || 0),
       weaponId: opts.weaponId || "unarmed",
+      // A crafted instance of a weapon is genuinely better than the
+      // shop's: quality lifts Power (so it beats armour the plain
+      // version bounces off) and damage. That is what keeps the
+      // bench worth using even for a runner who already owns the
+      // best thing money buys.
+      weaponQuality: opts.weaponQuality || 0,
       // Action count. One is a mundane body; more is bought with
       // Wired Reflexes (cyber) or Improved Reflexes (adept magic) —
       // neither generated yet, so this is the seam they land on.
@@ -255,11 +261,13 @@
   // damage removed per hit.
   function resolveDamage(combat, attacker, defender, weapon, netHits) {
     const armour = Math.max(0, defender.armour + (weapon.ap || 0));
-    const power = (weapon.power || 0) + (weapon.useStrength ? (attacker.attributes.strength || 0) : 0);
+    const power = (weapon.power || 0) + (attacker.weaponQuality || 0) +
+      (weapon.useStrength ? (attacker.attributes.strength || 0) : 0);
     if (power <= armour) {
       return { penetrated: false, armour: armour, power: power, damage: 0 };
     }
-    const dv = (weapon.dv || 0) + netHits + (weapon.useStrength ? Math.floor((attacker.attributes.strength || 0) / 2) : 0);
+    const dv = (weapon.dv || 0) + (attacker.weaponQuality || 0) + netHits +
+      (weapon.useStrength ? Math.floor((attacker.attributes.strength || 0) / 2) : 0);
     const soakPool = (defender.attributes.body || 0) + armour;
     const soakDice = MJ.rollDicePool(combat.rng, soakPool);
     const soaked = MJ.countHits(soakDice);

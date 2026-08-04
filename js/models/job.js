@@ -142,7 +142,7 @@
   // mission's target from accidentally being the same faction
   // that's hiring the job (client != target, per §06's "hired by
   // someone to hit someone else").
-  const REUSE_RATIO = 0.4; // tuning dial, per the bible's own language
+  const REUSE_RATIO = 0.4; // tuning dial, per the current understanding's own language
   const CHAINED_JOB_CHANCE = 0.35; // share of multi-mission contracts that are order-gated chains (placeholder)
 
   // siteProvider (optional): { mint(value, orientation) } — the

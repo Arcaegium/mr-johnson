@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — core/save.js
-   Save/load per design bible §09 ("Save model: seeds and deltas,
+   Save/load per current understanding §09 ("Save model: seeds and deltas,
    never content"). IndexedDB for the browser target, schema
    version stamped from day one so future shape changes have
    something to migrate from.
@@ -11,7 +11,7 @@
    crafted items and harvested materials into `armory` below) —
    but full session serialization to disk is still the flagged
    v0.5 follow-up: site/mission object graphs need their
-   compressSite-style record forms first. The shape is the bible's
+   compressSite-style record forms first. The shape is the current understanding's
    own §09 spec either way, so finishing persistence populates
    fields that already exist rather than changing the schema.
 
@@ -41,7 +41,7 @@
     });
   }
 
-  // ── Default save shape (design bible §09) ───────────────────────
+  // ── Default save shape (current understanding §09) ───────────────────────
   function defaultSave(rootSeed) {
     return {
       meta: { schemaVersion: SCHEMA_VERSION, currentDay: 1, rootSeed: rootSeed },
