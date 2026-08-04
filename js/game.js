@@ -474,6 +474,10 @@
     }
     if (res.suppression) logLine(session, "  softened: the site's " + res.suppression.axis + " grid is degraded for the rest of the day (+" + res.suppression.level + "d vs " + res.suppression.axis + " obstacles)");
     if (res.patient) logLine(session, "  patient " + res.patient + " now at " + res.woundsNow + " wound(s)");
+    if (res.dataHaul) {
+      logLine(session, "  pulled " + res.dataHaul.files + " datafile(s) from " +
+        res.dataHaul.nodesLooted + " node(s) — deck storage " + res.dataHaul.storage);
+    }
     if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);
     if (res.bonusItem) {
       session.save.armory.items.push(res.bonusItem);

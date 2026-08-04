@@ -110,6 +110,14 @@
         });
       });
       for (const lens of MJ.RECON_LENSES) acts.push({ v: "recon:" + lens, label: "Recon — " + lens });
+      // The Matrix run is its own dispatch — a crawl through the
+      // site's HOST, not its corridors. Two routes: quiet takes the
+      // fewest nodes, greedy detours through datastores for a bigger
+      // haul and eats the extra ice for it.
+      if (site.host && site.host.nodes.length > 1) {
+        acts.push({ v: "matrix:quiet", label: `Matrix run — quiet (${site.host.nodes.length} nodes)` });
+        acts.push({ v: "matrix:data", label: "Matrix run — grab all the data you can" });
+      }
       if (site.tags.some((t) => String(t.tag).indexOf("resource:") === 0)) acts.push({ v: "harvest", label: "Harvest resources" });
     }
     return acts;
@@ -155,6 +163,13 @@
     if (act.indexOf("recon:") === 0) {
       const lens = act.split(":")[1];
       return { mission: MJ.createReconMission(site, lens), label: `recon ${lens} @ ${siteTag(site)}` };
+    }
+    if (act.indexOf("matrix:") === 0) {
+      const greedy = act.split(":")[1] === "data";
+      return {
+        mission: MJ.createMatrixMission(site, { wantData: greedy }),
+        label: `matrix run${greedy ? " (data haul)" : ""} @ ${siteTag(site)}`,
+      };
     }
     if (act === "harvest") return { mission: MJ.createResourceMission(site), label: `harvest @ ${siteTag(site)}` };
     return null;

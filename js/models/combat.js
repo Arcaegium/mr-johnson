@@ -114,6 +114,12 @@
     rifle:     { label: "Rifle",        skill: "marksmanship", power: 9, dv: 8, ap: -3, modes: ["SS", "SA"] },
     machinegun:{ label: "Machine gun",  skill: "heavyWeapons", power: 10, dv: 9, ap: -3, modes: ["BF", "FA"] },
     gel:       { label: "Gel rounds",   skill: "firearms",     power: 6, dv: 7, ap: 2,  stun: true, modes: ["SS", "SA"] },
+    // Matrix. Black ICE burns a decker's own brain — biofeedback,
+    // so it fills the STUN track and a hot-sim run can drop the
+    // decker in their chair. Attacking it back is a hacking test,
+    // not a gun, which is why a wired samurai is no help in a host.
+    blackHammer: { label: "Black hammer", skill: "hacking", power: 7, dv: 6, ap: -1, stun: true, modes: ["melee"] },
+    dataSpike:   { label: "Data spike",   skill: "hacking", power: 6, dv: 5, ap: -2, stun: true, modes: ["melee"] },
   };
 
   function weaponProfile(id) {

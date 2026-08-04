@@ -231,6 +231,46 @@
         { skill: "sorcery",    verb: "break it", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
     },
+    // ── Matrix idiom ─────────────────────────────────────────────
+    // Ice is the host's security, and it senses in the MATRIX only —
+    // which is the whole reason a decker working from a terminal is
+    // invisible to the guard standing next to him, and equally why
+    // fumbling a hack is seen by things the guard will never hear
+    // about. Same structural roles as everywhere else: a barrier to
+    // get through, a sentry that objects, one loud way past.
+    barrierIce: {
+      label: "Barrier ICE",
+      senses: [],  // a wall logs nothing; it simply does not open
+      affordances: [
+        { skill: "hacking",     verb: "slip the barrier", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
+        { skill: "electronics", verb: "spoof its credentials", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 2 },
+        { skill: null,          verb: "route around the node", loud: false, threat: THREAT.NORMAL, attempts: 1 },
+        { skill: "hacking",     verb: "hammer it down", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+      ],
+    },
+    patrolIce: {
+      label: "Patrol ICE",
+      senses: ["matrix"],
+      affordances: [
+        { skill: "hacking",     verb: "mask your icon", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
+        { skill: "computer",    verb: "pass as legitimate traffic", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 2 },
+        { skill: "hacking",     verb: "corrupt its patrol route", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "hacking",     verb: "burn it out", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+      ],
+    },
+    blackIce: {
+      label: "Black ICE",
+      senses: ["matrix"],
+      // It bites back. A decker in hot sim takes real damage, which
+      // is why a Matrix run is not a safe alternative to a break-in.
+      fights: true,
+      armour: 4, weapon: "blackHammer",
+      affordances: [
+        { skill: "hacking",     verb: "slide past it", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
+        { skill: "computer",    verb: "feed it a decoy icon", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 2 },
+        { skill: "hacking",     verb: "attack it directly", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+      ],
+    },
     spirit: {
       label: "Spirit",
       // DUAL-NATURED: a materialised spirit perceives the astral and
@@ -426,6 +466,96 @@
     }
   }
 
+  // ── The host: the Matrix's own graph ───────────────────────────
+  // `security.matrix` used to generate NOTHING — 4198 physical and
+  // 1452 astral obstacles across 600 sites, and exactly 0 matrix.
+  // A Matrix-leaning site was mechanically empty on its own axis:
+  // the number was decorative, and the third pillar had no content
+  // to be a pillar of.
+  //
+  // A host is not the building. Walls mean nothing here; what
+  // constrains a decker is the topology of the system itself, so
+  // this is its own graph with its own node types — never the room
+  // graph reskinned. Node 0 is always the entry (the public face);
+  // the objective sits deepest.
+  //
+  // §05's four layers are Intel, Loadout, Route and Encounter. This
+  // builds ROUTE and ENCOUNTER, which is what scene-text owes: the
+  // node-traversal puzzle, with ice as ordinary affordance-bearing
+  // obstacles so the whole existing stepper drives it. Loadout as a
+  // RAM/card economy is the deck-building layer on top, later.
+  const NODE_TYPES = {
+    spu:       { label: "SPU",        alert: 1, canHoldObjective: false },
+    datastore: { label: "Datastore",  alert: 2, canHoldObjective: true, data: true },
+    slave:     { label: "Slave node", alert: 2, canHoldObjective: false, controlsDevices: true },
+    ds:        { label: "Data store", alert: 3, canHoldObjective: true, data: true },
+    cpu:       { label: "CPU",        alert: 4, canHoldObjective: true },
+  };
+
+  const ICE_TYPES = ["barrierIce", "patrolIce", "blackIce"];
+
+  function generateHost(rng, security) {
+    const rating = security.matrix;
+    // Node count tracks the rating the same way physical coverage
+    // does — a bigger system is a longer crawl, not just a harder one.
+    const nodeCount = Math.max(2, Math.round(rating * 0.8) + rng.int(1, 2));
+    const nodes = [];
+    for (let i = 0; i < nodeCount; i++) {
+      let type;
+      if (i === 0) type = "spu";                       // the public face
+      else if (i === nodeCount - 1) type = "cpu";      // the deep end
+      else type = rng.weighted([
+        { item: "spu", weight: 4 },
+        { item: "datastore", weight: 3 },
+        { item: "slave", weight: 2 },
+        { item: "ds", weight: 2 },
+      ]);
+      nodes.push({
+        id: i, type: type, label: NODE_TYPES[type].label,
+        alertPerAction: NODE_TYPES[type].alert,
+        holdsData: !!NODE_TYPES[type].data,
+        ice: [],
+      });
+    }
+    // A spine so there is always a route, plus a shortcut or two —
+    // the long quiet way versus the short exposed one is the whole
+    // Route decision (§05), and it needs at least two ways down.
+    const edges = [];
+    for (let i = 1; i < nodes.length; i++) edges.push({ from: i - 1, to: i });
+    const shortcuts = Math.min(2, Math.floor(nodeCount / 3));
+    for (let s = 0; s < shortcuts; s++) {
+      const from = rng.int(0, nodeCount - 3);
+      const to = rng.int(from + 2, nodeCount - 1);
+      if (!edges.some((e) => e.from === from && e.to === to)) edges.push({ from: from, to: to });
+    }
+
+    // Ice budget mirrors the physical rule: each point of the rating
+    // is 10% coverage of the host's own encounter points.
+    const slots = nodes.length;
+    let budget = Math.round(slots * (rating / 10));
+    if (budget < 1 && rating >= 1) budget = 1;
+    let guard = 0;
+    while (budget > 0 && guard++ < 200) {
+      const node = nodes[rng.int(1, nodes.length - 1)]; // never the entry
+      const type = rng.weighted([
+        { item: "barrierIce", weight: 4 },
+        { item: "patrolIce", weight: 3 },
+        { item: "blackIce", weight: Math.max(1, Math.floor(rating / 3)) },
+      ]);
+      const tier = Math.max(1, Math.min(10, rating + rng.int(-1, 1)));
+      node.ice.push(generateObstacleInstance(rng, type, tier, "matrix"));
+      budget -= 1;
+    }
+
+    return {
+      rating: rating,
+      nodes: nodes,
+      edges: edges,
+      entryNode: 0,
+      objectiveNode: nodes.length - 1,
+    };
+  }
+
   function generateLayout(rng, security) {
     const roomCount = rng.int(4, 7);
     const rooms = [];
@@ -566,6 +696,7 @@
     const orientation = options.orientation || rollOrientation(r);
     const security = deriveSecurity(r, value, orientation);
     const layout = generateLayout(r, security);
+    const host = generateHost(r, security);
     const population = generatePopulation(r, security);
     const district = options.district || r.pick(DISTRICTS);
     const isWild = WILD_DISTRICTS.indexOf(district) !== -1;
@@ -582,6 +713,7 @@
       },
       security: security,
       layout: layout,
+      host: host,
       population: population,
       lootTable: lootTable,       // the probability chart of what's findable here
       // Persistence is deltas only (§09) — reserved here so the
@@ -797,9 +929,15 @@
       ...site.layout.patrols,
     ];
     const astralSlots = [...site.layout.rooms, ...site.layout.spiritZones];
+    // The host counts. Leaving it out meant a Matrix scout found
+    // nothing to report on a site whose whole defence is its ice —
+    // the same "generated but unreachable" hole patrols and spirit
+    // zones had, one pillar over.
+    const matrixSlots = site.host ? site.host.nodes : [];
     return [
       ...physicalSlots.flatMap((s) => s.physicalObstacles),
       ...astralSlots.flatMap((s) => s.astralObstacles),
+      ...matrixSlots.flatMap((n) => n.ice),
     ];
   }
 
@@ -870,6 +1008,8 @@
   MJ.ORIENTATIONS = ORIENTATIONS;
   MJ.OBSTACLE_TEMPLATES = OBSTACLE_TEMPLATES;
   MJ.generateObstacleInstance = generateObstacleInstance;
+  MJ.generateHost = generateHost;
+  MJ.NODE_TYPES = NODE_TYPES;
   MJ.planeOfAffordance = planeOfAffordance;
   MJ.SKILL_PLANE = SKILL_PLANE; // mission.js spawns responders with this
   MJ.PHYSICAL_OBSTACLE_TYPES = PHYSICAL_OBSTACLE_TYPES;

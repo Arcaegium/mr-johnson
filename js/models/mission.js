@@ -159,6 +159,51 @@
   // Same record family as job.js's job-derived missions — `kind`
   // distinguishes; a job mission has no kind and resolves as
   // "jobObjective".
+  // A Matrix run against a site's host. `wantData` is the greedy
+  // route — more datastores, more ice, more exposure. §05: "the
+  // deeper and longer you stay to fill storage, the more Alert you
+  // eat, so profit trades directly against safety."
+  function createMatrixMission(site, opts) {
+    opts = opts || {};
+    return {
+      kind: "matrixRun",
+      site: site,
+      wantData: !!opts.wantData,
+      objective: { verb: "Intel", domain: "data" },
+    };
+  }
+
+  // Datastores passed on the way through. Storage caps the haul —
+  // a bigger deck carries more out, so the deck is the difference
+  // between a paid run and a profitable one.
+  const DATA_PER_NODE = 2;
+
+  function deckStorageFor(runners) {
+    let best = 0;
+    for (const r of runners) {
+      for (const item of r.gear || []) {
+        if (item.consumed) continue;
+        const t = MJ.ITEM_TEMPLATES[item.templateId];
+        if (t && t.category === "deck") best = Math.max(best, MJ.effectiveTier(item));
+      }
+    }
+    return best; // 0 with no deck — nothing to carry it in
+  }
+
+  function haulData(run) {
+    const route = run.mission && run.hostRoute;
+    if (!route || !route.dataNodes || !route.dataNodes.length) return null;
+    const storage = deckStorageFor(run.runners);
+    if (storage <= 0) return null;
+    // Only nodes whose ice you actually cleared are worth looting —
+    // you cannot pull files out of a node still fighting you.
+    const reached = route.dataNodes.filter((n) =>
+      n.ice.every((i) => run.neutralized.has(i) || run.tasks.some((t) => t.obstacle === i.label && t.success)));
+    const files = Math.min(storage, reached.length * DATA_PER_NODE);
+    if (files <= 0) return null;
+    return { files: files, storage: storage, nodesLooted: reached.length };
+  }
+
   function createReconMission(site, lens) {
     return { kind: "recon", lens: lens, site: site, locationType: "site", resolved: false, karmaAward: null };
   }
@@ -304,6 +349,62 @@
     return obstacles.slice(0, MAX_ROUTE_OBSTACLES);
   }
 
+  // ── The host crawl ─────────────────────────────────────────────
+  // A Matrix run is not the building. Walls mean nothing; what
+  // constrains a decker is the system's own topology, so this walks
+  // the host graph rather than the room graph — the third pillar
+  // finally having its own space to be a pillar of.
+  //
+  // §05's Route layer is the trade this implements: the long way
+  // passes more nodes, which means more ice AND more datastores, so
+  // greed and exposure are the same decision. The short way skips
+  // both. `wantData` is what a data-hungry run picks.
+  function hostPaths(host) {
+    const out = [];
+    const walk = (at, seen) => {
+      if (at === host.objectiveNode) { out.push(seen.concat([at])); return; }
+      if (seen.length > 12) return;
+      for (const e of host.edges) {
+        if (e.from !== at || seen.indexOf(e.to) !== -1) continue;
+        walk(e.to, seen.concat([at]));
+      }
+    };
+    walk(host.entryNode, []);
+    return out;
+  }
+
+  function hostRoute(site, opts) {
+    opts = opts || {};
+    const host = site.host;
+    if (!host) return { path: [], obstacles: [], dataNodes: [] };
+    const paths = hostPaths(host);
+    if (!paths.length) return { path: [], obstacles: [], dataNodes: [] };
+
+    // Greedy route wants datastores; a quiet run wants the fewest
+    // nodes it can get away with. Same graph, opposite priorities.
+    const score = (p) => {
+      const dataCount = p.filter((id) => host.nodes[id].holdsData).length;
+      return opts.wantData ? (dataCount * 10 - p.length) : -p.length;
+    };
+    const path = paths.reduce((a, b) => (score(a) >= score(b) ? a : b));
+
+    const obstacles = [];
+    const dataNodes = [];
+    for (const id of path) {
+      const node = host.nodes[id];
+      if (node.holdsData) dataNodes.push(node);
+      for (const ice of node.ice) {
+        // Co-location inside the host, so witnessing works exactly
+        // as it does in meatspace: two pieces of ice on one node see
+        // each other's business.
+        ice.rooms = ["node" + id];
+        ice.hostNode = id;
+        obstacles.push(ice);
+      }
+    }
+    return { path: path, obstacles: obstacles.slice(0, MAX_ROUTE_OBSTACLES), dataNodes: dataNodes, host: host };
+  }
+
   function reconObstacles(site, lens) {
     const all = MJ.allObstacles(site);
     const pool = lens === "matrix"
@@ -373,6 +474,7 @@
   function beginMission(rng, mission, runners, day) {
     const site = mission.site;
     const kind = missionKind(mission);
+    const matrixRun = kind === "matrixRun" ? hostRoute(site, { wantData: !!mission.wantData }) : null;
     if (!site.securityState) MJ.initSecurityState(rng, site);
     const state = site.securityState;
     // Karma keys off the START of the mission — snapshot first.
@@ -389,7 +491,12 @@
       mission: mission, runners: runners, day: day, site: site, kind: kind,
       state: state, start: start,
       intelBonus: hasFreshIntel(site, day) ? INTEL_BONUS_DICE : 0,
-      obstacles: kind === "recon" ? reconObstacles(site, mission.lens) : routeObstacles(site),
+      obstacles: kind === "recon" ? reconObstacles(site, mission.lens)
+        : kind === "matrixRun" ? matrixRun.obstacles
+        : routeObstacles(site),
+      // Matrix runs carry their route so the readout can say WHERE
+      // in the host the decker is, and what is still worth grabbing.
+      hostRoute: matrixRun,
       index: 0, tasks: [], armorGuard: armorGuard,
       // Held by object identity, not route index: responders splice
       // into the middle of the route and would shift any index key.
@@ -1309,6 +1416,17 @@
       threatBand: band, incident: incident, forcedResponse: run.engagedAlert,
       walkedIntoResponse: run.walkedIntoResponse || null,
     };
+    // The Matrix's second payday. §05: "the run's real profit is
+    // often the data, not the pay" — and it is capped by the deck
+    // you brought, so storage is the difference between getting paid
+    // and getting rich.
+    if (kind === "matrixRun") {
+      result.hostPath = (run.hostRoute && run.hostRoute.path) || [];
+      if (success) {
+        const haul = haulData(run);
+        if (haul) result.dataHaul = haul;
+      }
+    }
     if (success && kind === "resourceGathering") {
       // Draw from the site's own probability chart (§09: the loot
       // table is as canonical as the walls — same name, same odds).
@@ -1540,6 +1658,9 @@
   MJ.RECON_LENSES = RECON_LENSES;
   MJ.isDispatchable = isDispatchable;
   MJ.createReconMission = createReconMission;
+  MJ.createMatrixMission = createMatrixMission;
+  MJ.hostRoute = hostRoute;
+  MJ.hostPaths = hostPaths;
   MJ.createCraftingMission = createCraftingMission;
   MJ.createMedicalMission = createMedicalMission;
   MJ.createResourceMission = createResourceMission;
