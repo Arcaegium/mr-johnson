@@ -130,10 +130,16 @@ function, so all three agree by construction.
   so a weapon and its quality can never come from different items.
 - **`MJ.effectiveTier(item)`** — tier + crafted quality. Every mechanical reader
   of tier must go through this.
-- **`attemptKey(index, approach)`** vs **`discoveryKey(index, skill)`** — budgets
-  are per-AFFORDANCE (a guard's two stealth plays are different swings);
-  discoveries are per-SKILL (learning he is sensor-equipped rules out sneaking
-  however you found out).
+- **Per-run memory is keyed by the OBSTACLE OBJECT, never by route index.**
+  `run.attempts` (obstacle → {approach: tries}, driving escalation),
+  `run.discovered` (obstacle → {skill: why it can't work here}) and
+  `run.neutralized` (a Set of obstacles) all hold identities. Responders splice
+  into the route ahead of the crew and shift every later index, so anything filed
+  under an index starts describing a different obstacle the moment a guard turns
+  up — the newcomer inheriting tries and discoveries it never earned. Tries are
+  per-AFFORDANCE (a guard's two stealth plays are different swings); discoveries
+  are per-SKILL (learning he is sensor-equipped rules out sneaking however you
+  found out).
 - **`session.log` holds RECORDS, not sentences.** The hub keeps a log at every
   fidelity — a scrolling pane today, a readout on a drawn console later — so an
   entry is `{seq, day, kind, text, refs}`. `kind` is one of

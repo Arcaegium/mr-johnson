@@ -672,8 +672,8 @@
       concealment: 0,
       extended: null, // in-progress extended work, if any (P2.1)
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
-      attempts: {},        // "obstacleIndex#approach" -> tries, which drive escalation
-      discovered: {},      // "obstacleIndex:skill" -> why it will never work here
+      attempts: new Map(), // obstacle -> { approach: tries }, which drive escalation
+      discovered: new Map(), // obstacle -> { skill: why it will never work here }
       engagedAlert: false, // did this run force a real response
     };
     // Walking into a building that is ALREADY responding — an
@@ -826,16 +826,41 @@
   // — and they are not the same swing. The count no longer spends a
   // budget; it drives escalation, so trying the same thing over and
   // over is what makes you look like someone with a purpose.
-  function attemptKey(index, approach) {
-    return index + "#" + approach;
+  // ── Keyed by the OBSTACLE, never by its position ───────────────
+  // Responders splice into the route ahead of the crew, which shifts
+  // the index of everything after them. Anything filed under a route
+  // index therefore ends up describing a different obstacle the
+  // moment a guard turns up — a freshly-spawned responder inheriting
+  // the tries and discoveries its predecessor earned, so its very
+  // first attempt reads as a fourth and an approach it never blocked
+  // shows as useless. `run.neutralized` already avoided this by
+  // holding obstacle objects; these now do the same.
+  function triesOn(run, obstacle, approach) {
+    const perObstacle = run.attempts.get(obstacle);
+    return (perObstacle && perObstacle[approach]) || 0;
   }
 
-  // What you LEARNED, though, is about the obstacle and the skill:
-  // finding out he is sensor-equipped rules out sneaking generally,
-  // however you found it out.
-  function discoveryKey(index, skill) {
-    return index + ":" + skill;
+  function countTry(run, obstacle, approach) {
+    let perObstacle = run.attempts.get(obstacle);
+    if (!perObstacle) { perObstacle = {}; run.attempts.set(obstacle, perObstacle); }
+    perObstacle[approach] = (perObstacle[approach] || 0) + 1;
+    return perObstacle[approach];
   }
+
+  function knownUseless(run, obstacle, skill) {
+    const perObstacle = run.discovered.get(obstacle);
+    return (perObstacle && perObstacle[skill]) || null;
+  }
+
+  function markUseless(run, obstacle, skill, reason) {
+    let perObstacle = run.discovered.get(obstacle);
+    if (!perObstacle) { perObstacle = {}; run.discovered.set(obstacle, perObstacle); }
+    perObstacle[skill] = reason;
+  }
+
+  // What you LEARNED is about the obstacle and the SKILL: finding out
+  // he is sensor-equipped rules out sneaking generally, however you
+  // found it out — so discoveries are per skill, per obstacle.
 
   // NOTHING RUNS OUT THROUGH USE. A crew can always try again; what
   // changes is what trying again says about them (threatClassFor) and
@@ -843,13 +868,6 @@
   // thing that genuinely removes an approach is learning it cannot
   // work here — a fact about the obstacle, discovered by trying, not
   // a counter about the crew.
-  //
-  // Kept as a function because the shape "how many swings are left"
-  // is what the prompt and the stall check ask for; the answer is
-  // simply always "as many as you want to pay for."
-  function attemptsLeft() {
-    return Infinity;
-  }
 
   // ── Responders: what an engaged axis actually sends ─────────────
   // Each axis fields a challenge at its own alert level, in its own
@@ -969,7 +987,7 @@
       // was told there was NOTHING to try against a spirit it could
       // simply have walked around.
       if (!a.skill) {
-        const triedNoSkill = (run.attempts[attemptKey(run.index, approach)] || 0) + 1;
+        const triedNoSkill = triesOn(run, obstacle, approach) + 1;
         options.push({
           skill: null, approach: approach, verb: a.verb, loud: !!a.loud,
           blocked: !!a.blocked, reason: a.reason || null,
@@ -994,13 +1012,13 @@
         const pool = MJ.dicePoolFor(runner, a.skill, MJ.gearBonusFor(runner, a.skill));
         if (!best || pool > best.pool) best = { runner: runner, pool: pool };
       }
-      const known = run.discovered[discoveryKey(run.index, a.skill)] || null;
+      const known = knownUseless(run, obstacle, a.skill);
       // How many swings this approach has already had, and therefore
       // what the NEXT one would read as. Handing the player the
       // projected read before they commit is the whole point: they
       // should be able to see themselves walking into questionable
       // and choose to do something else instead.
-      const tries = run.attempts[attemptKey(run.index, approach)] || 0;
+      const tries = triesOn(run, obstacle, approach);
       options.push({
         skill: a.skill, approach: approach, verb: a.verb, loud: !!a.loud,
         blocked: !!a.blocked, reason: a.reason || null,
@@ -1291,8 +1309,7 @@
     // an unwitnessed failure left the approach infinitely retryable,
     // because the attempt was only being counted inside the witness
     // path.
-    const key = attemptKey(run.index, w.approach);
-    run.attempts[key] = (run.attempts[key] || 0) + 1;
+    const tries = countTry(run, obstacle, w.approach);
 
     const task = {
       obstacle: obstacle.label, tier: obstacle.tier,
@@ -1304,7 +1321,7 @@
       exhausted: test.exhausted,
     };
 
-    const read = witnessExtended(run, obstacle, w, test, run.attempts[key]);
+    const read = witnessExtended(run, obstacle, w, test, tries);
     if (read) { task.read = read.read; if (read.responders) task.responders = read.responders; }
     run.tasks.push(task);
 
@@ -1395,8 +1412,7 @@
       const fight = runCombat(run, obstacle, { surprise: surprise });
 
       run.anyLoud = true;
-      const key = attemptKey(run.index, approach);
-      run.attempts[key] = (run.attempts[key] || 0) + 1;
+      countTry(run, obstacle, approach);
 
       const task = {
         obstacle: obstacle.label, tier: obstacle.tier,
@@ -1456,15 +1472,12 @@
     // beat. It still counts as an act, so a normal-class route-around
     // reads as nothing while a louder one would still be seen.
     if (!skill) {
-      // Same key attemptsLeft derives from, or the budget would
-      // never tick down and "route around" would be infinite.
-      const noRollKey = attemptKey(run.index, approach);
-      run.attempts[noRollKey] = (run.attempts[noRollKey] || 0) + 1;
+      const noRollTries = countTry(run, obstacle, approach);
       const task = { obstacle: obstacle.label, tier: obstacle.tier, result: affordance ? affordance.verb : "went around" };
       // Nothing was rolled, so nothing was fumbled — a no-roll
       // approach can only be seen by being loud.
       if (wasWitnessed(run, obstacle, affordance, true, null)) {
-        const cls = threatClassFor(affordance, run.attempts[noRollKey]);
+        const cls = threatClassFor(affordance, noRollTries);
         if (cls !== MJ.THREAT.NORMAL) {
           const applied = MJ.witnessAct(run.state, run.day, cls);
           task.read = { threatClass: cls, band: applied.band };
@@ -1505,20 +1518,19 @@
     tickTether(run);
 
     // What did that reveal, and did anything see it?
-    const key = attemptKey(run.index, approach);
-    run.attempts[key] = (run.attempts[key] || 0) + 1;
+    const tries = countTry(run, obstacle, approach);
     // A blocked affordance is discovered by trying it — you learn the
     // box is air-gapped by reaching for a signal that isn't there.
     // Filed against the SKILL: what you found out is that this
     // approach does not work on this thing, not that this one verb
     // does not.
     if (outcome.ok === false && affordance && affordance.blocked) {
-      run.discovered[discoveryKey(run.index, skill)] = affordance.reason || "doesn't work here";
+      markUseless(run, obstacle, skill, affordance.reason || "doesn't work here");
     }
     let read = null;
     let tipped = false;
     if (wasWitnessed(run, obstacle, affordance, outcome.success, runner)) {
-      const cls = threatClassFor(affordance, run.attempts[key]);
+      const cls = threatClassFor(affordance, tries);
       if (cls !== MJ.THREAT.NORMAL) {
         const applied = MJ.witnessAct(run.state, run.day, cls);
         read = {
@@ -1583,13 +1595,12 @@
     let n = 0;
     for (let approach = 0; approach < obstacle.affordances.length; approach++) {
       const a = obstacle.affordances[approach];
-      if (attemptsLeft(run, run.index, a, approach) <= 0) continue;
       // A skill-less approach needs nobody trained and nothing
       // known — it counts. Skipping it here while missionPrompt
       // offered it meant a crew could be declared out of options
       // with "route around" still sitting on the screen.
       if (!a.skill) { n += 1; continue; }
-      if (run.discovered[discoveryKey(run.index, a.skill)]) continue;
+      if (knownUseless(run, obstacle, a.skill)) continue;
       if (eff.some((e) => (e[a.skill] || 0) > 0)) n += 1;
     }
     return n;
@@ -1613,7 +1624,7 @@
     const outclassed = []; // trained, but the rating is beyond them
     for (const a of obstacle.affordances) {
       if (!a.skill) continue;
-      if (run.discovered[discoveryKey(run.index, a.skill)]) continue;
+      if (knownUseless(run, obstacle, a.skill)) continue;
       let bestRank = 0;
       for (const skills of eff) bestRank = Math.max(bestRank, skills[a.skill] || 0);
       // One obstacle can offer the same skill twice (a guard can be

@@ -311,6 +311,46 @@
       (100 * exposed).toFixed(0) + "% exposed vs " + (100 * hidden).toFixed(0) + "% hidden)");
     check(hidden < 0.15, "C2: a heavily concealed crew must usually go unnoticed (" + (100 * hidden).toFixed(0) + "%)");
 
+    // ── A run's memory belongs to the OBSTACLE, not its position ──
+    // Responders splice in ahead of the crew and shift every later
+    // index. Anything filed under a route index therefore starts
+    // describing a different obstacle the moment a guard turns up:
+    // the newcomer inherits the tries and discoveries its predecessor
+    // earned, so its very first attempt reads as a repeat and an
+    // approach it never blocked shows as useless. That is a crew
+    // sneaking past a guard cleanly and getting burned on the very
+    // next move for no reason they can see.
+    const shiftRng = MJ.makeRNG("stress-index-shift");
+    const shiftSite = MJ.mintSite("stress-shift-u", 3);
+    const shiftCrew = makeRoster(shiftRng.fork("crew"), 3);
+    for (const r of shiftCrew) { MJ.watchRunner(r, shiftRng); MJ.hireRunner(r, "permanent"); }
+    const shiftRun = MJ.beginMission(shiftRng.fork("m"),
+      { site: shiftSite, kind: "jobObjective", objective: {} }, shiftCrew, 1);
+    if (shiftRun.obstacles.length >= 3) {
+      const marked = shiftRun.obstacles[2];
+      shiftRun.attempts.set(marked, { 0: 3 });
+      shiftRun.discovered.set(marked, { stealth: "sensor-equipped" });
+      shiftRun.index = 0;
+      const intruder = MJ.generateObstacleInstance(MJ.makeRNG("shift-int"), "guard", 3, "physical");
+      intruder.rooms = shiftRun.obstacles[0].rooms;
+      shiftRun.obstacles.splice(1, 0, intruder);
+
+      check(shiftRun.obstacles.indexOf(marked) === 3, "C2: the splice must actually shift the marked obstacle");
+      check((shiftRun.attempts.get(marked) || {})[0] === 3,
+        "C2: an obstacle must keep its own try count after the route shifts under it");
+      check((shiftRun.discovered.get(marked) || {}).stealth === "sensor-equipped",
+        "C2: an obstacle must keep its own discoveries after the route shifts under it");
+      check(!shiftRun.attempts.get(intruder),
+        "C2: a spliced-in responder must inherit NO tries from whoever held its index");
+      check(!shiftRun.discovered.get(intruder),
+        "C2: a spliced-in responder must inherit NO discoveries from whoever held its index");
+      // And the prompt must agree: the newcomer's approaches read as
+      // first attempts, not as repeats someone else earned.
+      const intruderPrompt = MJ.missionPrompt(Object.assign(Object.create(Object.getPrototypeOf(shiftRun)), shiftRun, { index: 1 }));
+      check(intruderPrompt && intruderPrompt.options.every((o) => !o.tries),
+        "C2: a fresh responder's options must all read as first attempts");
+    }
+
     const spiritInst = MJ.generateObstacleInstance(MJ.makeRNG("spdual"), "spirit", 1);
     check(spiritInst.dualNatured && spiritInst.senses.indexOf("astral") !== -1 &&
       spiritInst.senses.indexOf("physical") !== -1,
