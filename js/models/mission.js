@@ -118,6 +118,7 @@
 
   // ── Eligibility: a dispatch is what a contract buys ─────────────
   function isDispatchable(runner) {
+    if (runner.dead) return false; // died on a job — not a market state
     return !!runner.market.hired && runner.market.phase !== "kia";
   }
 
@@ -543,7 +544,10 @@
     // run: a critical glitch mid-mission changes them. Once per
     // runner rather than once per runner PER affordance, though —
     // this used to allocate a fresh skill map fifteen times a prompt.
-    const eff = run.runners.map((r) => MJ.getEffectiveSkills(r));
+    // Anyone dropped in a firefight is out of the run — they cannot
+    // front an approach from the floor.
+    const upright = run.runners.filter((r) => !run.downed || !run.downed.has(r));
+    const eff = upright.map((r) => MJ.getEffectiveSkills(r));
     for (let approach = 0; approach < obstacle.affordances.length; approach++) {
       const a = obstacle.affordances[approach];
       // Skill-less affordances are real approaches, not filler:
@@ -563,8 +567,8 @@
         continue;
       }
       let best = null;
-      for (let ri = 0; ri < run.runners.length; ri++) {
-        const runner = run.runners[ri];
+      for (let ri = 0; ri < upright.length; ri++) {
+        const runner = upright[ri];
         const trained = eff[ri][a.skill] || 0;
         if (trained <= 0) continue;
         // Ranked by the pool they will ACTUALLY roll — the same
@@ -603,6 +607,143 @@
 
   // One decision, one roll. `choice` is { skill, runner } — or null,
   // meaning nobody could touch it and the crew stalls out loudly.
+  // ── Combat, entered from a mission ─────────────────────────────
+  // A violent approach is not a check. §07: turn-based starts either
+  // FORCED ("a witnessed or failed takedown, a tripped alarm, a
+  // spotted crew") or CHOSEN, and choosing it while still undetected
+  // is the ambush — a surprise round nobody can answer. That is the
+  // whole reason to open a fight deliberately rather than blunder
+  // into one, and it is why the threat read matters right up to the
+  // moment somebody pulls a trigger.
+  const DEATH_ON_TAKEDOWN = 0.05; // 1 in 20; the other 19 take a wound
+
+  function enemiesFor(run, obstacle) {
+    const foes = [MJ.makeCombatant({
+      label: obstacle.label + " T" + obstacle.tier,
+      attributes: {
+        agility: 2 + Math.ceil(obstacle.tier / 2),
+        intelligence: 2 + Math.floor(obstacle.tier / 3),
+        body: 2 + Math.ceil(obstacle.tier / 2),
+        willpower: 2 + Math.ceil(obstacle.tier / 2),
+        strength: 2 + Math.floor(obstacle.tier / 2),
+      },
+      skills: { firearms: obstacle.tier, melee: obstacle.tier, marksmanship: obstacle.tier },
+    }, { side: "enemy", armour: obstacle.armour, weaponId: obstacle.weapon, ammo: 999 })];
+    // Anything else that can fight and shares this ground joins in.
+    // Opening fire in a room with two guards is a fight with two
+    // guards — that is what makes clearing the eyes first matter.
+    for (const o of run.obstacles) {
+      if (o === obstacle || !o.fights || run.neutralized.has(o)) continue;
+      if (!o.rooms || !obstacle.rooms || !o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1)) continue;
+      foes.push(MJ.makeCombatant({
+        label: o.label + " T" + o.tier,
+        attributes: {
+          agility: 2 + Math.ceil(o.tier / 2), intelligence: 2 + Math.floor(o.tier / 3),
+          body: 2 + Math.ceil(o.tier / 2), willpower: 2 + Math.ceil(o.tier / 2),
+          strength: 2 + Math.floor(o.tier / 2),
+        },
+        skills: { firearms: o.tier, melee: o.tier, marksmanship: o.tier },
+      }, { side: "enemy", armour: o.armour, weaponId: o.weapon, ammo: 999 }));
+      foes[foes.length - 1].sourceObstacle = o;
+    }
+    foes[0].sourceObstacle = obstacle;
+    return foes;
+  }
+
+  function crewCombatants(run) {
+    return run.runners.filter((r) => !run.downed || !run.downed.has(r)).map((r) =>
+      MJ.makeCombatant(r, {
+        side: "crew",
+        weaponId: MJ.combatWeaponFor(r),
+        armour: MJ.armourRatingFor(r),
+        ammo: 30,
+      }));
+  }
+
+  // Going down is where mission risk finally has teeth. The bible's
+  // old "a runner can never die on a job" was written when a mission
+  // was a dice check nobody watched; now the player sees the tracks
+  // fill, chooses to press or withdraw, and can pull out. A death
+  // they saw coming is a consequence, not an ambush.
+  //
+  // The wound scales with how badly they were overmatched, rather
+  // than a flat -1: being dropped by a tier-9 hardsuit marks a
+  // career in a way a rent-a-cop does not.
+  function resolveTakedown(run, combatant) {
+    const runner = combatant.source;
+    const overflow = Math.max(0,
+      (combatant.physical - combatant.physicalMax) + (combatant.stun - combatant.stunMax));
+    if (run.rng.chance(DEATH_ON_TAKEDOWN)) {
+      // `dead` is its own flag, deliberately NOT market.phase="kia".
+      // The phase machine describes runners on the WATCH LIST, and
+      // hiring suppresses it — writing a phase onto a hired runner
+      // both broke that invariant and made a corpse look like it was
+      // still cycling through availability. Dying on a job is not a
+      // market state; the roster sweep removes them at day's end.
+      runner.dead = true;
+      if (runner.market) runner.market.hired = null; // the contract ends with them
+      return { runner: runner.identity.handle, died: true };
+    }
+    const severity = 1 + Math.floor(overflow / 4);
+    runner.wounds += severity;
+    return { runner: runner.identity.handle, died: false, wounds: severity };
+  }
+
+  function runCombat(run, obstacle, opts) {
+    opts = opts || {};
+    const crew = crewCombatants(run);
+    const foes = enemiesFor(run, obstacle);
+    const combat = MJ.beginCombat(run.rng, crew, foes, { surprise: !!opts.surprise });
+
+    // Bounded in ROUNDS, not actions. Counting actions meant a big
+    // fight hit the cap after only a handful of rounds, and worse:
+    // when neither side can hurt the other — a pistol crew against
+    // an armoured spirit, where every shot bounces off gate 2 — the
+    // exchange simply never ended, and "some of the crew is still
+    // standing" was being scored as a WIN. A fight you cannot finish
+    // is not a fight you won; it is one you have to walk away from.
+    const MAX_ROUNDS = 10;
+    let guard = 0;
+    while (!MJ.combatOver(combat) && combat.round <= MAX_ROUNDS && guard++ < 800) {
+      const slot = MJ.combatActor(combat);
+      if (!slot) break;
+      const actor = slot.actor;
+      const targets = combat.combatants.filter((c) => c.side !== actor.side && !c.down);
+      if (!targets.length) break;
+      // House policy: hit the one closest to dropping, so a fight
+      // shortens instead of spreading damage evenly.
+      const target = targets.reduce((a, b) =>
+        (a.physical + a.stun) >= (b.physical + b.stun) ? a : b);
+      const weapon = MJ.weaponProfile(actor.weaponId);
+      const mode = weapon.modes.indexOf("BF") !== -1 ? "BF" : weapon.modes[0];
+      MJ.combatAct(combat, { target: target, mode: mode, stance: actor.side === "crew" ? "cover" : "open" });
+    }
+
+    const casualties = [];
+    for (const c of crew) {
+      if (!c.down) continue;
+      if (!run.downed) run.downed = new Set();
+      run.downed.add(c.source);
+      casualties.push(resolveTakedown(run, c));
+    }
+    // Only a cleared field counts. Standing there unable to finish
+    // them is a stalemate — the crew breaks off, the obstacle is
+    // still there, and every round of it fed the alert.
+    const enemiesLeft = foes.some((f) => !f.down);
+    const crewLeft = crew.some((c) => !c.down);
+    const won = crewLeft && !enemiesLeft;
+    const stalemate = crewLeft && enemiesLeft;
+    if (won) for (const f of foes) if (f.sourceObstacle) run.neutralized.add(f.sourceObstacle);
+
+    return {
+      won: won, stalemate: stalemate, rounds: combat.round, casualties: casualties,
+      enemies: foes.map((f) => f.name),
+      enemiesDown: foes.filter((f) => f.down).length,
+      surprise: !!opts.surprise,
+      log: combat.log,
+    };
+  }
+
   // A critical glitch lands the same way whoever caused it and
   // however: armor eats it first (reusable this mission), then a
   // patch (consumed), and only then does the wound land. Shared so
@@ -742,6 +883,59 @@
       : obstacle.affordances.findIndex((a) => a.skill === skill);
     const affordance = obstacle.affordances[approach];
 
+    // A violent approach against something that can fight back opens
+    // COMBAT rather than resolving as one roll. This is what finally
+    // kills `attempts: 1` on "fight": you never ran out of ability to
+    // shoot, you were only ever limited by what shooting costs — and
+    // the cost is the exchange itself, plus everything it summons.
+    if (affordance && affordance.loud && obstacle.fights) {
+      // Undetected when the shooting starts = the ambush. Once they
+      // already read you as threatening there is no surprise to have.
+      const band = MJ.threatBand(run.state, run.day);
+      const surprise = band === "normal" && !MJ.alertEngaged(run.state);
+      const fight = runCombat(run, obstacle, { surprise: surprise });
+
+      run.anyLoud = true;
+      const key = attemptKey(run.index, approach);
+      run.attempts[key] = (run.attempts[key] || 0) + 1;
+
+      const task = {
+        obstacle: obstacle.label, tier: obstacle.tier,
+        runner: runner.identity.handle, skill: skill,
+        combat: true, surprise: fight.surprise, rounds: fight.rounds,
+        enemies: fight.enemies, enemiesDown: fight.enemiesDown,
+        casualties: fight.casualties, loud: true,
+        stalemate: fight.stalemate,
+        success: fight.won,
+      };
+
+      // Gunfire is witnessed no matter what — loud is the one thing
+      // success cannot hide.
+      const applied = MJ.witnessAct(run.state, run.day, MJ.THREAT.THREATENING);
+      task.read = {
+        threatClass: MJ.THREAT.THREATENING, band: applied.band,
+        changed: applied.band !== applied.before, awkward: applied.awkward,
+      };
+      if (applied.tipped) {
+        run.engagedAlert = true;
+        task.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);
+      }
+      if (MJ.alertEngaged(run.state)) MJ.addAlertPointsAll(run.state, ALERT_POINTS_PER_BEAT);
+      run.tasks.push(task);
+
+      if (fight.won) { run.index += 1; return task; }
+      // Broke off but still standing: the obstacle is untouched and
+      // they can try another way, if they have one left.
+      if (fight.stalemate) {
+        if (remainingApproaches(run) === 0) { run.failed = true; run.index += 1; }
+        return task;
+      }
+      // Everyone is down. Nobody is walking any further.
+      run.failed = true;
+      run.aborted = true;
+      return task;
+    }
+
     // An extended approach opens a piece of WORK rather than taking a
     // swing. The first interval rolls immediately so the player has
     // something to judge, then the run parks in that state and every
@@ -880,7 +1074,9 @@
   function remainingApproaches(run) {
     const obstacle = run.obstacles[run.index];
     if (!obstacle) return 0;
-    const eff = run.runners.map((r) => MJ.getEffectiveSkills(r));
+    const eff = run.runners
+      .filter((r) => !run.downed || !run.downed.has(r))
+      .map((r) => MJ.getEffectiveSkills(r));
     let n = 0;
     for (let approach = 0; approach < obstacle.affordances.length; approach++) {
       const a = obstacle.affordances[approach];

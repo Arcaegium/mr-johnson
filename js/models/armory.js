@@ -71,20 +71,20 @@
   //                  arrive with the Phase 2 magic pillar, flagged.
   const ITEM_TEMPLATES = {
     // ── Weapons ──────────────────────────────────────────────────
-    holdout:      { label: "Vesper Holdout Pistol",  category: "weapon", tier: 1, skill: "firearms",     craftSkill: "electronics" },
-    heavyPistol:  { label: "Kestrel Heavy Pistol",   category: "weapon", tier: 3, skill: "firearms",     craftSkill: "electronics" },
-    smartgun:     { label: "Smartgun",               category: "weapon", tier: 3, skill: "firearms",     craftSkill: "electronics" },
-    hornetSmg:    { label: "Hornet SMG",             category: "weapon", tier: 4, skill: "firearms",     craftSkill: "electronics" },
-    longhornAR:   { label: "Longhorn Assault Rifle", category: "weapon", tier: 5, skill: "firearms",     craftSkill: "electronics" },
-    doorknocker:  { label: "Doorknocker Shotgun",    category: "weapon", tier: 4, skill: "firearms",     craftSkill: "electronics" },
-    sniperRig:    { label: "Sniper Rig",             category: "weapon", tier: 4, skill: "marksmanship", craftSkill: "electronics" },
-    farsight:     { label: "Farsight Rail Rifle",    category: "weapon", tier: 7, skill: "marksmanship", craftSkill: "electronics" },
-    sledgeLmg:    { label: "Sledge LMG",             category: "weapon", tier: 5, skill: "heavyWeapons", craftSkill: "electronics" },
-    mortarboy:    { label: "Mortarboy Launcher",     category: "weapon", tier: 7, skill: "heavyWeapons", craftSkill: "electronics" },
-    shockBaton:   { label: "Shock Baton",            category: "weapon", tier: 2, skill: "melee",        craftSkill: "electronics" },
-    monoblade:    { label: "Monoblade",              category: "weapon", tier: 3, skill: "melee",        craftSkill: "electronics" },
-    fangBlade:    { label: "Fang Blade",             category: "weapon", tier: 5, skill: "melee",        craftSkill: "electronics" },
-    filamentWhip: { label: "Filament Whip",          category: "weapon", tier: 7, skill: "melee",        craftSkill: "electronics" },
+    holdout:      { label: "Vesper Holdout Pistol",  category: "weapon", tier: 1, skill: "firearms",     craftSkill: "electronics", combat: "holdout" },
+    heavyPistol:  { label: "Kestrel Heavy Pistol",   category: "weapon", tier: 3, skill: "firearms",     craftSkill: "electronics", combat: "pistol" },
+    smartgun:     { label: "Smartgun",               category: "weapon", tier: 3, skill: "firearms",     craftSkill: "electronics", combat: "pistol" },
+    hornetSmg:    { label: "Hornet SMG",             category: "weapon", tier: 4, skill: "firearms",     craftSkill: "electronics", combat: "smg" },
+    longhornAR:   { label: "Longhorn Assault Rifle", category: "weapon", tier: 5, skill: "firearms",     craftSkill: "electronics", combat: "smg" },
+    doorknocker:  { label: "Doorknocker Shotgun",    category: "weapon", tier: 4, skill: "firearms",     craftSkill: "electronics", combat: "shotgun" },
+    sniperRig:    { label: "Sniper Rig",             category: "weapon", tier: 4, skill: "marksmanship", craftSkill: "electronics", combat: "rifle" },
+    farsight:     { label: "Farsight Rail Rifle",    category: "weapon", tier: 7, skill: "marksmanship", craftSkill: "electronics", combat: "rifle" },
+    sledgeLmg:    { label: "Sledge LMG",             category: "weapon", tier: 5, skill: "heavyWeapons", craftSkill: "electronics", combat: "machinegun" },
+    mortarboy:    { label: "Mortarboy Launcher",     category: "weapon", tier: 7, skill: "heavyWeapons", craftSkill: "electronics", combat: "machinegun" },
+    shockBaton:   { label: "Shock Baton",            category: "weapon", tier: 2, skill: "melee",        craftSkill: "electronics", combat: "baton" },
+    monoblade:    { label: "Monoblade",              category: "weapon", tier: 3, skill: "melee",        craftSkill: "electronics", combat: "blade" },
+    fangBlade:    { label: "Fang Blade",             category: "weapon", tier: 5, skill: "melee",        craftSkill: "electronics", combat: "blade" },
+    filamentWhip: { label: "Filament Whip",          category: "weapon", tier: 7, skill: "melee",        craftSkill: "electronics", combat: "blade" },
     demoKit:      { label: "Demolitions Kit",        category: "weapon", tier: 4, skill: "demolitions",  craftSkill: "electronics" },
     // ── Armor (woundGuard = absorbs crit-glitch wounds/mission) ──
     linedCoat:    { label: "Lined Streetcoat",       category: "armor", tier: 2, craftSkill: "electronics" },
@@ -221,6 +221,41 @@
     return best;
   }
 
+  // ── The armoury, read as a combat loadout ──────────────────────
+  // What a runner is actually carrying when a fight starts. The
+  // weapon they bring is the best one they can USE — a monoblade in
+  // the hands of someone with no melee training is worse than the
+  // pistol they can actually shoot — so this ranks by the runner's
+  // own skill first and the item's tier second. Nobody arrives
+  // unarmed by accident; unarmed is the floor, not a bug.
+  function combatWeaponFor(runner) {
+    const skills = MJ.getEffectiveSkills(runner);
+    let best = null;
+    for (const item of runner.gear || []) {
+      if (item.consumed) continue;
+      const t = ITEM_TEMPLATES[item.templateId];
+      if (!t || t.category !== "weapon" || !t.combat) continue;
+      const rank = skills[t.skill] || 0;
+      if (rank <= 0) continue; // cannot use what they were never taught
+      const score = rank * 100 + t.tier;
+      if (!best || score > best.score) best = { score: score, profile: t.combat, label: t.label };
+    }
+    return best ? best.profile : "unarmed";
+  }
+
+  // Armour rating for the Penetrate gate. Tier maps straight across:
+  // a Lined Streetcoat is thin, a Milspec Hardsuit stops rifle rounds
+  // that a shotgun cannot get through.
+  function armourRatingFor(runner) {
+    let best = 0;
+    for (const item of runner.gear || []) {
+      if (item.consumed) continue;
+      const t = ITEM_TEMPLATES[item.templateId];
+      if (t && t.category === "armor") best = Math.max(best, t.tier);
+    }
+    return best;
+  }
+
   // ── Consumables: find and burn ──────────────────────────────────
   function findConsumable(runner, effect, skillId) {
     for (const item of runner.gear || []) {
@@ -286,6 +321,8 @@
   MJ.reclaimItem = reclaimItem;
   MJ.gearBonusFor = gearBonusFor;
   MJ.woundGuardFor = woundGuardFor;
+  MJ.combatWeaponFor = combatWeaponFor;
+  MJ.armourRatingFor = armourRatingFor;
   MJ.findConsumable = findConsumable;
   MJ.consumeItem = consumeItem;
   MJ.teachFormula = teachFormula;

@@ -145,6 +145,11 @@
     guard: {
       label: "Guard",
       perceives: true,
+      // Shoots back. A camera does not, a maglock cannot — only
+      // things that can fight turn a violent approach into an
+      // actual exchange rather than target practice.
+      fights: true,
+      armour: 3, weapon: "smg",
       affordances: [
         { skill: "stealth",  verb: "slip past unseen", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
         // One shot: you cannot re-smooth-talk someone who just called
@@ -196,6 +201,8 @@
     spirit: {
       label: "Spirit",
       perceives: true,
+      fights: true,
+      armour: 4, weapon: "unarmed",
       affordances: [
         { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
         // Two ways past a sentry, astral or otherwise: out of its
@@ -276,7 +283,17 @@
     // `perceives` rides the instance: a guard, camera, ward, or
     // spirit can form an opinion about what you just tried; a
     // maglock cannot, and neither can an air-gapped box.
-    return { type: typeId, label: template.label, tier, projection, perceives: !!template.perceives, affordances };
+    // `fights` and its loadout ride along too: a guard shoots back,
+    // a maglock does not, and that is the difference between a fight
+    // and target practice. Armour and attributes scale with tier —
+    // a T9 guard is corp security in a hardsuit, a T1 is a rent-a-cop.
+    return {
+      type: typeId, label: template.label, tier, projection,
+      perceives: !!template.perceives, fights: !!template.fights,
+      armour: template.fights ? (template.armour || 0) + Math.floor(tier / 2) : 0,
+      weapon: template.weapon || "unarmed",
+      affordances,
+    };
   }
 
   // ── Room / obstacle graph (physical) ────────────────────────────

@@ -429,6 +429,14 @@
     for (const t of res.tasks || []) {
       if (!t.runner) {
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.result);
+      } else if (t.combat) {
+        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + (t.surprise ? "AMBUSH — " : "FIREFIGHT — ") +
+          t.enemies.join(", ") + " — " + t.rounds + " round" + (t.rounds === 1 ? "" : "s") + ": " +
+          (t.success ? "crew held the ground" : t.stalemate ? "broke off — could not finish them" : "THE CREW WENT DOWN") + readNote(t.read));
+        for (const c of t.casualties || []) {
+          logLine(session, "      " + c.runner + (c.died
+            ? " was KILLED" : " went down — " + c.wounds + " wound" + (c.wounds === 1 ? "" : "s")));
+        }
       } else if (t.extended) {
         const outcome = t.abandoned ? "backed off"
           : t.success ? "through"
@@ -492,6 +500,15 @@
         MJ.collectJobPay(session.save, job);
         logLine(session, "JOB COMPLETE — " + job.hiringFaction + " pays " + (session.save.johnson.money - before) + " (reputation +1)");
       }
+    }
+
+    // Bury the dead before anything else touches the roster — they
+    // do not draw a wage, do not cycle on the market, and are not
+    // available tomorrow.
+    for (let i = session.roster.length - 1; i >= 0; i--) {
+      if (!session.roster[i].dead) continue;
+      logLine(session, session.roster[i].identity.handle + " did not come back — the operation is short a runner");
+      session.roster.splice(i, 1);
     }
 
     // Payroll, before the day rolls over.
