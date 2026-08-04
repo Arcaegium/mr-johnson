@@ -738,6 +738,61 @@ with fewer doors.
 generator never reads, so a player can never find a number that turns out not to
 matter.
 
+### 10.5 Nothing runs out; repetition is what costs you
+There are **no attempt limits**. A crew can always try again. What changes is
+what trying again *reveals*: every repeat of an approach reads one band worse
+(immediately for approaches whose own safeguard handled the first try, otherwise
+every second try). Persistence is priced in **exposure**, never in a counter.
+
+**Brute force is always available; violence is only one form of it.** Which form
+depends on what the obstacle *is*:
+
+| class | data | the inexhaustible approach |
+|---|---|---|
+| **Inert** — maglock, ward, barrier ICE | `senses: []`, no `fights` | Work it. It cannot perceive you or act, so given time it opens. Kicking it does nothing — the loud option is demolitions or sorcery, a real skill, not a universal fallback. |
+| **Sensor** — camera, patrol ICE | `senses: [plane]` | Perceives and reports; cannot stop you. What it does is spend your clock. |
+| **Responder** — guard, spirit, black ICE | `fights: true` | Violence, which opens combat rather than a roll. |
+
+You can always pull the trigger. Whether the bullet accomplishes anything is the
+world's call, not the menu's.
+
+**The two failure modes are withdrawing and going down.** Nothing else ends a
+run. And a withdrawal is not only "half the crew is on the floor" — it is just as
+often "that door is rated past anything we can pick, and nobody here carries
+explosives." That verdict is **intel**, so it goes on the record naming what was
+missing:
+
+```
+withdrew — Camera T3 needs electronics, hacking, stealth — this crew has none of it
+no way through — Maglock door T4 needs electronics, larceny, hacking,
+                 or 2 other ways in — this crew has none of it
+```
+
+That line is the next hire. A failed run that teaches you which specialist the
+operation lacks is doing its job.
+
+The one thing that genuinely removes an approach is **discovering it cannot work
+here** — a Watsonian immunity, a fact about the obstacle, learned by trying.
+
+### 10.6 The awareness meter
+A player who cannot see the read is being charged a resource they cannot budget.
+The mission readout shows the ladder with the current band lit, and how much room
+is left before it moves:
+
+```
+[NORMAL] › awkward › questionable › threatening — room for 3 more odd moments
+normal › awkward › [QUESTIONABLE] › threatening — one more odd moment tips it
+```
+
+Every option also projects what **this** attempt would read as, before it is
+clicked — `stealth 6d · reads questionable (try 2)` — so slowing down is a
+decision the player can actually make rather than a lesson learned afterwards.
+
+Alongside it, **what can perceive the crew on this ground right now**. That list
+is deliberately per-watcher rather than one global number, because it is the
+state the visual layer renders: a camera with a rotating vision arc the crew has
+to stay out of. Same state, drawn instead of printed.
+
 ### 11.3 The threat read & live security
 **Three layers:**
 1. **The band** — Min / Current / Max per axis. Current = "how much room are we

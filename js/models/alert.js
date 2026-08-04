@@ -104,6 +104,42 @@
     return ensureRead(state, day).band;
   }
 
+  // ── The awareness read, for any renderer ───────────────────────
+  // Where the crew stands and how much room is left before the next
+  // band. Without this the player is being charged a resource they
+  // cannot see: three banked awkward moments tip you to questionable
+  // with no warning, and the whole point of a quiet approach is being
+  // able to judge when to slow down.
+  //
+  // `toNext` counts the odd moments still affordable at this band.
+  // Null where the step is not a countdown — questionable tips on the
+  // very next witnessed act, and threatening is already the end of
+  // the line.
+  function awarenessRead(state, day) {
+    const read = ensureRead(state, day);
+    const rank = bandRank(read.band);
+    let toNext = null;
+    if (read.band === "normal" || read.band === "awkward") {
+      toNext = Math.max(0, AWKWARD_TO_QUESTIONABLE - read.awkward);
+    } else if (read.band === "questionable") {
+      toNext = 1; // anything odd from here tips it
+    }
+    return {
+      band: read.band,
+      rank: rank,
+      bands: BANDS.slice(),
+      awkward: read.awkward,
+      awkwardToTip: AWKWARD_TO_QUESTIONABLE,
+      toNext: toNext,
+      engaged: alertEngaged(state),
+      levels: {
+        physical: alertLevel(state, "physical"),
+        astral: alertLevel(state, "astral"),
+        matrix: alertLevel(state, "matrix"),
+      },
+    };
+  }
+
   // Apply what a witnessed act revealed. Unwitnessed acts never get
   // here — an air-gapped box has nobody to form an opinion.
   // Returns { band, tipped } where `tipped` marks the moment the
@@ -261,6 +297,7 @@
   MJ.POINTS_PER_LEVEL = POINTS_PER_LEVEL;
   MJ.initSecurityState = initSecurityState;
   MJ.threatBand = threatBand;
+  MJ.awarenessRead = awarenessRead;
   MJ.witnessAct = witnessAct;
   MJ.grantHeadroom = grantHeadroom;
   MJ.engageAlert = engageAlert;

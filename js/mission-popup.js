@@ -229,12 +229,82 @@
         (run.tether <= Math.max(2, Math.ceil(run.tetherMax / 4))
           ? " " + no("— the pull is getting hard") : ""));
     }
-    const band = run.site && run.site.securityState ? MJ.threatBand(run.site.securityState, run.day) : "normal";
-    if (band !== "normal") {
-      lines.push('<span class="dimmed">they are reading you as </span>' +
-        (band === "threatening" ? no(band.toUpperCase()) : '<span class="w-warn">' + esc(band) + "</span>"));
-    }
+    const meter = awarenessMeter(run);
+    if (meter) lines.push(meter);
     return lines;
+  }
+
+  // ── The awareness meter ────────────────────────────────────────
+  // How the place is reading the crew, and how much room is left
+  // before that changes. A player who cannot see this is being
+  // charged a resource they have no way to budget: three odd moments
+  // tip you to questionable, and the whole skill of a quiet run is
+  // knowing when to slow down.
+  //
+  // Drawn as the four bands with the current one lit, because the
+  // ladder is the thing to understand — not a percentage. When the
+  // visual layer arrives this is the same state a rotating camera arc
+  // renders; the watchers below are the text stand-in for "what can
+  // see you from where you are standing."
+  const BAND_TONE = { normal: "w-ok", awkward: "w-warn", questionable: "w-warn", threatening: "w-no" };
+
+  function awarenessMeter(run) {
+    if (!run.site || !run.site.securityState || !MJ.awarenessRead) return null;
+    const a = MJ.awarenessRead(run.site.securityState, run.day);
+    const ladder = a.bands.map((b, i) => {
+      if (i === a.rank) return '<span class="' + (BAND_TONE[b] || "w-warn") + '">[' + esc(b.toUpperCase()) + "]</span>";
+      return '<span class="dimmed">' + esc(b) + "</span>";
+    }).join('<span class="dimmed"> › </span>');
+
+    let room = "";
+    if (a.band === "threatening") {
+      room = " " + no("— they are responding in force");
+    } else if (a.band === "questionable") {
+      room = ' <span class="w-warn">— one more odd moment tips it</span>';
+    } else if (a.toNext !== null) {
+      room = '<span class="dimmed"> — room for </span>' + num(a.toNext) +
+        '<span class="dimmed"> more odd moment' + (a.toNext === 1 ? "" : "s") + "</span>";
+    }
+
+    const watchers = watcherLine(run);
+    return ladder + room + (watchers ? "<br>" + watchers : "");
+  }
+
+  // What can actually perceive the crew on this ground, right now.
+  // Witnessing is per-plane and co-located (§07), so this is the list
+  // a vision arc eventually draws: the things whose attention is the
+  // reason time costs anything.
+  function watcherLine(run) {
+    const obstacle = run.obstacles && run.obstacles[run.index];
+    if (!obstacle || !obstacle.rooms) return "";
+    const plane = run.kind === "astralRun" ? "astral" : run.kind === "matrixRun" ? "matrix" : "physical";
+    const here = [];
+    for (const o of run.obstacles) {
+      if (o === obstacle || run.neutralized.has(o)) continue;
+      if (!o.senses || o.senses.indexOf(plane) === -1) continue;
+      if (!o.rooms || !o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1)) continue;
+      here.push(o.label + (o.fights ? "" : " (eyes only)"));
+    }
+    if (!here.length) return '<span class="dimmed">nothing else here has eyes on this</span>';
+    return '<span class="dimmed">watching from the same ground: </span>' +
+      here.map((h) => '<span class="w-warn">' + esc(h) + "</span>").join('<span class="dimmed">, </span>');
+  }
+
+  // What this attempt would look like to anything watching. Nothing
+  // runs out through use, so the price of trying again is here — and
+  // showing it BEFORE the click is the difference between a player
+  // choosing to slow down and a player finding out afterwards.
+  const READ_TONE = { normal: "dimmed", awkward: "w-warn", questionable: "w-warn", threatening: "w-no" };
+
+  function readsAsNote(o) {
+    if (!o.readsAs) return "";
+    const repeat = o.tries > 0;
+    // A first quiet attempt that reads as nothing is not worth a
+    // line — the readout should carry warnings, not noise.
+    if (o.readsAs === "normal") return "";
+    const tone = READ_TONE[o.readsAs] || "dimmed";
+    return ' <span class="dimmed">· reads </span><span class="' + tone + '">' + esc(o.readsAs) + "</span>" +
+      (repeat ? '<span class="dimmed"> (try ' + (o.tries + 1) + ")</span>" : "");
   }
 
   function optionFor(o) {
@@ -249,9 +319,7 @@
     if (o.discovered) meta = no(o.discovered);
     else if (o.noRoll) meta = '<span class="dimmed">no roll — costs the time</span>';
     else if (!o.runner) meta = '<span class="dimmed">no ' + esc(o.skill) + " on this crew</span>";
-    else if (o.attemptsLeft <= 0) meta = '<span class="dimmed">out of attempts here</span>';
-    else meta = esc(o.skill) + " " + num(o.pool + "d") +
-      (o.attemptsLeft > 1 ? ' <span class="dimmed">· ' + o.attemptsLeft + " tries left</span>" : "");
+    else meta = esc(o.skill) + " " + num(o.pool + "d") + readsAsNote(o);
     return { html: main, meta: meta, dead: !o.available };
   }
 

@@ -165,8 +165,8 @@
         { skill: "electronics", verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
         { skill: "larceny",     verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
         { skill: "hacking",     verb: "unlock it remotely", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
-        { skill: "con",         verb: "lift the key off a guard", loud: false, threat: THREAT.THREATENING, attempts: 1 },
-        { skill: "demolitions", verb: "breach it", loud: true, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "con",         verb: "lift the key off a guard", loud: false, threat: THREAT.THREATENING },
+        { skill: "demolitions", verb: "breach it", loud: true, threat: THREAT.THREATENING },
       ],
     },
     guard: {
@@ -181,19 +181,19 @@
       fights: true,
       armour: 3, weapon: "smg",
       affordances: [
-        { skill: "stealth",  verb: "slip past unseen", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
+        { skill: "stealth",  verb: "slip past unseen", loud: false, threat: THREAT.QUESTIONABLE },
         // One shot: you cannot re-smooth-talk someone who just called
         // your bluff, and adjacent guards are one audience.
-        { skill: "con",      verb: "talk your way past", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
+        { skill: "con",      verb: "talk your way past", loud: false, threat: THREAT.AWKWARD },
         // `neutralizes` = this obstacle stops being able to see. That
         // is the whole point of a takedown: done cleanly against the
         // only pair of eyes in the room, there is nobody left to have
         // an opinion. Done in front of a camera, there is.
-        { skill: "stealth",  verb: "silent takedown", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "stealth",  verb: "silent takedown", loud: false, threat: THREAT.THREATENING, neutralizes: true },
         // Loud without being dangerous — a belligerent asshole, not
         // someone who needs shooting.
-        { skill: "intimidation", verb: "taunt and draw them off", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
-        { skill: "firearms", verb: "fight", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "intimidation", verb: "taunt and draw them off", loud: false, threat: THREAT.AWKWARD },
+        { skill: "firearms", verb: "fight", loud: true, threat: THREAT.THREATENING, neutralizes: true },
       ],
     },
     camera: {
@@ -208,8 +208,8 @@
         { skill: "electronics", verb: "loop the feed", loud: false, threat: THREAT.QUESTIONABLE, extended: true, neutralizes: true },
         { skill: "hacking",     verb: "kill it remotely", loud: false, threat: THREAT.QUESTIONABLE, extended: true, neutralizes: true },
         // Staying out of the arc leaves it live and watching.
-        { skill: "stealth",     verb: "stay out of its arc", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
-        { skill: "firearms",    verb: "shoot it out", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "stealth",     verb: "stay out of its arc", loud: false, threat: THREAT.QUESTIONABLE },
+        { skill: "firearms",    verb: "shoot it out", loud: true, threat: THREAT.THREATENING, neutralizes: true },
       ],
     },
     // Astral idiom — the same two structural roles (barrier, sentry)
@@ -223,12 +223,12 @@
       // see you doing it.
       senses: [],
       affordances: [
-        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
+        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL },
         // The ward keeps you out on its own — that safeguard is why
         // a first press is merely offputting, and why leaning on it
         // again is not.
         { skill: "assensing",  verb: "pick it slowly", loud: false, threat: THREAT.AWKWARD, escalates: true, extended: true },
-        { skill: "sorcery",    verb: "break it", loud: true, threat: THREAT.THREATENING, attempts: 1 },
+        { skill: "sorcery",    verb: "break it", loud: true, threat: THREAT.THREATENING },
       ],
     },
     // ── Matrix idiom ─────────────────────────────────────────────
@@ -243,19 +243,19 @@
       senses: [],  // a wall logs nothing; it simply does not open
       affordances: [
         { skill: "hacking",     verb: "slip the barrier", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
-        { skill: "electronics", verb: "spoof its credentials", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 2 },
-        { skill: null,          verb: "route around the node", loud: false, threat: THREAT.NORMAL, attempts: 1 },
-        { skill: "hacking",     verb: "hammer it down", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "electronics", verb: "spoof its credentials", loud: false, threat: THREAT.AWKWARD, escalates: true },
+        { skill: null,          verb: "route around the node", loud: false, threat: THREAT.NORMAL },
+        { skill: "hacking",     verb: "hammer it down", loud: true, threat: THREAT.THREATENING, neutralizes: true },
       ],
     },
     patrolIce: {
       label: "Patrol ICE",
       senses: ["matrix"],
       affordances: [
-        { skill: "hacking",     verb: "mask your icon", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
-        { skill: "computer",    verb: "pass as legitimate traffic", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 2 },
-        { skill: "hacking",     verb: "corrupt its patrol route", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
-        { skill: "hacking",     verb: "burn it out", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "hacking",     verb: "mask your icon", loud: false, threat: THREAT.QUESTIONABLE },
+        { skill: "computer",    verb: "pass as legitimate traffic", loud: false, threat: THREAT.AWKWARD, escalates: true },
+        { skill: "hacking",     verb: "corrupt its patrol route", loud: false, threat: THREAT.THREATENING, neutralizes: true },
+        { skill: "hacking",     verb: "burn it out", loud: true, threat: THREAT.THREATENING, neutralizes: true },
       ],
     },
     blackIce: {
@@ -266,9 +266,9 @@
       fights: true,
       armour: 4, weapon: "blackHammer",
       affordances: [
-        { skill: "hacking",     verb: "slide past it", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
-        { skill: "computer",    verb: "feed it a decoy icon", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 2 },
-        { skill: "hacking",     verb: "attack it directly", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "hacking",     verb: "slide past it", loud: false, threat: THREAT.QUESTIONABLE },
+        { skill: "computer",    verb: "feed it a decoy icon", loud: false, threat: THREAT.AWKWARD, escalates: true },
+        { skill: "hacking",     verb: "attack it directly", loud: true, threat: THREAT.THREATENING, neutralizes: true },
       ],
     },
     spirit: {
@@ -281,17 +281,17 @@
       fights: true,
       armour: 4, weapon: "unarmed",
       affordances: [
-        { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, neutralizes: true },
         // Two ways past a sentry, astral or otherwise: out of its
         // notice, or in plain view and unremarkable. Blowing the
         // covert one is worse than blowing the overt one — being
         // caught sneaking says more about you than being sensed
         // walking through does. (Stealth vs. awareness gets its own
         // treatment later; this is the structure, not the depth.)
-        { skill: "stealth",    verb: "sneak around it", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
-        { skill: "assensing",  verb: "walk past without tripping it", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 3 },
-        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
-        { skill: "sorcery",    verb: "blast it down", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
+        { skill: "stealth",    verb: "sneak around it", loud: false, threat: THREAT.QUESTIONABLE },
+        { skill: "assensing",  verb: "walk past without tripping it", loud: false, threat: THREAT.AWKWARD, escalates: true },
+        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL },
+        { skill: "sorcery",    verb: "blast it down", loud: true, threat: THREAT.THREATENING, neutralizes: true },
       ],
     },
   };

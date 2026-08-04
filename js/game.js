@@ -465,7 +465,11 @@
     // what's actually guarding the place.
     for (const t of res.tasks || []) {
       if (!t.runner) {
-        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.result);
+        // A withdrawal that names what the crew lacked is the most
+        // useful line a failed run produces — it is the next hire.
+        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.result,
+          t.gap ? "dispatch" : "note",
+          t.gap ? { needs: t.gap.needs, outclassed: t.gap.outclassed, site: t.obstacle, tier: t.gap.tier } : null);
       } else if (t.combat) {
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + (t.surprise ? "AMBUSH — " : "FIREFIGHT — ") +
           t.enemies.join(", ") + " — " + t.rounds + " round" + (t.rounds === 1 ? "" : "s") + ": " +

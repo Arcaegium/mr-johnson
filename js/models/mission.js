@@ -667,7 +667,7 @@
       neutralized: new Set(),
       extended: null, // in-progress extended work, if any (P2.1)
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
-      attempts: {},        // "obstacleIndex:skill" -> tries, for budgets and escalation
+      attempts: {},        // "obstacleIndex#approach" -> tries, which drive escalation
       discovered: {},      // "obstacleIndex:skill" -> why it will never work here
       engagedAlert: false, // did this run force a real response
     };
@@ -741,26 +741,41 @@
     return band === "questionable" || band === "threatening";
   }
 
-  // Repetition past a safeguard escalates the read: the ward keeps
-  // you out on its own, so a first press is merely offputting —
-  // leaning on it again is a person with a purpose.
+  // Repetition is what costs you, and it costs you in what the act
+  // REVEALS rather than in a budget running out. A ward keeps you out
+  // on its own, so a first press is merely offputting; leaning on it
+  // a fourth time is a person with a purpose. Same for a lock, a
+  // credential, a story told to a guard.
+  //
+  // This is the whole replacement for attempt limits. An approach
+  // never becomes unavailable through use — you can always try again
+  // — but each repeat reads one band worse, so persistence is priced
+  // in exposure. What removes an option is discovering it cannot work
+  // here (a Watsonian immunity), which is a fact about the obstacle,
+  // not a counter about you.
+  const THREAT_LADDER = [MJ.THREAT.NORMAL, MJ.THREAT.AWKWARD, MJ.THREAT.QUESTIONABLE, MJ.THREAT.THREATENING];
+  const REPEATS_PER_STEP = 2; // tries at one approach before it reads a band worse
+
   function threatClassFor(affordance, tries) {
     if (!affordance || !affordance.threat) return MJ.THREAT.NORMAL;
-    if (affordance.escalates && tries > 1 && affordance.threat === MJ.THREAT.AWKWARD) {
-      return MJ.THREAT.QUESTIONABLE;
-    }
-    return affordance.threat;
+    const base = THREAT_LADDER.indexOf(affordance.threat);
+    if (base < 0) return affordance.threat;
+    // `escalates` marks approaches whose own safeguard handled the
+    // first try, so they step up immediately rather than on the
+    // usual cadence.
+    const repeats = Math.max(0, (tries || 1) - 1);
+    const steps = affordance.escalates
+      ? repeats
+      : Math.floor(repeats / REPEATS_PER_STEP);
+    return THREAT_LADDER[Math.min(THREAT_LADDER.length - 1, base + steps)];
   }
 
-  // ── Attempt budgets ─────────────────────────────────────────────
-  // An approach runs out: one shot to talk your way past (you cannot
-  // work the same room twice), a few tries at credentials before the
-  // account locks itself. Spending the last one removes the option
-  // WITHOUT an alarm — the lockout already ended the credible threat.
-  // Budgets are per AFFORDANCE, not per skill. A guard offers two
+  // ── Tries ───────────────────────────────────────────────────────
+  // Counted per AFFORDANCE, not per skill: a guard offers two
   // different stealth plays — slip past him, or put him down quietly
-  // — and they are not the same swing: sharing a key meant trying
-  // one silently spent the other.
+  // — and they are not the same swing. The count no longer spends a
+  // budget; it drives escalation, so trying the same thing over and
+  // over is what makes you look like someone with a purpose.
   function attemptKey(index, approach) {
     return index + "#" + approach;
   }
@@ -772,9 +787,18 @@
     return index + ":" + skill;
   }
 
-  function attemptsLeft(run, index, affordance, approach) {
-    const budget = affordance.attempts === undefined ? 1 : affordance.attempts;
-    return budget - (run.attempts[attemptKey(index, approach)] || 0);
+  // NOTHING RUNS OUT THROUGH USE. A crew can always try again; what
+  // changes is what trying again says about them (threatClassFor) and
+  // what the delay costs them while something else closes in. The one
+  // thing that genuinely removes an approach is learning it cannot
+  // work here — a fact about the obstacle, discovered by trying, not
+  // a counter about the crew.
+  //
+  // Kept as a function because the shape "how many swings are left"
+  // is what the prompt and the stall check ask for; the answer is
+  // simply always "as many as you want to pay for."
+  function attemptsLeft() {
+    return Infinity;
   }
 
   // ── Responders: what an engaged axis actually sends ─────────────
@@ -895,13 +919,14 @@
       // was told there was NOTHING to try against a spirit it could
       // simply have walked around.
       if (!a.skill) {
-        const leftNoSkill = attemptsLeft(run, run.index, a, approach);
+        const triedNoSkill = (run.attempts[attemptKey(run.index, approach)] || 0) + 1;
         options.push({
           skill: null, approach: approach, verb: a.verb, loud: !!a.loud,
           blocked: !!a.blocked, reason: a.reason || null,
           discovered: null, runner: null, pool: 0,
-          attemptsLeft: leftNoSkill, noRoll: true,
-          available: leftNoSkill > 0,
+          noRoll: true, tries: triedNoSkill - 1,
+          readsAs: threatClassFor(a, triedNoSkill),
+          available: true,
         });
         continue;
       }
@@ -919,8 +944,13 @@
         const pool = MJ.dicePoolFor(runner, a.skill, MJ.gearBonusFor(runner, a.skill));
         if (!best || pool > best.pool) best = { runner: runner, pool: pool };
       }
-      const left = attemptsLeft(run, run.index, a, approach);
       const known = run.discovered[discoveryKey(run.index, a.skill)] || null;
+      // How many swings this approach has already had, and therefore
+      // what the NEXT one would read as. Handing the player the
+      // projected read before they commit is the whole point: they
+      // should be able to see themselves walking into questionable
+      // and choose to do something else instead.
+      const tries = run.attempts[attemptKey(run.index, approach)] || 0;
       options.push({
         skill: a.skill, approach: approach, verb: a.verb, loud: !!a.loud,
         blocked: !!a.blocked, reason: a.reason || null,
@@ -929,8 +959,12 @@
         discovered: known,
         runner: best ? best.runner : null,
         pool: best ? best.pool : 0,
-        attemptsLeft: left,
-        available: !!best && left > 0 && !known,
+        tries: tries,
+        readsAs: threatClassFor(a, tries + 1),
+        // Nothing is used up. An approach is unavailable only when
+        // nobody can attempt it, or the crew has learned it cannot
+        // work here.
+        available: !!best && !known,
       });
     }
     return {
@@ -1261,7 +1295,13 @@
     if (!choice) {
       run.failed = true;
       run.anyLoud = true;
-      const task = { obstacle: obstacle.label, tier: obstacle.tier, result: "no usable approach — stalled" };
+      // Say WHAT was missing. "Stalled" teaches nothing; "nobody here
+      // has demolitions, and that door wants it" is the next hire.
+      const gap = blockingGap(run);
+      const task = {
+        obstacle: obstacle.label, tier: obstacle.tier, gap: gap,
+        result: gap ? "no way through — " + describeGap(gap) : "no usable approach — stalled",
+      };
       run.tasks.push(task);
       run.index += 1;
       return task;
@@ -1294,10 +1334,9 @@
     }
 
     // A violent approach against something that can fight back opens
-    // COMBAT rather than resolving as one roll. This is what finally
-    // kills `attempts: 1` on "fight": you never ran out of ability to
-    // shoot, you were only ever limited by what shooting costs — and
-    // the cost is the exchange itself, plus everything it summons.
+    // COMBAT rather than resolving as one roll. You never run out of
+    // the ability to shoot; you are limited by what shooting costs,
+    // and the cost is the exchange itself plus everything it summons.
     if (affordance && affordance.loud && obstacle.fights) {
       // Undetected when the shooting starts = the ambush. Once they
       // already read you as threatening there is no surprise to have.
@@ -1509,11 +1548,67 @@
   // Walk away. The mission fails, but nothing else gets rolled — no
   // further wounds, no further noise. "Is it worth another swing"
   // is the decision this exists to make real.
+  // ── Why the crew could not proceed ─────────────────────────────
+  // A withdrawal is not only "half of us are down." It is just as
+  // often "that door is rated past anything we can pick, and nobody
+  // here carries explosives." That verdict is INTEL — it names the
+  // specialist this operation needs — so it goes on the record
+  // instead of vanishing into a generic failure.
+  function blockingGap(run) {
+    const obstacle = run.obstacles && run.obstacles[run.index];
+    if (!obstacle) return null;
+    const upright = run.runners.filter((r) => !run.downed || !run.downed.has(r));
+    const eff = upright.map((r) => MJ.getEffectiveSkills(r));
+    const missing = [];   // nobody trained at all
+    const outclassed = []; // trained, but the rating is beyond them
+    for (const a of obstacle.affordances) {
+      if (!a.skill) continue;
+      if (run.discovered[discoveryKey(run.index, a.skill)]) continue;
+      let bestRank = 0;
+      for (const skills of eff) bestRank = Math.max(bestRank, skills[a.skill] || 0);
+      // One obstacle can offer the same skill twice (a guard can be
+       // slipped past OR put down quietly, both stealth), and naming
+       // it twice reads as a bug.
+      if (bestRank <= 0) { if (missing.indexOf(a.skill) === -1) missing.push(a.skill); }
+      else if (bestRank < Math.ceil(obstacle.tier / 2)) {
+        const note = a.skill + " " + bestRank;
+        if (outclassed.indexOf(note) === -1) outclassed.push(note);
+      }
+    }
+    if (!missing.length && !outclassed.length) return null;
+    return {
+      obstacle: obstacle.label, tier: obstacle.tier,
+      needs: missing, outclassed: outclassed,
+    };
+  }
+
+  // Phrased as the next hire, because that is what it is worth.
+  // Three names is enough to act on; the full list of everything the
+  // crew lacks is noise.
+  function describeGap(gap) {
+    if (!gap) return "";
+    if (gap.needs.length) {
+      const shown = gap.needs.slice(0, 3).join(", ");
+      const extra = gap.needs.length - 3;
+      const more = extra > 0 ? ", or " + extra + " other way" + (extra === 1 ? "" : "s") + " in" : "";
+      return gap.obstacle + " T" + gap.tier + " needs " + shown + more +
+        " — this crew has none of it";
+    }
+    return gap.obstacle + " T" + gap.tier + " is rated past this crew (best: " +
+      gap.outclassed.slice(0, 3).join(", ") + ")";
+  }
+
   function missionAbort(run) {
     if (run.aborted) return run;
     run.aborted = true;
     run.failed = true;
-    run.tasks.push({ obstacle: "—", tier: 0, result: "withdrew — the crew pulled out" });
+    const gap = blockingGap(run);
+    run.gap = gap;
+    run.tasks.push({
+      obstacle: gap ? gap.obstacle : "—", tier: gap ? gap.tier : 0,
+      gap: gap,
+      result: gap ? "withdrew — " + describeGap(gap) : "withdrew — the crew pulled out",
+    });
     return run;
   }
 
@@ -1523,9 +1618,23 @@
   // useless here. Quiet beats loud, then the biggest pool. This is
   // the house playing your hand for you — the same seat the popup
   // hands to the player, and deliberately the same stepper.
+  // How many fruitless swings the house takes at one obstacle before
+  // calling it. Violence has no attempt budget — a crew never runs
+  // out of the ability to shoot — so the thing that used to end a
+  // hopeless obstacle no longer does. That is correct for a PLAYER,
+  // who can see it going badly and choose to withdraw; the
+  // auto-chooser needs the same judgement written down. It stands in
+  // for a player's patience, which is a policy, not a rule of the
+  // world, and it lives here rather than in the mechanics for
+  // exactly that reason.
+  const AUTO_PATIENCE = 4;
+
   function autoResolve(run) {
     let guard = 0;
+    let swings = 0;
+    let atObstacle = -1;
     while (!missionDone(run) && guard++ < 500) {
+      if (run.index !== atObstacle) { atObstacle = run.index; swings = 0; }
       const prompt = missionPrompt(run);
       // Mid-extended-work, the house keeps going. The test ends
       // itself when the pool runs dry or somebody fumbles, so this
@@ -1538,6 +1647,13 @@
         else if (best.loud && !o.loud) best = o;
         else if (best.loud === o.loud && o.pool > best.pool) best = o;
       }
+      // Out of patience on this one: the only thing left is to keep
+      // making noise at it, and that has not been working.
+      if (best && best.loud && swings >= AUTO_PATIENCE) {
+        missionAbort(run);
+        break;
+      }
+      swings += 1;
       missionChoose(run, best ? { skill: best.skill, runner: best.runner, approach: best.approach } : null);
     }
     return run;
