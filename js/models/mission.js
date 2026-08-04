@@ -665,6 +665,11 @@
       // into the middle of the route and would shift any index key.
       // Per-run, so putting a guard down never leaks into tomorrow.
       neutralized: new Set(),
+      // Everything that hides the crew adds dice here: a spell,
+      // darkness, a distraction, and eventually just standing where
+      // the camera is not looking. Zero means they are relying on
+      // their own tradecraft and nothing else.
+      concealment: 0,
       extended: null, // in-progress extended work, if any (P2.1)
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
       attempts: {},        // "obstacleIndex#approach" -> tries, which drive escalation
@@ -705,15 +710,57 @@
   // worse to work under than a stationary post.
   const sensesPlane = (o, plane) => (o.senses || []).indexOf(plane) !== -1;
 
-  function otherPerceiver(run, target, plane) {
+  function perceiversNear(run, target, plane) {
     const here = target.rooms;
-    if (!here) return false;
-    return run.obstacles.some((o) =>
+    if (!here) return [];
+    return run.obstacles.filter((o) =>
       o !== target && sensesPlane(o, plane) && !run.neutralized.has(o) &&
       o.rooms && o.rooms.some((r) => here.indexOf(r) !== -1));
   }
 
-  function wasWitnessed(run, obstacle, affordance, succeeded) {
+  // ── Being present is not the same as being aware ───────────────
+  // A guard ten feet away CAN respond, but only if he actually
+  // noticed. Working a lock under an invisibility spell, or in the
+  // dark, or while he is looking the other way, is exactly the
+  // fiction where a crew picks it three times over and he never
+  // turns round. So a nearby watcher gets a CHANCE to notice, not an
+  // automatic one.
+  //
+  // Opposed: the watcher's attention against how well the act was
+  // covered. `run.concealment` is the hook everything that hides a
+  // crew plugs into — a spell, darkness, a distraction, and later the
+  // simple fact of standing outside a camera's arc.
+  // A watcher's attention is built the same way its competence is in
+  // a fight — skill plus the attribute behind it — so the same tier
+  // means the same calibre of opposition whether it is shooting at
+  // the crew or just looking at them. Anything less made a posted
+  // guard easier to fool than the man he is modelled on.
+  function noticePool(watcher) {
+    const t = watcher.tier || 1;
+    const skill = 1 + Math.ceil(t / 2);      // T1 -> 2, T10 -> 6
+    const attribute = 2 + Math.floor(t / 3); // T1 -> 2, T10 -> 5
+    return skill + attribute;
+  }
+
+  function concealmentPool(run, runner) {
+    const own = runner ? MJ.dicePoolFor(runner, "stealth", MJ.gearBonusFor(runner, "stealth")) : 0;
+    return Math.max(0, own + (run.concealment || 0));
+  }
+
+  // Did anything ELSE on this ground both perceive this plane AND
+  // actually catch it? Returns the watcher that did, or null.
+  function noticedBy(run, target, plane, runner) {
+    const watchers = perceiversNear(run, target, plane);
+    if (!watchers.length) return null;
+    const hidden = MJ.countHits(MJ.rollDicePool(run.rng, concealmentPool(run, runner)));
+    for (const w of watchers) {
+      const saw = MJ.countHits(MJ.rollDicePool(run.rng, noticePool(w)));
+      if (saw > hidden) return w;
+    }
+    return null;
+  }
+
+  function wasWitnessed(run, obstacle, affordance, succeeded, runner) {
     if (affordance && affordance.loud) return true; // gunfire carries regardless
 
     // WHICH WORLD did this happen in? Only things that perceive on
@@ -728,15 +775,18 @@
     // just handled. Take down the one guard in the room and there is
     // nobody left to have an opinion; do it in front of a camera, or
     // his partner, and "silent" was never on the table.
-    if (succeeded) return otherPerceiver(run, obstacle, plane);
-    // It failed. The thing you fumbled saw it if it has eyes ON THIS
-    // PLANE — fumbling a hack is witnessed by the host's watchers,
-    // not by the guard leaning on the door outside.
+    if (succeeded) return !!noticedBy(run, obstacle, plane, runner);
+    // It failed. The thing you fumbled registers it if it has eyes ON
+    // THIS PLANE — fumbling a hack is witnessed by the host's
+    // watchers, not by the guard leaning on the door outside. It
+    // gets no notice roll: you fumbled it, in its face.
     if (sensesPlane(obstacle, plane)) return true;
-    // ...and if it does not, something else on this plane may.
-    if (otherPerceiver(run, obstacle, plane)) return true;
+    // The obstacle itself perceives nothing — a lock forms no
+    // opinions. So this only registers if something ELSE here both
+    // can respond AND actually caught it.
+    if (noticedBy(run, obstacle, plane, runner)) return true;
     // Nothing here perceives — but if they are already suspicious
-    // they are watching the place, not the equipment.
+    // they are sweeping the place, not watching the equipment.
     const band = MJ.threatBand(run.state, run.day);
     return band === "questionable" || band === "threatening";
   }
@@ -1271,7 +1321,7 @@
   // nothing, a fumble registers, and something else with eyes on the
   // same ground can see either.
   function witnessExtended(run, obstacle, w, test, tries) {
-    if (!wasWitnessed(run, obstacle, w.affordance, test.success)) return null;
+    if (!wasWitnessed(run, obstacle, w.affordance, test.success, w.runner)) return null;
     const cls = threatClassFor(w.affordance, tries);
     if (cls === MJ.THREAT.NORMAL) return null;
     const applied = MJ.witnessAct(run.state, run.day, cls);
@@ -1413,7 +1463,7 @@
       const task = { obstacle: obstacle.label, tier: obstacle.tier, result: affordance ? affordance.verb : "went around" };
       // Nothing was rolled, so nothing was fumbled — a no-roll
       // approach can only be seen by being loud.
-      if (wasWitnessed(run, obstacle, affordance, true)) {
+      if (wasWitnessed(run, obstacle, affordance, true, null)) {
         const cls = threatClassFor(affordance, run.attempts[noRollKey]);
         if (cls !== MJ.THREAT.NORMAL) {
           const applied = MJ.witnessAct(run.state, run.day, cls);
@@ -1467,7 +1517,7 @@
     }
     let read = null;
     let tipped = false;
-    if (wasWitnessed(run, obstacle, affordance, outcome.success)) {
+    if (wasWitnessed(run, obstacle, affordance, outcome.success, runner)) {
       const cls = threatClassFor(affordance, run.attempts[key]);
       if (cls !== MJ.THREAT.NORMAL) {
         const applied = MJ.witnessAct(run.state, run.day, cls);

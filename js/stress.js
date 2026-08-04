@@ -274,10 +274,42 @@
     check(MJ.threatBand(viaMatrix.state, 1) === "normal",
       "C2: the whole Matrix-then-takedown route must leave the site reading normal");
 
-    const byHand = planeStage("h");
-    const loopTask = planeTake(byHand, /loop the feed/);
-    check(loopTask && loopTask.read,
-      "C2: doing the same job BY HAND in front of a guard must register");
+    // Doing the same job BY HAND happens in the guard's world, so he
+    // CAN catch it — but being present is not the same as being
+    // aware, so he gets a roll rather than a certainty. The plane
+    // separation above is absolute; this is a chance, and the probe
+    // has to test each as what it is.
+    let sawIt = 0, byHandTrials = 0;
+    for (let i = 0; i < 200; i++) {
+      const stage = planeStage("h" + i);
+      const t = planeTake(stage, /loop the feed/);
+      if (!t) continue;
+      byHandTrials += 1;
+      if (t.read) sawIt += 1;
+    }
+    check(byHandTrials > 150, "C2: by-hand probe needs trials to mean anything (" + byHandTrials + ")");
+    check(sawIt > 0, "C2: a guard in the room must sometimes catch a by-hand job");
+    check(sawIt < byHandTrials, "C2: a guard must not be omniscient — some attempts go unnoticed");
+
+    // Concealment is the dial that decides it. Blind the crew and the
+    // guard catches them far more often than when they are hidden;
+    // this is the seam an invisibility spell or a dark room plugs in.
+    const noticeRate = (concealment) => {
+      let seen = 0, n = 0;
+      for (let i = 0; i < 200; i++) {
+        const stage = planeStage("c" + concealment + "-" + i);
+        stage.concealment = concealment;
+        const t = planeTake(stage, /loop the feed/);
+        if (!t) continue;
+        n += 1; if (t.read) seen += 1;
+      }
+      return n ? seen / n : 0;
+    };
+    const exposed = noticeRate(-99); // clamps to a zero pool: no tradecraft at all
+    const hidden = noticeRate(12);   // heavily concealed
+    check(exposed > hidden, "C2: concealment must reduce how often a watcher catches you (" +
+      (100 * exposed).toFixed(0) + "% exposed vs " + (100 * hidden).toFixed(0) + "% hidden)");
+    check(hidden < 0.15, "C2: a heavily concealed crew must usually go unnoticed (" + (100 * hidden).toFixed(0) + "%)");
 
     const spiritInst = MJ.generateObstacleInstance(MJ.makeRNG("spdual"), "spirit", 1);
     check(spiritInst.dualNatured && spiritInst.senses.indexOf("astral") !== -1 &&

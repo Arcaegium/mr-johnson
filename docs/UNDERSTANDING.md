@@ -750,7 +750,7 @@ depends on what the obstacle *is*:
 | class | data | the inexhaustible approach |
 |---|---|---|
 | **Inert** — maglock, ward, barrier ICE | `senses: []`, no `fights` | Work it. It cannot perceive you or act, so given time it opens. Kicking it does nothing — the loud option is demolitions or sorcery, a real skill, not a universal fallback. |
-| **Sensor** — camera, patrol ICE | `senses: [plane]` | Perceives and reports; cannot stop you. What it does is spend your clock. |
+| **Sensor** — camera, patrol ICE | `senses: [plane]` | Perceives and reports; cannot stop you. Its presence is what makes acts nearby cost anything. |
 | **Responder** — guard, spirit, black ICE | `fights: true` | Violence, which opens combat rather than a roll. |
 
 You can always pull the trigger. Whether the bullet accomplishes anything is the
@@ -773,6 +773,40 @@ operation lacks is doing its job.
 
 The one thing that genuinely removes an approach is **discovering it cannot work
 here** — a Watsonian immunity, a fact about the obstacle, learned by trying.
+
+### 10.5b A witness must be PRESENT — and must actually notice
+Acting on something that cannot alert or respond moves the meter **only if
+something else is there that can, and that catches it.** Both conditions, every
+time. A lock forms no opinions; a maglock alone in an empty room can be worked
+all night for free, and that is correct rather than an oversight. Nothing
+arrives just because time passed.
+
+**Presence is not awareness.** A guard ten feet away can respond, but only if he
+noticed. So a nearby watcher gets a *chance* to catch the act — opposed, their
+attention against how well the act was covered:
+
+- **Attention** is built like a fight stat block, skill plus the attribute behind
+  it (`1 + ceil(tier/2)` and `2 + floor(tier/3)`), so the same tier means the
+  same calibre of opposition whether it is shooting at the crew or looking at
+  them.
+- **Concealment** is the runner's own stealth plus `run.concealment` — the hook
+  every source of cover plugs into: a spell, darkness, a distraction, and later
+  the plain fact of standing where the camera is not pointed.
+
+Measured, acting beside a live watcher:
+
+| concealment | caught |
+|---|---|
+| 0 (own tradecraft only) | 26% |
+| +4 | 8% |
+| +14 (heavy) | 0% |
+
+Which is the fiction working: under a strong invisibility the crew picks the lock
+three times over and the guard never turns round.
+
+**Two things stay absolute.** Plane separation — a meatspace guard never
+perceives a Matrix act, no roll involved. And fumbling *the thing itself*: you
+botched it in its face, so if it senses that plane at all, it registers.
 
 ### 10.6 The awareness meter
 A player who cannot see the read is being charged a resource they cannot budget.
