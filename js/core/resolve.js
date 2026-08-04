@@ -112,9 +112,86 @@
     };
   }
 
+  // ── Extended tests: work that takes as long as it takes ────────
+  // Some tasks aren't one swing. Cracking an on-prem host, picking a
+  // serious lock, coaxing a spirit — you chip at it, accumulating
+  // hits toward a threshold across INTERVALS, and each interval
+  // costs time. The pool shrinks by one every interval: you are
+  // getting tired, the system is adapting, the guard's round is
+  // coming back. That shrink is what gives the whole thing a
+  // natural end — a big enough pool will get there, a marginal one
+  // grinds to nothing and you have to decide whether that was worth
+  // the minutes.
+  //
+  // A glitch ends it outright. That is the real tension: every extra
+  // interval is another chance to fumble, so pressing a hard test is
+  // a genuine gamble rather than a formality with a time cost.
+  //
+  // This is what replaces `attempts: N` on technical work. An
+  // attempt budget is an arbitrary cap; an extended test is the same
+  // idea with a reason — you can always keep trying, it just costs
+  // time you may not have and risks a fumble you cannot take back.
+  function beginExtendedTest(runner, skillId, threshold, opts) {
+    opts = opts || {};
+    return {
+      runner: runner, skillId: skillId, threshold: threshold,
+      pool: dicePoolFor(runner, skillId, opts.bonusDice),
+      hits: 0, intervals: 0, rolls: [],
+      done: false, success: false, glitch: false, criticalGlitch: false,
+      exhausted: false,
+    };
+  }
+
+  // One interval. Returns the same test object, advanced.
+  function extendedTestStep(rng, test) {
+    if (test.done) return test;
+    if (test.pool <= 0) {
+      test.done = true; test.exhausted = true;
+      return test;
+    }
+    const dice = rollDicePool(rng, test.pool);
+    const hits = countHits(dice);
+    const glitch = countOnes(dice) > dice.length / 2;
+    test.intervals += 1;
+    test.hits += hits;
+    test.rolls.push({ pool: test.pool, hits: hits, glitch: glitch });
+
+    if (glitch) {
+      // Everything accumulated is lost with it — a fumble on the
+      // twelfth minute of a hack is not a partial success.
+      test.done = true;
+      test.glitch = true;
+      test.criticalGlitch = hits === 0;
+      return test;
+    }
+    if (test.hits >= test.threshold) {
+      test.done = true;
+      test.success = true;
+      return test;
+    }
+    test.pool -= 1;
+    if (test.pool <= 0) { test.done = true; test.exhausted = true; }
+    return test;
+  }
+
+  // Run it to completion — the quick-resolve path, and the shape the
+  // auto-chooser uses. `maxIntervals` caps how long a crew is willing
+  // to stand there; leaving it out means "as long as the dice last."
+  function resolveExtendedTest(rng, runner, skillId, threshold, opts) {
+    opts = opts || {};
+    const test = beginExtendedTest(runner, skillId, threshold, opts);
+    const cap = opts.maxIntervals || Infinity;
+    while (!test.done && test.intervals < cap) extendedTestStep(rng, test);
+    if (!test.done) { test.done = true; test.gaveUp = true; }
+    return test;
+  }
+
   MJ.rollDicePool = rollDicePool;
   MJ.countHits = countHits;
   MJ.thresholdForTier = thresholdForTier;
   MJ.dicePoolFor = dicePoolFor;
   MJ.resolveTask = resolveTask;
+  MJ.beginExtendedTest = beginExtendedTest;
+  MJ.extendedTestStep = extendedTestStep;
+  MJ.resolveExtendedTest = resolveExtendedTest;
 })();

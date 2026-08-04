@@ -361,6 +361,7 @@
       // into the middle of the route and would shift any index key.
       // Per-run, so putting a guard down never leaks into tomorrow.
       neutralized: new Set(),
+      extended: null, // in-progress extended work, if any (P2.1)
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
       attempts: {},        // "obstacleIndex:skill" -> tries, for budgets and escalation
       discovered: {},      // "obstacleIndex:skill" -> why it will never work here
@@ -495,12 +496,47 @@
     return run.aborted || run.index >= run.obstacles.length;
   }
 
+  // ── Extended work in progress ──────────────────────────────────
+  // An extended approach isn't one swing, so the crew ends up stood
+  // in a corridor with the job half done and a decision to make:
+  // another interval, or cut losses. Threshold scales with tier, so
+  // unlike a single roll — capped at threshold 5 forever — this
+  // difficulty axis has no ceiling.
+  const EXTENDED_THRESHOLD_PER_TIER = 3;
+
+  function extendedThreshold(tier) {
+    return Math.max(2, tier * EXTENDED_THRESHOLD_PER_TIER);
+  }
+
+  function extendedPrompt(run) {
+    const w = run.extended;
+    const obstacle = run.obstacles[run.index];
+    return {
+      extended: true,
+      obstacle: obstacle,
+      label: obstacle.label,
+      tier: obstacle.tier,
+      projection: obstacle.projection,
+      index: run.index,
+      total: run.obstacles.length,
+      verb: w.verb,
+      runner: w.runner,
+      skill: w.test.skillId,
+      hits: w.test.hits,
+      threshold: w.test.threshold,
+      pool: w.test.pool,          // already decremented — what the NEXT interval rolls
+      intervals: w.test.intervals,
+      options: [],                // the choice is continue/stop, not an approach list
+    };
+  }
+
   // What the crew is looking at, and every way they could take it.
   // Blocked affordances are included on purpose — a Watsonian
   // immunity is only knowable by trying it (§06: information isn't
   // confirmed until experienced), so the UI decides what to reveal.
   function missionPrompt(run) {
     if (missionDone(run)) return null;
+    if (run.extended) return extendedPrompt(run);
     const obstacle = run.obstacles[run.index];
     const options = [];
     // Effective skills are recomputed per prompt, not cached on the
@@ -567,8 +603,123 @@
 
   // One decision, one roll. `choice` is { skill, runner } — or null,
   // meaning nobody could touch it and the crew stalls out loudly.
+  // A critical glitch lands the same way whoever caused it and
+  // however: armor eats it first (reusable this mission), then a
+  // patch (consumed), and only then does the wound land. Shared so
+  // the extended path cannot drift from the single-roll one.
+  function applyCriticalGlitch(run, runner) {
+    if (run.armorGuard.get(runner) > 0) {
+      run.armorGuard.set(runner, run.armorGuard.get(runner) - 1);
+      return "armor";
+    }
+    const patch = MJ.findConsumable(runner, "absorbWound", null);
+    if (patch) {
+      MJ.consumeItem(patch);
+      return patch.label;
+    }
+    runner.wounds += 1; // placeholder wound rule — real damage lands in P2.3
+    return null;
+  }
+
+  // Advance or abandon an extended approach already under way.
+  // `keepGoing` false is the crew deciding the minutes aren't worth
+  // it — that costs the attempt but nothing else, and the obstacle
+  // is still there to try another way.
+  function missionExtendedStep(run, keepGoing) {
+    const w = run.extended;
+    if (!w) return null;
+    const obstacle = run.obstacles[run.index];
+
+    if (!keepGoing) {
+      run.extended = null;
+      const task = {
+        obstacle: obstacle.label, tier: obstacle.tier,
+        runner: w.runner.identity.handle, skill: w.test.skillId,
+        extended: true, intervals: w.test.intervals,
+        hits: w.test.hits, threshold: w.test.threshold,
+        success: false, abandoned: true,
+        result: "backed off after " + w.test.intervals + " — not worth the minutes",
+      };
+      run.tasks.push(task);
+      if (remainingApproaches(run) === 0) { run.failed = true; run.index += 1; }
+      return task;
+    }
+
+    MJ.extendedTestStep(run.rng, w.test);
+    // Every interval is time on the clock. If they are already being
+    // hunted, standing still working a lock is the worst thing you
+    // can do, and the response keeps building while you do it.
+    if (MJ.alertEngaged(run.state)) MJ.addAlertPointsAll(run.state, ALERT_POINTS_PER_BEAT);
+    if (!w.test.done) return null; // still working — caller re-prompts
+    return finishExtended(run, w);
+  }
+
+  function finishExtended(run, w) {
+    const obstacle = run.obstacles[run.index];
+    const test = w.test;
+    run.extended = null;
+
+    if (test.success && w.affordance && w.affordance.neutralizes) {
+      run.neutralized.add(obstacle);
+    }
+    if (test.criticalGlitch) {
+      applyCriticalGlitch(run, w.runner);
+    }
+
+    // The attempt is spent whether or not anybody saw it — otherwise
+    // an unwitnessed failure left the approach infinitely retryable,
+    // because the attempt was only being counted inside the witness
+    // path.
+    const key = attemptKey(run.index, w.approach);
+    run.attempts[key] = (run.attempts[key] || 0) + 1;
+
+    const task = {
+      obstacle: obstacle.label, tier: obstacle.tier,
+      runner: w.runner.identity.handle, skill: test.skillId,
+      extended: true, intervals: test.intervals,
+      hits: test.hits, threshold: test.threshold,
+      pool: w.startPool, loud: !!(w.affordance && w.affordance.loud),
+      success: test.success, glitch: test.glitch, criticalGlitch: test.criticalGlitch,
+      exhausted: test.exhausted,
+    };
+
+    const read = witnessExtended(run, obstacle, w, test, run.attempts[key]);
+    if (read) { task.read = read.read; if (read.responders) task.responders = read.responders; }
+    run.tasks.push(task);
+
+    if (test.success) {
+      run.index += 1;
+    } else if (remainingApproaches(run) === 0) {
+      run.failed = true;
+      run.index += 1;
+    }
+    return task;
+  }
+
+  // Same rule as a single roll: a clean quiet finish registers
+  // nothing, a fumble registers, and something else with eyes on the
+  // same ground can see either.
+  function witnessExtended(run, obstacle, w, test, tries) {
+    if (!wasWitnessed(run, obstacle, w.affordance, test.success)) return null;
+    const cls = threatClassFor(w.affordance, tries);
+    if (cls === MJ.THREAT.NORMAL) return null;
+    const applied = MJ.witnessAct(run.state, run.day, cls);
+    const out = {
+      read: {
+        threatClass: cls, band: applied.band,
+        changed: applied.band !== applied.before, awkward: applied.awkward,
+      },
+    };
+    if (applied.tipped) {
+      run.engagedAlert = true;
+      out.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);
+    }
+    return out;
+  }
+
   function missionChoose(run, choice) {
     if (missionDone(run)) return null;
+    if (run.extended) return missionExtendedStep(run, choice !== null);
     const obstacle = run.obstacles[run.index];
     if (!choice) {
       run.failed = true;
@@ -590,6 +741,24 @@
     const approach = typeof choice.approach === "number" ? choice.approach
       : obstacle.affordances.findIndex((a) => a.skill === skill);
     const affordance = obstacle.affordances[approach];
+
+    // An extended approach opens a piece of WORK rather than taking a
+    // swing. The first interval rolls immediately so the player has
+    // something to judge, then the run parks in that state and every
+    // subsequent prompt asks the only question that matters: another
+    // interval, or cut losses?
+    if (affordance && affordance.extended) {
+      const startPool = MJ.dicePoolFor(runner, skill, run.intelBonus +
+        MJ.gearBonusFor(runner, skill) + suppressionBonus(run.site, obstacle.projection, run.day));
+      run.extended = {
+        runner: runner, verb: affordance.verb, affordance: affordance,
+        approach: approach, startPool: startPool,
+        test: MJ.beginExtendedTest(runner, skill, extendedThreshold(obstacle.tier), {}),
+      };
+      run.extended.test.pool = startPool; // gear/intel/suppression all count
+      return missionExtendedStep(run, true);
+    }
+
     // The no-roll approach: nobody tests anything, it just costs the
     // beat. It still counts as an act, so a normal-class route-around
     // reads as nothing while a louder one would still be seen.
@@ -633,22 +802,7 @@
     if (affordance && affordance.loud) run.anyLoud = true;
     if (outcome.glitch) run.anyGlitch = true;
     let guarded = null;
-    if (outcome.criticalGlitch) {
-      // Armor eats it first (reusable this mission); then a patch
-      // (consumed); only then does the wound land.
-      if (run.armorGuard.get(runner) > 0) {
-        run.armorGuard.set(runner, run.armorGuard.get(runner) - 1);
-        guarded = "armor";
-      } else {
-        const patch = MJ.findConsumable(runner, "absorbWound", null);
-        if (patch) {
-          guarded = patch.label;
-          MJ.consumeItem(patch);
-        } else {
-          runner.wounds += 1; // placeholder wound rule
-        }
-      }
-    }
+    if (outcome.criticalGlitch) guarded = applyCriticalGlitch(run, runner);
     // Anything that removes a set of eyes has to do so BEFORE the
     // witness check, or the thing you just took down gets a vote.
     if (outcome.success && affordance && affordance.neutralizes) {
@@ -763,6 +917,10 @@
     let guard = 0;
     while (!missionDone(run) && guard++ < 500) {
       const prompt = missionPrompt(run);
+      // Mid-extended-work, the house keeps going. The test ends
+      // itself when the pool runs dry or somebody fumbles, so this
+      // terminates on its own — it does not need a patience rule.
+      if (prompt.extended) { missionExtendedStep(run, true); continue; }
       const usable = prompt.options.filter((o) => o.available);
       let best = null;
       for (const o of usable) {
@@ -1087,6 +1245,8 @@
   MJ.beginMission = beginMission;
   MJ.missionPrompt = missionPrompt;
   MJ.missionChoose = missionChoose;
+  MJ.missionExtendedStep = missionExtendedStep;
+  MJ.extendedThreshold = extendedThreshold;
   MJ.missionAbort = missionAbort;
   MJ.missionDone = missionDone;
   MJ.finishMission = finishMission;

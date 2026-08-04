@@ -131,6 +131,17 @@
   function describeTask(t) {
     if (!t.runner) return '<span class="dimmed">' + esc(t.obstacle) + " " + num("T" + t.tier) + " — " + esc(t.result) + "</span>";
     if (t.rejected) return nm(t.runner) + " tried " + esc(t.skill) + " on " + nm(t.obstacle) + " — " + no(t.rejected);
+    if (t.extended) {
+      const outcome = t.abandoned ? no("backed off")
+        : t.success ? ok("through")
+        : t.glitch ? no("FUMBLED IT") : no("ran dry");
+      return nm(t.runner) + " worked " + nm(t.obstacle) + " " + num("T" + t.tier) +
+        " (" + esc(t.skill) + ") — " + num(t.hits) + '<span class="dimmed">/</span>' + num(t.threshold) +
+        " over " + num(t.intervals) + '<span class="dimmed"> interval' + (t.intervals === 1 ? "" : "s") + "</span>: " + outcome +
+        (t.criticalGlitch ? " " + no("CRITICAL GLITCH") : "") + readNote(t.read) +
+        (t.responders && t.responders.length
+          ? "<br>" + no("&nbsp;&nbsp;RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
+    }
     const bits = esc(t.skill) + " " + num(t.pool + "d") + (t.loud ? ", " + no("LOUD") : "") + (t.boosted ? ", +" + num(t.boosted) : "");
     return nm(t.runner) + " (" + bits + ") vs " + nm(t.obstacle) + " " + num("T" + t.tier) + " — " +
       num(t.hits) + " hits: " + (t.success ? ok("through") : no("MISSED")) +
@@ -199,10 +210,50 @@
       done(res);
     }
 
+    // Mid-extended-work. The only question is whether to spend
+    // another interval, so the whole prompt collapses to that — with
+    // the progress, the shrinking pool, and the time already burned
+    // laid out, because those are exactly what the decision turns on.
+    function stepExtended(prompt) {
+      const shortBy = prompt.threshold - prompt.hits;
+      MJ.decide.open({
+        title: esc(entry.label || run.kind),
+        subtitle: '<span class="dimmed">obstacle </span>' + num(prompt.index + 1) +
+          '<span class="dimmed"> of </span>' + num(prompt.total) +
+          '<span class="dimmed"> · working</span>',
+        context: contextLines(run),
+        transcript: transcript,
+        heading: nm(prompt.runner.identity.handle) + '<span class="dimmed"> is working on </span>' +
+          nm(prompt.label) + " " + num("T" + prompt.tier) +
+          '<div class="ask">' + esc(prompt.verb) + " — " +
+          num(prompt.hits) + '<span class="dimmed"> of </span>' + num(prompt.threshold) +
+          '<span class="dimmed"> done, </span>' + num(prompt.intervals) +
+          '<span class="dimmed"> interval' + (prompt.intervals === 1 ? "" : "s") + " spent</span></div>",
+        options: [{
+          html: '<span class="w-ok">keep working</span>',
+          meta: prompt.pool > 0
+            ? esc(prompt.skill) + " " + num(prompt.pool + "d") +
+              '<span class="dimmed"> next interval · </span>' + num(shortBy) + '<span class="dimmed"> to go</span>'
+            : '<span class="dimmed">nothing left to roll</span>',
+          dead: prompt.pool <= 0,
+        }, {
+          html: "back off",
+          meta: '<span class="dimmed">lose the progress, keep the time</span>',
+        }],
+        actions: [{ id: "withdraw", label: "withdraw the crew", tone: "warn-btn" }],
+        onChoose: (opt, i) => {
+          MJ.missionExtendedStep(run, i === 0);
+          step();
+        },
+        onAction: (id) => { if (id === "withdraw") { MJ.missionAbort(run); finish(); } },
+      });
+    }
+
     function step() {
       absorb();
       const prompt = MJ.missionPrompt(run);
       if (!prompt) return finish();
+      if (prompt.extended) return stepExtended(prompt);
       const options = prompt.options.map(optionFor);
       const stalled = prompt.options.every((o) => !o.available);
       MJ.decide.open({

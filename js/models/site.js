@@ -135,9 +135,9 @@
       label: "Maglock door",
       perceives: false, // a lock forms no opinions
       affordances: [
-        { skill: "electronics", verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2 },
-        { skill: "larceny",     verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2 },
-        { skill: "hacking",     verb: "unlock it remotely", loud: false, threat: THREAT.QUESTIONABLE, attempts: 3 },
+        { skill: "electronics", verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
+        { skill: "larceny",     verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
+        { skill: "hacking",     verb: "unlock it remotely", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
         { skill: "con",         verb: "lift the key off a guard", loud: false, threat: THREAT.THREATENING, attempts: 1 },
         { skill: "demolitions", verb: "breach it", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
@@ -167,8 +167,8 @@
       affordances: [
         // A looped feed is a blind camera — it is still bolted to the
         // wall, but it cannot witness anything after this.
-        { skill: "electronics", verb: "loop the feed", loud: false, threat: THREAT.QUESTIONABLE, attempts: 2, neutralizes: true },
-        { skill: "hacking",     verb: "kill it remotely", loud: false, threat: THREAT.QUESTIONABLE, attempts: 3, neutralizes: true },
+        { skill: "electronics", verb: "loop the feed", loud: false, threat: THREAT.QUESTIONABLE, extended: true, neutralizes: true },
+        { skill: "hacking",     verb: "kill it remotely", loud: false, threat: THREAT.QUESTIONABLE, extended: true, neutralizes: true },
         // Staying out of the arc leaves it live and watching.
         { skill: "stealth",     verb: "stay out of its arc", loud: false, threat: THREAT.QUESTIONABLE, attempts: 1 },
         { skill: "firearms",    verb: "shoot it out", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
@@ -189,7 +189,7 @@
         // The ward keeps you out on its own — that safeguard is why
         // a first press is merely offputting, and why leaning on it
         // again is not.
-        { skill: "assensing",  verb: "pick it slowly", loud: false, threat: THREAT.AWKWARD, escalates: true, attempts: 3 },
+        { skill: "assensing",  verb: "pick it slowly", loud: false, threat: THREAT.AWKWARD, escalates: true, extended: true },
         { skill: "sorcery",    verb: "break it", loud: true, threat: THREAT.THREATENING, attempts: 1 },
       ],
     },

@@ -429,6 +429,14 @@
     for (const t of res.tasks || []) {
       if (!t.runner) {
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.result);
+      } else if (t.extended) {
+        const outcome = t.abandoned ? "backed off"
+          : t.success ? "through"
+          : t.glitch ? "FUMBLED IT" : "ran dry";
+        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " worked it (" + t.skill +
+          (t.pool !== undefined ? " " + t.pool + "d" : "") + ") — " + t.hits + "/" + t.threshold +
+          " over " + t.intervals + " interval" + (t.intervals === 1 ? "" : "s") + ": " + outcome +
+          (t.criticalGlitch ? " + CRITICAL GLITCH" : "") + readNote(t.read));
       } else if (t.rejected) {
         // Found out the hard way — that's what the attempt bought.
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " tried " + t.skill + " — " + t.rejected);
