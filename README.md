@@ -13,6 +13,19 @@ text long before anything gets polished.
 No install, no accounts, no backend — it's static files and your
 browser's local storage. Saves live on the device you played on.
 
+## Design documents
+
+The canonical design lives in three living documents. **Read them before
+extending anything** — working from a remembered version of the design is how
+a placeholder gets mistaken for the target.
+
+- **[Design bible](https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8)** — what the game is. Sections are cited throughout the code as §NN.
+- **[Build plan](https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d)** — phases, the fidelity ladder, the deferred backlog.
+- **[Phase 2 work plan](docs/PHASE-2-PLAN.md)** — the current phase, in dependency order. Also published [as a formatted page](https://claude.ai/code/artifact/ae02034e-d2a1-4496-9828-fc84d275eba3).
+
+Phase 0 (foundation) and Phase 1 (management game) are complete. **Phase 2 —
+Text Missions — is the current work.**
+
 ## The loop
 
 Watch the runner market and hire on a ladder of commitment (freelance →
