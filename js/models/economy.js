@@ -96,7 +96,13 @@
   // — the two dials must move together: a safe job must be able to
   // out-earn the dispatches it takes at matching rung, or the game
   // is arithmetic-dead on arrival.
-  const NUYEN_PER_VALUE = 12;       // computePrice's karma-cost scale -> nuyen
+  // computePrice's karma-cost scale -> nuyen. Halved from 12 when
+  // attributes entered the dice pool: attributes are now part of a
+  // runner's value, which roughly doubled computePrice, and leaving
+  // this dial alone put a median 3-runner freelance crew at ~6.5k
+  // against a ~4.2k median job leg. Every job would have lost money.
+  // The two dials have to move together (see below).
+  const NUYEN_PER_VALUE = 6;
   const RETAINER_DISCOUNT = 0.7;    // "a contracted block... at a discount off current price"
   const PERMANENT_MULTIPLIER = 10;  // "a lump sum relative to current price"
 

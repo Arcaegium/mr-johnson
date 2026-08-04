@@ -53,6 +53,26 @@
     return Math.max(1, Math.ceil(tier / 2));
   }
 
+  // ── The one definition of a dice pool ──────────────────────────
+  // Skill + Attribute, plus whatever situational dice the caller
+  // brings. Everything that needs to KNOW a pool — the resolver that
+  // rolls it, the prompt that shows it to the player, the chooser
+  // that ranks approaches by it — reads this. The popup used to
+  // compute its own and quietly fell a whole attribute short of what
+  // actually got rolled, which is exactly the drift a shared
+  // definition exists to prevent.
+  //
+  // Untrained rolls nothing: a zero-rank skill is an automatic
+  // failure however gifted the runner, so neither the attribute nor
+  // any bonus can rescue it.
+  function dicePoolFor(runner, skillId, bonusDice) {
+    const rank = MJ.getEffectiveSkills(runner)[skillId] || 0;
+    if (rank <= 0) return 0;
+    const attrId = MJ.attributeFor(skillId);
+    const attr = attrId ? (runner.attributes[attrId] || 0) : 0;
+    return rank + attr + (bonusDice || 0);
+  }
+
   // opts.bonusDice: situational extra dice on top of a TRAINED pool
   // (e.g. mission.js's fresh-intel bonus). Never rescues untrained —
   // a zero-rank skill stays an automatic failure, bonus or not.
@@ -67,9 +87,7 @@
     }
 
     const threshold = thresholdForTier(obstacle.tier);
-    const effectiveSkills = MJ.getEffectiveSkills(runner);
-    const baseRank = effectiveSkills[skillId] || 0;
-    const poolSize = baseRank > 0 ? baseRank + (opts.bonusDice || 0) : 0;
+    const poolSize = dicePoolFor(runner, skillId, opts.bonusDice);
 
     if (poolSize <= 0) {
       // Untrained: nothing to roll, an automatic failure, not a
@@ -97,5 +115,6 @@
   MJ.rollDicePool = rollDicePool;
   MJ.countHits = countHits;
   MJ.thresholdForTier = thresholdForTier;
+  MJ.dicePoolFor = dicePoolFor;
   MJ.resolveTask = resolveTask;
 })();

@@ -157,7 +157,7 @@
         { skill: "stealth",  verb: "silent takedown", loud: false, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
         // Loud without being dangerous — a belligerent asshole, not
         // someone who needs shooting.
-        { skill: "presence", verb: "taunt and draw them off", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
+        { skill: "intimidation", verb: "taunt and draw them off", loud: false, threat: THREAT.AWKWARD, attempts: 1 },
         { skill: "firearms", verb: "fight", loud: true, threat: THREAT.THREATENING, attempts: 1, neutralizes: true },
       ],
     },
@@ -229,7 +229,7 @@
   // never eligible for immunity.
   const IMMUNITY_REASONS = {
     con:         "won't engage — non-verbal, drone-piloted, or simply not listening",
-    presence:    "unshakeable — doesn't rattle, doesn't scare off",
+    intimidation: "unshakeable — doesn't rattle, doesn't scare off",
     stealth:     "sensor-equipped — thermal or motion-tuned, trained to notice",
     electronics: "hardened against tampering",
     hacking:     "air-gapped — no wireless signal reaches it",

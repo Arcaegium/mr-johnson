@@ -123,7 +123,7 @@
     disguiseKit:  { label: "Disguise Kit",           category: "gear", tier: 3, skill: "con",         craftSkill: "electronics" },
     voiceEcho:    { label: "Echo Voice Rig",         category: "gear", tier: 5, skill: "con",         craftSkill: "electronics" },
     ascentRig:    { label: "Ascent Climbing Rig",    category: "gear", tier: 2, skill: "athletics",   craftSkill: "electronics" },
-    squadlink:    { label: "Squadlink Comms",        category: "gear", tier: 3, skill: "presence",    craftSkill: "electronics" },
+    squadlink:    { label: "Squadlink Comms",        category: "gear", tier: 3, skill: "leadership",  craftSkill: "electronics" },
     // ── Consumables: patches, drugs, grenades (single use) ───────
     stimPatch:    { label: "Stim Patch",         category: "consumable", tier: 1, effect: "absorbWound", craftSkill: "medicine" },
     traumaPatch:  { label: "Trauma Patch",       category: "consumable", tier: 3, effect: "absorbWound", craftSkill: "medicine" },

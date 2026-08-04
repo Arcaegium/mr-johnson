@@ -34,10 +34,45 @@
   // list is the canonical set every runner's skill map is keyed by.
   const SKILLS = [
     "firearms", "heavyWeapons", "marksmanship", "melee", "demolitions",
-    "stealth", "athletics", "medicine", "presence", "con", "larceny",
+    "stealth", "athletics", "medicine", "leadership", "intimidation", "con", "larceny",
     "computer", "hacking", "electronics", "rigging",
     "sorcery", "conjuring", "enchanting", "assensing",
   ];
+
+  // ── Every skill's linked attribute ────────────────────────────
+  // The dice pool is Skill + Attribute. Mapped off the tabletop's
+  // own links, collapsed where our attribute set is narrower than
+  // the source's: Reaction folds into Agility and Intuition into
+  // Intelligence (the bible fixes both by defining Initiative as
+  // Agility + Intelligence), and Logic joins Intuition there.
+  //
+  // Strength is NOT folded into Body. No attack roll is Strength-
+  // linked in the source — melee and heavy weapons roll Agility and
+  // Strength feeds damage — but with no Strength at all, Body ends
+  // up doing the attack roll, the damage track AND the soak, and
+  // melee Power goes flat so a troll and an elf hit identically
+  // with the same knife.
+  //
+  // Body and Willpower deliberately carry NO skills. They are the
+  // two pure defensive stats: physical track and stun track, soak,
+  // Drain, Full Defense.
+  const SKILL_ATTRIBUTE = {
+    firearms: "agility", marksmanship: "agility", stealth: "agility",
+    larceny: "agility", rigging: "agility",
+
+    heavyWeapons: "strength", melee: "strength", athletics: "strength",
+
+    demolitions: "intelligence", medicine: "intelligence", computer: "intelligence",
+    hacking: "intelligence", electronics: "intelligence",
+
+    con: "charisma", leadership: "charisma", intimidation: "charisma",
+
+    sorcery: "magic", conjuring: "magic", enchanting: "magic", assensing: "magic",
+  };
+
+  function attributeFor(skillId) {
+    return SKILL_ATTRIBUTE[skillId] || null;
+  }
 
   // ── Skill gates: some skills require a matching family ────────
   // Most skills are universal — anyone can pick them up. A handful
@@ -65,17 +100,59 @@
     return !gate || gate === family;
   }
 
-  // ── Metatypes: light attribute-range flavor, not hard rules ───
-  // Deltas applied on top of a base roll. Kept small on purpose —
-  // flavor and minor differentiation, not a redesign of the attrs.
+  // ── Metatypes: starting deltas AND lifetime ceilings ──────────
+  // `mods` shift the opening roll; `max` is the wall that runner can
+  // never grow past. The ceiling is the real mechanical identity —
+  // a troll out-lifts a human permanently, not merely on average at
+  // generation — and it is what makes the metatype line on a
+  // dossier worth reading at hire time, because it tells you where
+  // that runner's career ends. Numbers follow the tabletop's own
+  // metatype maxima, collapsed to our attribute set.
+  //
+  // `weight` is population share. Humans are clearly dominant and
+  // orks are the clear second, as the source has it; the rest are
+  // real minorities without being background-noise rarities.
   const METATYPES = {
-    human:  { label: "Human",  mods: {} },
-    elf:    { label: "Elf",    mods: { agility: 1, charisma: 1, body: -1 } },
-    dwarf:  { label: "Dwarf",  mods: { body: 1, willpower: 1, agility: -1 } },
-    ork:    { label: "Ork",    mods: { body: 2, charisma: -1 } },
-    troll:  { label: "Troll",  mods: { body: 3, agility: -1, intelligence: -1 } },
+    human: {
+      label: "Human", weight: 50, mods: {},
+      max: { body: 6, agility: 6, strength: 6, willpower: 6, intelligence: 6, charisma: 6 },
+    },
+    elf: {
+      label: "Elf", weight: 10, mods: { agility: 1, charisma: 1, body: -1 },
+      max: { body: 6, agility: 7, strength: 6, willpower: 6, intelligence: 6, charisma: 8 },
+    },
+    dwarf: {
+      label: "Dwarf", weight: 10, mods: { body: 1, strength: 1, willpower: 1, agility: -1 },
+      max: { body: 8, agility: 6, strength: 8, willpower: 10, intelligence: 6, charisma: 6 },
+    },
+    ork: {
+      label: "Ork", weight: 20, mods: { body: 2, strength: 1, charisma: -1, intelligence: -1 },
+      max: { body: 9, agility: 6, strength: 8, willpower: 6, intelligence: 5, charisma: 6 },
+    },
+    troll: {
+      label: "Troll", weight: 10, mods: { body: 3, strength: 2, agility: -1, intelligence: -1, charisma: -2 },
+      max: { body: 10, agility: 5, strength: 10, willpower: 6, intelligence: 5, charisma: 4 },
+    },
   };
   const METATYPE_IDS = Object.keys(METATYPES);
+  const MAGIC_MAX = 6; // Essence caps it further; see applyMagic/growth
+
+  function attributeCeiling(runner, attrId) {
+    if (attrId === "magic") {
+      // essence is { current, max } — reading it as a bare number
+      // yielded NaN, and `rating >= NaN` is false, so Magic grew
+      // without any ceiling at all until this was caught.
+      const ess = runner.essence && typeof runner.essence.current === "number"
+        ? runner.essence.current : MAGIC_MAX;
+      return Math.min(MAGIC_MAX, Math.floor(ess));
+    }
+    const meta = METATYPES[runner.identity.metatype];
+    return (meta && meta.max[attrId]) || 6;
+  }
+
+  function pickMetatype(rng) {
+    return rng.weighted(METATYPE_IDS.map((id) => ({ item: id, weight: METATYPES[id].weight })));
+  }
 
   // ── Focus templates: family, key skill, allowed origins ───────
   // Origins (cyber/magic/infected/mundane) live per-focus below —
@@ -91,11 +168,15 @@
     { id: "stealth",      label: "Stealth",       family: "fighter", keySkill: "stealth",      origins: ["cyber", "magic", "infected"] },
     { id: "melee",        label: "Melee",         family: "fighter", keySkill: "melee",        origins: ["cyber", "magic"] },
     { id: "marksman",     label: "Marksman",      family: "fighter", keySkill: "marksmanship", origins: ["cyber", "magic"] },
-    { id: "tank",         label: "Tank",          family: "fighter", keySkill: "presence",     origins: ["cyber", "magic"] },
+    { id: "tank",         label: "Tank",          family: "fighter", keySkill: "intimidation", origins: ["cyber", "magic"] },
     { id: "combatMedic",  label: "Combat Medic",  family: "fighter", keySkill: "medicine",     origins: ["cyber", "mundane"] },
     { id: "streetDoc",    label: "Street Doc",    family: "fighter", keySkill: "medicine",     origins: ["mundane"] },
-    // Face / Thief
+    // Face family — three distinct social verbs, not one "presence".
+    // Deception, command, and threat are different jobs that different
+    // runners are good at; "presence" was the Face's whole remit and
+    // so could never be a specialisation.
     { id: "face",         label: "Face",          family: "face",    keySkill: "con",          origins: ["mundane", "magic", "infected"] },
+    { id: "leader",       label: "Leader",        family: "face",    keySkill: "leadership",   origins: ["mundane", "cyber"] },
     // Decker (one archetype, tilted by affinity — see generateRunner)
     { id: "decker",       label: "Decker",        family: "decker",  keySkill: "hacking",      origins: ["cyber", "mundane"] },
     // Rigger (one archetype, drone class defines the verb elsewhere)
@@ -113,6 +194,35 @@
 
   function focusById(id) {
     return FOCUSES.find((f) => f.id === id);
+  }
+
+  // ── Market composition: how often the Awakened turn up ────────
+  // Two dials, and they only work together. Every mage focus is
+  // Awakened by construction, so the mage focuses' share of the
+  // focus draw sets a FLOOR on Awakened frequency before origin is
+  // ever consulted — with a flat draw that floor was already ~37%,
+  // which is why weighting origin alone would have changed nothing.
+  //
+  // Target: Awakened about a third of the market — ~25% mages and
+  // ~8% physical adepts. Far above the setting's ~1% baseline,
+  // because a runner market is self-selected for outliers; far
+  // below an even split, because humans have to read as the norm.
+  const MAGE_FOCUS_WEIGHT = 4;
+  const OTHER_FOCUS_WEIGHT = 7;   // 7 mage x4 = 28 vs 12 other x7 = 84 -> mages 25%
+  const ORIGIN_WEIGHT = { mundane: 40, cyber: 40, infected: 11, magic: 9 };
+
+  function focusWeight(focus) {
+    return focus.family === "mage" ? MAGE_FOCUS_WEIGHT : OTHER_FOCUS_WEIGHT;
+  }
+
+  function pickFocus(rng, candidates) {
+    return rng.weighted(candidates.map((f) => ({ item: f, weight: focusWeight(f) })));
+  }
+
+  // Magic sits low against mundane/cyber, so an adept is a genuine
+  // find rather than a coin flip on every fighter.
+  function pickOrigin(rng, focus) {
+    return rng.weighted(focus.origins.map((o) => ({ item: o, weight: ORIGIN_WEIGHT[o] || 1 })));
   }
 
   // ── Archetype skill lists — the primary/secondary/tertiary heatmap ─
@@ -138,19 +248,20 @@
     heavyWeapons:     { list: ["heavyWeapons", "firearms", "demolitions", "marksmanship", "athletics"], specialistSecondary: 1, generalistSecondary: 3 },
     demolitions:      { list: ["demolitions", "firearms", "electronics", "athletics", "heavyWeapons"],   specialistSecondary: 1, generalistSecondary: 3 },
     stealth:          { list: ["stealth", "firearms", "larceny", "athletics", "melee"],                  specialistSecondary: 1, generalistSecondary: 3 },
-    melee:            { list: ["melee", "athletics", "firearms", "presence", "stealth"],                 specialistSecondary: 1, generalistSecondary: 3 },
+    melee:            { list: ["melee", "athletics", "firearms", "intimidation", "stealth"],             specialistSecondary: 1, generalistSecondary: 3 },
     marksman:         { list: ["marksmanship", "firearms", "stealth", "athletics"],                      specialistSecondary: 1, generalistSecondary: 2 },
-    tank:             { list: ["presence", "melee", "firearms", "athletics", "heavyWeapons"],             specialistSecondary: 1, generalistSecondary: 3 },
+    tank:             { list: ["intimidation", "melee", "firearms", "athletics", "heavyWeapons"],         specialistSecondary: 1, generalistSecondary: 3 },
     combatMedic:      { list: ["medicine", "firearms", "melee", "athletics", "stealth"],                  specialistSecondary: 1, generalistSecondary: 3 },
-    streetDoc:        { list: ["medicine", "electronics", "presence", "con"],                             specialistSecondary: 1, generalistSecondary: 2 },
-    face:             { list: ["con", "presence", "larceny", "athletics"],                                specialistSecondary: 1, generalistSecondary: 2 },
+    streetDoc:        { list: ["medicine", "electronics", "leadership", "con"],                           specialistSecondary: 1, generalistSecondary: 2 },
+    face:             { list: ["con", "leadership", "intimidation", "larceny"],                           specialistSecondary: 1, generalistSecondary: 2 },
+    leader:           { list: ["leadership", "con", "intimidation", "firearms"],                          specialistSecondary: 1, generalistSecondary: 2 },
     decker:           { list: ["hacking", "computer", "electronics", "stealth", "larceny"],               specialistSecondary: 1, generalistSecondary: 3 },
     rigger:           { list: ["rigging", "electronics", "computer", "firearms", "athletics"],            specialistSecondary: 1, generalistSecondary: 3 },
     combatMage:       { list: ["sorcery", "assensing", "athletics", "stealth", "firearms"],               specialistSecondary: 1, generalistSecondary: 3 },
     detectionMage:    { list: ["assensing", "sorcery", "stealth", "athletics"],                           specialistSecondary: 1, generalistSecondary: 2 },
-    healthMage:       { list: ["sorcery", "assensing", "enchanting", "presence"],                         specialistSecondary: 1, generalistSecondary: 2 },
-    illusionMage:     { list: ["sorcery", "con", "stealth", "presence"],                                  specialistSecondary: 1, generalistSecondary: 2 },
-    manipulationMage: { list: ["sorcery", "con", "presence", "assensing"],                                specialistSecondary: 1, generalistSecondary: 2 },
+    healthMage:       { list: ["sorcery", "assensing", "enchanting", "leadership"],                       specialistSecondary: 1, generalistSecondary: 2 },
+    illusionMage:     { list: ["sorcery", "con", "stealth", "intimidation"],                              specialistSecondary: 1, generalistSecondary: 2 },
+    manipulationMage: { list: ["sorcery", "con", "leadership", "assensing"],                              specialistSecondary: 1, generalistSecondary: 2 },
     conjuringMage:    { list: ["conjuring", "sorcery", "assensing", "enchanting"],                         specialistSecondary: 1, generalistSecondary: 2 },
     enchantingMage:   { list: ["enchanting", "sorcery", "conjuring", "assensing"],                         specialistSecondary: 1, generalistSecondary: 2 },
   };
@@ -269,19 +380,17 @@
   ];
 
   // ── Attribute generation ──────────────────────────────────────
+  const PHYSICAL_ATTRS = ["body", "agility", "strength", "willpower", "intelligence", "charisma"];
+
   function generateAttributes(rng, metatypeId, family) {
-    const mods = METATYPES[metatypeId].mods;
+    const meta = METATYPES[metatypeId];
     const base = () => rng.int(2, 5);
-    const attrs = {
-      body: base() + (mods.body || 0),
-      agility: base() + (mods.agility || 0),
-      willpower: base() + (mods.willpower || 0),
-      intelligence: base() + (mods.intelligence || 0),
-      charisma: base() + (mods.charisma || 0),
-      magic: 0,
-    };
-    for (const k of Object.keys(attrs)) {
-      if (k !== "magic") attrs[k] = Math.max(1, attrs[k]);
+    const attrs = { magic: 0 };
+    for (const k of PHYSICAL_ATTRS) {
+      // Clamped to the metatype's own ceiling at generation too — a
+      // troll should never open below 1, and an ork should never
+      // open above the Intelligence they can ever reach.
+      attrs[k] = Math.max(1, Math.min(meta.max[k], base() + (meta.mods[k] || 0)));
     }
     return attrs;
   }
@@ -373,10 +482,90 @@
     return Math.floor(rank) + 1; // half of marginalSkillCost(floor(rank)) either way
   }
 
+  // ── Attributes grow from a reserved share, not by competing ────
+  // The tabletop charges rating x5 for an attribute against rating
+  // x2 for a skill, and that pricing works there because a PLAYER
+  // decides to save up for it. Our cascade has no such patience: it
+  // walks a priority order and buys the first affordable thing, so
+  // against a 25-karma attribute step a brand-new overflow skill at
+  // 2 karma wins every time, forever. Attributes would never rise
+  // at all. Pricing cannot solve an allocation problem.
+  //
+  // So a fixed share of every award is set aside and BANKED until it
+  // can afford the next step — attributes then advance steadily and
+  // thematically, and can neither be starved by cheap skills nor eat
+  // the whole award.
+  const ATTRIBUTE_SHARE = 0.25;
+  const ATTRIBUTE_COST_MULT = 5;
+
+  function attributeCost(rating) {
+    return (rating + 1) * ATTRIBUTE_COST_MULT;
+  }
+
+  // Which attributes this runner cares about, best first: the one
+  // behind their focus's key skill, then the ones behind the rest of
+  // their archetype list. An attribute nobody's skills use never
+  // gets bought — growth stays thematic by construction rather than
+  // by a rule that says so.
+  function attributePriority(runner) {
+    const tiers = runner.classification.skillTiers;
+    const order = [runner.classification.focusKeySkill, tiers.primary, ...tiers.secondary, ...tiers.tertiary];
+    const seen = [];
+    for (const skill of order) {
+      const attr = attributeFor(skill);
+      if (attr && seen.indexOf(attr) === -1) seen.push(attr);
+    }
+    return seen;
+  }
+
+  function spendAttributeFund(runner) {
+    const priority = attributePriority(runner);
+    let bought = null;
+    let guard = 0;
+    while (guard++ < 100) {
+      let spent = false;
+      for (const attr of priority) {
+        const now = runner.attributes[attr] || 0;
+        if (now >= attributeCeiling(runner, attr)) continue; // walled by metatype
+        const cost = attributeCost(now);
+        if (runner.attributeFund >= cost) {
+          runner.attributes[attr] = now + 1;
+          runner.attributeFund -= cost;
+          bought = attr;
+          spent = true;
+          break;
+        }
+      }
+      if (!spent) break;
+    }
+    return bought;
+  }
+
+  // True once nothing this runner's skills use can rise any further —
+  // every relevant attribute is at its metatype (or Essence) wall.
+  function attributesMaxed(runner) {
+    return attributePriority(runner).every(
+      (a) => (runner.attributes[a] || 0) >= attributeCeiling(runner, a));
+  }
+
   function growRunner(runner, karmaAward, rng) {
+    // Skim the attribute share off the top and bank it. Fractions
+    // carry in the fund rather than being rounded away each time.
+    if (runner.attributeFund === undefined) runner.attributeFund = 0;
+    const toAttributes = attributesMaxed(runner) ? 0 : karmaAward * ATTRIBUTE_SHARE;
+    runner.attributeFund += toAttributes;
+    spendAttributeFund(runner);
+
     const tiers = runner.classification.skillTiers;
     const priorityOrder = [tiers.primary, ...tiers.secondary, ...tiers.tertiary];
-    let remaining = karmaAward;
+    // A veteran whose body has nothing left to give puts everything
+    // into training instead — and any fund left stranded at that
+    // wall comes back rather than sitting banked forever.
+    let remaining = karmaAward - toAttributes;
+    if (toAttributes === 0 && runner.attributeFund > 0) {
+      remaining += runner.attributeFund;
+      runner.attributeFund = 0;
+    }
     let guard = 0;
     while (remaining > 0 && guard++ < 10000) {
       let spent = false;
@@ -482,6 +671,31 @@
     return Object.values(effectiveSkills).reduce((sum, rank) => sum + karmaCost(rank), 0);
   }
 
+  // Cumulative karma sunk into an attribute, by the same logic as
+  // karmaCost but on the attribute curve (each step costs
+  // rating x ATTRIBUTE_COST_MULT). Attributes are in the dice pool
+  // now, so they have to be in the price: without this a troll and
+  // a human with identical skill sheets cost the same while the
+  // troll rolls four more dice on every Strength test.
+  //
+  // Only the attributes this runner's own skills actually USE are
+  // counted. A mage's Strength is real but nobody is paying a
+  // premium for it, and pricing it would quietly make metatypes
+  // with high ceilings expensive regardless of whether the runner
+  // can do anything with them.
+  function attributeKarmaValue(rating) {
+    if (rating <= 1) return 0;
+    return ATTRIBUTE_COST_MULT * ((rating * (rating + 1)) / 2 - 1);
+  }
+
+  function relevantAttributeValue(runner) {
+    let sum = 0;
+    for (const attr of attributePriority(runner)) {
+      sum += attributeKarmaValue(runner.attributes[attr] || 0);
+    }
+    return sum;
+  }
+
   // NOTE — scale: this returns a karma-cost-derived value (roughly
   // 40-250 for a fresh runner), NOT a final nuyen figure. The rest
   // of the design (job pay, gear, hiring costs) runs in the
@@ -489,7 +703,7 @@
   // now lives in models/economy.js's hireCost(), which is the only
   // place this karma-cost scale actually gets turned into nuyen.
   function computePrice(runner) {
-    const base = trueValue(getEffectiveSkills(runner));
+    const base = trueValue(getEffectiveSkills(runner)) + relevantAttributeValue(runner);
     const c = runner.classification;
     if (c.disciplineLabel === c.trueArchetype) return Math.round(base);
     const mult = c.disciplineLabel === "specialist" ? KARMA_HYPE_MULT : KARMA_BARGAIN_MULT;
@@ -585,10 +799,10 @@
     } else if (options.family) {
       candidates = FOCUSES.filter((f) => f.family === options.family);
     }
-    const focus = r.pick(candidates);
+    const focus = candidates.length === 1 ? candidates[0] : pickFocus(r, candidates);
 
-    const origin = options.origin || r.pick(focus.origins);
-    const metatypeId = options.metatype || r.pick(METATYPE_IDS);
+    const origin = options.origin || pickOrigin(r, focus);
+    const metatypeId = options.metatype || pickMetatype(r);
 
     const trueArchetype = r.chance(0.5) ? "specialist" : "generalist";
     const disciplineLabel = generateDiscipline(r, trueArchetype);
@@ -617,6 +831,7 @@
       skills: skills,
       wounds: 0,
       karma: 0,
+      attributeFund: 0, // banked share of past awards, waiting on the next attribute step
       market: {
         state: "unwatched", // "unwatched" | "watched"
         hired: null,        // null | { tier: "freelance"|"retainer"|"permanent", missionsRemaining } — mission-counted contracts (models/market.js)
@@ -646,6 +861,12 @@
   }
 
   MJ.SKILLS = SKILLS;
+  MJ.SKILL_ATTRIBUTE = SKILL_ATTRIBUTE;
+  MJ.attributeFor = attributeFor;
+  MJ.attributeCeiling = attributeCeiling;
+  MJ.attributeCost = attributeCost;
+  MJ.attributePriority = attributePriority;
+  MJ.ATTRIBUTE_SHARE = ATTRIBUTE_SHARE;
   MJ.HANDLES = HANDLES;
   MJ.handleBaseFromIndex = handleBaseFromIndex;
   MJ.mintRunner = mintRunner;

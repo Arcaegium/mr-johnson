@@ -188,7 +188,38 @@
     const untrained = Object.keys(eff).find((k) => eff[k] === 0);
     const obT = { tier: 2, affordances: [{ skill: trained, verb: "x", loud: false }] };
     const obU = { tier: 2, affordances: [{ skill: untrained, verb: "x", loud: false }] };
-    check(MJ.resolveTask(rngB, rb, obT, trained, { bonusDice: 2 }).poolSize === eff[trained] + 2, "C2: bonus dice must add to a trained pool");
+    // Pool is Skill + Attribute + situational dice. The attribute is
+    // part of the base, so a bonus adds on top of BOTH.
+    const attrT = rb.attributes[MJ.attributeFor(trained)] || 0;
+    check(MJ.resolveTask(rngB, rb, obT, trained, { bonusDice: 2 }).poolSize === eff[trained] + attrT + 2, "C2: bonus dice must add to a trained pool");
+    check(MJ.resolveTask(rngB, rb, obT, trained, {}).poolSize === eff[trained] + attrT, "C2: a trained pool is skill + attribute");
+
+    // The number the PLAYER is shown must be the number that gets
+    // rolled. missionPrompt once built its own pool and omitted the
+    // attribute, so the popup advertised a pool an entire attribute
+    // short of the truth. Walk real prompts and assert the offered
+    // pool equals what resolveTask would actually roll.
+    const rngPP = MJ.makeRNG("stress-promptpool");
+    const crewPP = makeRoster(rngPP, 3, ["fighter", "decker", "mage"]);
+    let promptsChecked = 0;
+    for (let i = 0; i < 150 && promptsChecked < 200; i++) {
+      const site = MJ.mintSite("promptpool-u", i);
+      const run = MJ.beginMission(rngPP, { site: site, kind: "jobObjective", objective: {} }, crewPP, 1);
+      let guard = 0;
+      while (!MJ.missionDone(run) && guard++ < 20) {
+        const prompt = MJ.missionPrompt(run);
+        if (!prompt) break;
+        for (const o of prompt.options) {
+          if (!o.runner || !o.skill) continue;
+          const truth = MJ.dicePoolFor(o.runner, o.skill, MJ.gearBonusFor(o.runner, o.skill));
+          check(o.pool === truth, "C2: prompt pool must equal the pool actually rolled (" + o.skill + ")");
+          promptsChecked++;
+        }
+        const usable = prompt.options.filter((x) => x.available);
+        MJ.missionChoose(run, usable.length ? { skill: usable[0].skill, runner: usable[0].runner, approach: usable[0].approach } : null);
+      }
+    }
+    check(promptsChecked > 50, "C2: prompt-pool probe must actually exercise prompts");
     check(MJ.resolveTask(rngB, rb, obU, untrained, { bonusDice: 2 }).poolSize === 0, "C2: bonus dice must never rescue untrained");
 
     // Job pay formula + chain wiring, in bulk.
@@ -1055,7 +1086,8 @@
     // Pool math through resolveTask; untrained never rescued.
     const eff = MJ.getEffectiveSkills(decker);
     const ob = { tier: 2, affordances: [{ skill: "hacking", verb: "x", loud: false }] };
-    check(MJ.resolveTask(rng, decker, ob, "hacking", { bonusDice: MJ.gearBonusFor(decker, "hacking") }).poolSize === eff.hacking + 2, "C11: pool must include gear dice");
+    const deckerInt = decker.attributes[MJ.attributeFor("hacking")] || 0;
+    check(MJ.resolveTask(rng, decker, ob, "hacking", { bonusDice: MJ.gearBonusFor(decker, "hacking") }).poolSize === eff.hacking + deckerInt + 2, "C11: pool must include gear dice");
     const untrained = Object.keys(eff).find((k) => eff[k] === 0);
     const obU = { tier: 2, affordances: [{ skill: untrained, verb: "x", loud: false }] };
     check(MJ.resolveTask(rng, decker, obU, untrained, { bonusDice: 2 }).poolSize === 0, "C11: gear must never rescue untrained");

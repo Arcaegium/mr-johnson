@@ -531,9 +531,13 @@
         const runner = run.runners[ri];
         const trained = eff[ri][a.skill] || 0;
         if (trained <= 0) continue;
-        // Ranked by effective pool, so the toolkit-holder naturally
-        // wins ties against an equally-skilled bare-handed runner.
-        const pool = trained + MJ.gearBonusFor(runner, a.skill);
+        // Ranked by the pool they will ACTUALLY roll — the same
+        // definition resolveTask uses, so the toolkit-holder wins
+        // ties against a bare-handed equal, and the runner with the
+        // better linked attribute wins against an equally-trained
+        // one. Computing this separately is what let the popup show
+        // a number a whole attribute short of the real roll.
+        const pool = MJ.dicePoolFor(runner, a.skill, MJ.gearBonusFor(runner, a.skill));
         if (!best || pool > best.pool) best = { runner: runner, pool: pool };
       }
       const left = attemptsLeft(run, run.index, a, approach);
