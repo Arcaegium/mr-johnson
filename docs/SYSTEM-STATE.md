@@ -7,7 +7,7 @@ right now**, what is a placeholder, and what is built-but-unreachable.
 Update this whenever a system lands. If it disagrees with the code, the code
 wins and this file is stale — verify before trusting a line here.
 
-Last verified at commit `ccff415` + the walk/injury/log pass.
+Last verified at commit `e7c8fc9` + the name-table and modifier-layer pass.
 
 ---
 
@@ -59,7 +59,11 @@ js/models/economy.js  280  canAfford spend earn collectJobPay
                            dailyUpkeep payUpkeep hireCost hireRunnerWithCost
                            upgradeContractWithCost itemCost buyItem sellItem
                            sellMaterials expandBoardCapacity
-js/models/combat.js   440  WEAPONS COMBAT_STANCES FIRE_MODES weaponProfile
+js/models/combat.js   600  WEAPONS FIRE_MODES weaponProfile
+                           COMBAT_EFFECTS COMBAT_CHANNELS COMBAT_POSTURES
+                           effectDef applyEffect clearEffect hasEffect
+                           effectModifier tickEffects describeEffects
+                           postureOf actionsFor
                            makeCombatant initiativeScore buildRound
                            beginCombat combatActor combatAct combatOver
                            physicalTrack stunTrack
@@ -91,7 +95,7 @@ js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
                            MJ.missionPopup (drives the mission stepper through it)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)
-js/stress.js          ~1.4k 12 probe classes. ~82k assertions, 0 failures.
+js/stress.js          ~1.5k 13 probe classes. ~82.6k assertions, 0 failures.
 ```
 
 **Two pages:** `index.html` (the playable shell) and `inspector.html` (benches +
@@ -153,8 +157,30 @@ function, so all three agree by construction.
   action count; pass structure verified (`p1:Fast p1:Mid p1:Slow p2:Fast …`).
 - Three-gate chain **verified to do its job**: shotgun and rifle both Power 9;
   vs armour 11 the shotgun landed 0/bounced 784, the rifle landed 327/bounced 0.
-- Dual tracks (`8 + ceil(attr/2)`), stances (open/cover/flanking/fullDefence),
-  fire modes (SS/SA/BF/FA) with ammunition, surprise round.
+- Dual tracks (`8 + ceil(attr/2)`), fire modes (SS/SA/BF/FA) with ammunition,
+  surprise round.
+- **The modifier layer.** Every number a fight produces is a base plus a sum
+  over the effects active on the combatant. The resolver never asks "what stance
+  is this?" — it asks `effectModifier(c, channel)`, so a new source of modifiers
+  is a row in `COMBAT_EFFECTS`, not an edit to the resolver.
+  - **Channels:** `accuracy`, `defence`, `power`, `damage`, `armour`, `soak`,
+    `initiative`, `initiativeDice`. A probe rejects any effect that moves a
+    channel outside this list, so a typo can't silently never apply.
+  - **Kinds:** *postures* (open / cover / flanking / fullDefence) share an
+    `exclusive` group so a combatant always has exactly one; *conditions*
+    (prone, blinded, deafened, suppressed, rattled, wounded) stack alongside;
+    *boons* (wired, combatSense, painEditor) are the seam chrome, adept powers
+    and spells land on — nothing generates them yet.
+  - **Stacking** caps at `maxStacks`; **timers** (`rounds`) count down at the
+    top of each round and re-applying refreshes rather than banks.
+  - `initiativeDice` is how anything buys extra actions — `actionsFor(c)` is
+    base + channel, floored at 1. Wired Reflexes lands here.
+  - **Injury is an effect.** `wounded` goes on automatically when a combatant
+    has physical boxes and comes off when they're treated. It contributes to
+    `defence` ONLY — the attack side already pays through `getEffectiveSkills`,
+    and charging both would bill one wound twice. A probe holds that.
+  - Attack log entries carry `actorEffects` / `targetEffects`, so a readout can
+    say *why* the numbers were what they were.
 - **Stalemate detection** — bounded in ROUNDS. A fight neither side can finish is
   a break-off: the crew disengages, the obstacle stands, every round fed the
   alert.
@@ -285,7 +311,9 @@ Anything here is a dial, not a decision.
    where Medicae and Contacts land? is Runners one widget or three?
 2. **Runner career record** — data model first, then the sheet.
 3. **Simultaneity** — the last Phase 2 item, gated on the console.
-4. **Stance versus geometry.** `COMBAT_STANCES` is position expressed as a menu
-   choice. When the top-down street arrives it supplies real position, and cover
-   becomes ground the crew is standing behind rather than a stance they select.
-   The accuracy/defence numbers move with it; the three-gate chain does not.
+4. **Postures versus geometry.** The posture effects are position expressed as a
+   menu choice. When the top-down street arrives it supplies real position, and
+   `cover` becomes ground the crew is standing behind rather than a posture they
+   select — but it stays the same effect on the same channels, so the spatial
+   layer changes what APPLIES it, not what it does. Conditions and boons are
+   unaffected. The three-gate chain does not move.

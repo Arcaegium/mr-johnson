@@ -767,20 +767,30 @@
 
   // ── Site names: Adverb-Adjective-Color-Noun-#### ────────────────
   // The what3words idea, fully weaponized: the NAME IS THE COMPLETE
-  // SEED, and the name's structure ENCODES the site's qualities —
-  // so when the universe randomly needs "a safe-band physical site
-  // in Tacoma owned by Mitsuhama," it selects those qualities and
-  // CONSTRUCTS the name that means them (no search, no override,
-  // no algorithm guessing). Decoding the same name in any universe
-  // reproduces the same site, qualities and all:
-  //   Adjective -> district     (64 adjectives / 9 districts)
-  //   Color     -> owner        (16 colors / 8 owners, 2 each)
-  //   Noun      -> value x orientation (64 nouns / 40 combos)
-  //   Adverb + 4 digits -> pure uniquifier (64 x 10,000 per combo)
-  // ~4.2 billion names. Veterans can learn to read addresses —
-  // that's street knowledge, and everything encoded is information
-  // the UI already shows on known sites. Theme and loot need no
-  // encoding budget: they derive from the name hash.
+  // SEED, and it says the site's qualities OUTRIGHT. When the
+  // universe needs "a safe-band physical site in Tacoma owned by
+  // Mitsuhama," it picks a word from Tacoma's list, a word from
+  // Mitsuhama's list, and the noun that means physical-value-3.
+  // Reading a name back is the same tables the other way: each slot
+  // is a lookup, not a computation.
+  //
+  //   Adjective -> district      one list of adjectives per district
+  //   Color     -> owner         two colours per owner
+  //   Noun      -> orientation, and its POSITION in that
+  //                orientation's list is the value (1-10)
+  //   Adverb + 4 digits -> the uniquifier, meaning nothing
+  //
+  // Every word belongs to exactly one entry in its OWN table, which
+  // is what lets a slot be read directly. Words may repeat ACROSS
+  // tables — Amber and Crimson are perfectly good adjectives and
+  // perfectly good colours — because the slot says which table
+  // applies. That makes slot order load-bearing rather than
+  // cosmetic, and a stress probe holds it.
+  //
+  // Veterans can learn to read addresses — that's street knowledge,
+  // and everything a name carries is information the UI already
+  // shows on known sites. Theme and loot need no room in the name:
+  // they derive from its hash.
   const NAME_ADVERBS = [
     "Absurdly", "Almost", "Awfully", "Badly", "Barely", "Blindly",
     "Boldly", "Briskly", "Broadly", "Calmly", "Carefully", "Cheaply",
@@ -794,83 +804,129 @@
     "Lightly", "Loosely", "Loudly", "Madly", "Mildly", "Mostly",
     "Nearly", "Neatly", "Newly", "Nicely",
   ];
-  const NAME_ADJECTIVES = [
-    "Amber", "Ancient", "Ashen", "Bitter", "Bright", "Broken",
-    "Bronze", "Cheerful", "Chilly", "Civil", "Clever", "Cloudy",
-    "Copper", "Crimson", "Crooked", "Curious", "Dusty", "Eager",
-    "Electric", "Elegant", "Faded", "Famous", "Fickle", "Formal",
-    "Fragrant", "Frozen", "Gentle", "Gilded", "Glass", "Golden",
-    "Graceful", "Gray", "Green", "Heavy", "Hidden", "Hollow",
-    "Humble", "Iron", "Ivory", "Jagged", "Jolly", "Lanky",
-    "Lavender", "Little", "Lonely", "Loyal", "Lucky", "Marble",
-    "Mellow", "Misty", "Modest", "Narrow", "Nimble", "Olive",
-    "Patient", "Pearl", "Proud", "Quiet", "Rapid", "Rusty",
-    "Scarlet", "Silent", "Silver", "Velvet",
-  ];
-  const NAME_NOUNS = [
-    "Anchor", "Anthem", "Arrow", "Badger", "Balloon", "Banjo",
-    "Beacon", "Bell", "Bicycle", "Bottle", "Bridge", "Bucket",
-    "Button", "Candle", "Canyon", "Castle", "Chimney", "Compass",
-    "Cricket", "Crown", "Dolphin", "Drum", "Falcon", "Feather",
-    "Fiddle", "Flag", "Fountain", "Garden", "Hammer", "Harbor",
-    "Heron", "Kettle", "Ladder", "Lantern", "Lemon", "Magnet",
-    "Marble", "Mirror", "Mountain", "Needle", "Orchard", "Otter",
-    "Paddle", "Pepper", "Piano", "Pigeon", "Pillar", "Prairie",
-    "Rabbit", "Ribbon", "River", "Rocket", "Saddle", "Sparrow",
-    "Spindle", "Steeple", "Tangerine", "Telescope", "Thimble",
-    "Trumpet", "Tunnel", "Turbine", "Walnut", "Windmill",
-  ];
+  // Each district owns its adjectives outright. Adding a word to a
+  // district widens that district's names and nothing else.
+  const DISTRICT_ADJECTIVES = {
+    "Downtown": [
+      "Amber", "Civil", "Electric", "Gilded", "Humble", "Loyal",
+      "Patient", "Velvet",
+    ],
+    "Redmond Barrens": ["Ancient", "Clever", "Elegant", "Glass", "Iron", "Lucky", "Pearl"],
+    "Bellevue": ["Ashen", "Cloudy", "Faded", "Golden", "Ivory", "Marble", "Proud"],
+    "Renton": [
+      "Bitter", "Copper", "Famous", "Graceful", "Jagged", "Mellow",
+      "Quiet",
+    ],
+    "Tacoma": ["Bright", "Crimson", "Fickle", "Gray", "Jolly", "Misty", "Rapid"],
+    "Everett": ["Broken", "Crooked", "Formal", "Green", "Lanky", "Modest", "Rusty"],
+    "Puyallup": [
+      "Bronze", "Curious", "Fragrant", "Heavy", "Lavender", "Narrow",
+      "Scarlet",
+    ],
+    "Salish Wilds": [
+      "Cheerful", "Dusty", "Frozen", "Hidden", "Little", "Nimble",
+      "Silent",
+    ],
+    "Snoqualmie Forest": ["Chilly", "Eager", "Gentle", "Hollow", "Lonely", "Olive", "Silver"],
+  };
 
-  const NAME_COLORS = [
-    "Amber", "Azure", "Cobalt", "Coral", "Crimson", "Emerald",
-    "Indigo", "Ivory", "Jade", "Obsidian", "Onyx", "Saffron",
-    "Scarlet", "Teal", "Umber", "Violet",
-  ];
+  // Two colours per owner, so an owner is legible at a glance
+  // without either colour being the whole tell.
+  const OWNER_COLORS = {
+    "Ares": ["Amber", "Jade"],
+    "Renraku": ["Azure", "Obsidian"],
+    "Mitsuhama": ["Cobalt", "Onyx"],
+    "Yakuza": ["Coral", "Saffron"],
+    "Ork Underground": ["Crimson", "Scarlet"],
+    "Independent": ["Emerald", "Teal"],
+    "Ancients": ["Indigo", "Umber"],
+    "Unowned": ["Ivory", "Violet"],
+  };
 
-  // ── The encoding tables (stable by index — never reorder) ──────
-  // adjective i -> district i % 9; color i -> owner i % 8;
-  // noun i -> combo i % 40, combo = (value-1) + 10 * orientationIdx.
-  function wordsFor(pool, groupCount, groupIndex) {
-    const out = [];
-    for (let i = 0; i < pool.length; i++) {
-      if (i % groupCount === groupIndex) out.push(pool[i]);
+  // The noun says orientation by WHICH list it is in and value by
+  // WHERE in that list it sits — index 0 is value 1, index 9 is
+  // value 10. So "Candle" is an astral site of value 4, always and
+  // everywhere, and the noun alone is the whole of what a site is
+  // before anybody defends it. Uniqueness rides on the adverb and
+  // the digits, which is what they are for.
+  const ORIENTATION_NOUNS = {
+    "physical": [
+      "Anchor", "Anthem", "Arrow", "Badger", "Balloon", "Banjo",
+      "Beacon", "Bell", "Bicycle", "Bottle",
+    ],
+    "astral": [
+      "Bridge", "Bucket", "Button", "Candle", "Canyon", "Castle",
+      "Chimney", "Compass", "Cricket", "Crown",
+    ],
+    "matrix": [
+      "Dolphin", "Drum", "Falcon", "Feather", "Fiddle", "Flag",
+      "Fountain", "Garden", "Hammer", "Harbor",
+    ],
+    "balanced": [
+      "Heron", "Kettle", "Ladder", "Lantern", "Lemon", "Magnet",
+      "Orchard", "Mirror", "Mountain", "Needle",
+    ],
+  };
+
+  // Reading a slot is a lookup, built once from the tables above so
+  // the two directions can never disagree. A word that appears twice
+  // within one table would make its slot ambiguous, so the build
+  // refuses it rather than silently keeping the last one.
+  function indexWords(table, what) {
+    const out = {};
+    for (const key of Object.keys(table)) {
+      table[key].forEach((word, i) => {
+        if (out[word]) throw new Error('site names: "' + word + '" claims two ' + what + " slots");
+        out[word] = { key: key, position: i };
+      });
     }
     return out;
   }
 
+  const DISTRICT_OF = indexWords(DISTRICT_ADJECTIVES, "district");
+  const OWNER_OF = indexWords(OWNER_COLORS, "owner");
+  const ORIENTATION_OF = indexWords(ORIENTATION_NOUNS, "orientation");
+
+  // Write the name that means these qualities: a word from the
+  // district's list, a word from the owner's, and the one noun that
+  // means this orientation at this value.
+  // Adverb-Adjective-Color-Noun-NNNN — the colour sits last among
+  // the adjectives, the way English stacks them: a Boldly-Bitter-
+  // Coral-Anthem, never a Boldly-Coral-Bitter one.
   function encodeSiteName(qualities, rng) {
-    const districtIdx = SITE_DISTRICTS.indexOf(qualities.district);
-    const ownerIdx = OWNERS.indexOf(qualities.owner);
-    const orientationIdx = ORIENTATIONS.indexOf(qualities.orientation);
-    const combo = (qualities.value - 1) + 10 * orientationIdx;
-    const adjective = rng.pick(wordsFor(NAME_ADJECTIVES, 9, districtIdx));
-    const color = rng.pick(wordsFor(NAME_COLORS, 8, ownerIdx));
-    const noun = rng.pick(wordsFor(NAME_NOUNS, 40, combo));
-    const adverb = rng.pick(NAME_ADVERBS);
-    const num = String(rng.int(0, 9999)).padStart(4, "0");
-    // Adverb-Adjective-Color-Noun-NNNN. The colour sits last among
-    // the adjectives, the way English stacks them: a Boldly-Bitter-
-    // Coral-Anthem, never a Boldly-Coral-Bitter one.
-    return adverb + "-" + adjective + "-" + color + "-" + noun + "-" + num;
+    const adjectives = DISTRICT_ADJECTIVES[qualities.district];
+    const colors = OWNER_COLORS[qualities.owner];
+    const nouns = ORIENTATION_NOUNS[qualities.orientation];
+    if (!adjectives || !colors || !nouns) return null;
+    const noun = nouns[qualities.value - 1];
+    if (!noun) return null;
+    return [
+      rng.pick(NAME_ADVERBS),
+      rng.pick(adjectives),
+      rng.pick(colors),
+      noun,
+      String(rng.int(0, 9999)).padStart(4, "0"),
+    ].join("-");
   }
 
-  // Decoding is POSITIONAL, never a search. Four words live in both
-  // the colour and adjective pools — Amber, Crimson, Ivory, Scarlet
-  // are all perfectly good colours and perfectly good adjectives —
-  // so the slot a word sits in is what says which table reads it.
+  // Read the qualities straight back out: each slot names its own
+  // table, and the table says what the word means. A word may appear
+  // in more than one table — Amber is a colour and an adjective —
+  // which is exactly why the slot decides, and why slot ORDER is
+  // load-bearing rather than cosmetic.
   function decodeSiteName(name) {
     const parts = String(name).split("-");
     if (parts.length !== 5 || !/^\d{4}$/.test(parts[4])) return null;
-    const adjIdx = NAME_ADJECTIVES.indexOf(parts[1]);
-    const colorIdx = NAME_COLORS.indexOf(parts[2]);
-    const nounIdx = NAME_NOUNS.indexOf(parts[3]);
-    if (NAME_ADVERBS.indexOf(parts[0]) === -1 || colorIdx === -1 || adjIdx === -1 || nounIdx === -1) return null;
-    const combo = nounIdx % 40;
+    if (NAME_ADVERBS.indexOf(parts[0]) === -1) return null;
+    const district = DISTRICT_OF[parts[1]];
+    const owner = OWNER_OF[parts[2]];
+    const noun = ORIENTATION_OF[parts[3]];
+    if (!district || !owner || !noun) return null;
     return {
-      district: SITE_DISTRICTS[adjIdx % 9],
-      owner: OWNERS[colorIdx % 8],
-      value: (combo % 10) + 1,
-      orientation: ORIENTATIONS[Math.floor(combo / 10)],
+      district: district.key,
+      owner: owner.key,
+      orientation: noun.key,
+      value: noun.position + 1,
     };
   }
 

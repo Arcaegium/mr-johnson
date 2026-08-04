@@ -890,6 +890,32 @@
       }
     }
     check(slotChecked > 0, "C8: slot-order probe never produced a decodable swap");
+    // Every quality in the space must be writable AND readable. The
+    // tables are the whole mechanism now, so a missing district list
+    // or a value with no noun is a hole in the address space rather
+    // than an arithmetic edge case.
+    let holes = 0, pairs = 0;
+    for (const d of MJ.SITE_DISTRICTS) {
+      for (const o of MJ.OWNERS) {
+        for (const orient of ["physical", "astral", "matrix", "balanced"]) {
+          for (let v = 1; v <= 10; v++) {
+            pairs += 1;
+            const nm2 = MJ.encodeSiteName({ district: d, owner: o, value: v, orientation: orient },
+              rngSlot.fork("space" + pairs));
+            const back = nm2 && MJ.decodeSiteName(nm2);
+            if (!back || back.district !== d || back.owner !== o || back.value !== v || back.orientation !== orient) holes += 1;
+          }
+        }
+      }
+    }
+    check(pairs === 2880, "C8: the address space should be 9 x 8 x 4 x 10 (saw " + pairs + ")");
+    check(holes === 0, "C8: every quality combination must round-trip through a name (" + holes + " holes)");
+    // Qualities outside the space produce no name at all, rather
+    // than a name that reads back as something else.
+    check(MJ.encodeSiteName({ district: "Atlantis", owner: "Ares", value: 3, orientation: "astral" }, rngSlot) === null,
+      "C8: an unknown district must produce no name");
+    check(MJ.encodeSiteName({ district: "Downtown", owner: "Ares", value: 11, orientation: "astral" }, rngSlot) === null,
+      "C8: a value outside 1-10 must produce no name");
     // Encode/decode round-trips the whole quality space, including
     // Unowned owners and the wilderness districts.
     const rngRT = MJ.makeRNG("stress-name-rt");
@@ -1411,6 +1437,114 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 13: the combat modifier layer ─────────────────────────
+  // Every number a fight produces is a base plus a sum over active
+  // effects. The rules that make that safe — postures replace, stacks
+  // cap, timers expire, unknown ids do nothing — are what let a new
+  // condition be a row in the table instead of an edit to the
+  // resolver, so they are worth holding down.
+  function class13_effects() {
+    const rng = MJ.makeRNG("stress-effects");
+    const subject = () => {
+      const r = makeRoster(rng.fork("s" + Math.random()), 1)[0];
+      return MJ.makeCombatant(r, { side: "crew", weaponId: "pistol", armour: 4 });
+    };
+
+    // The table itself: no effect may move a channel that does not
+    // exist, or the resolver would silently never read it.
+    for (const id of Object.keys(MJ.COMBAT_EFFECTS)) {
+      const def = MJ.COMBAT_EFFECTS[id];
+      check(!!def.label && !!def.kind, "C13: effect " + id + " needs a label and a kind");
+      for (const ch of Object.keys(def.channels || {})) {
+        check(MJ.COMBAT_CHANNELS.indexOf(ch) !== -1, "C13: effect " + id + " moves unknown channel \"" + ch + "\"");
+      }
+    }
+
+    // Exactly one posture, always. Applying another replaces it.
+    const p = subject();
+    const postureCount = (c) => (c.effects || []).filter((e) => MJ.effectDef(e.id).kind === "posture").length;
+    check(postureCount(p) === 1, "C13: a combatant starts in exactly one posture");
+    for (const id of MJ.COMBAT_POSTURES) {
+      MJ.applyEffect(p, id);
+      check(postureCount(p) === 1, "C13: applying " + id + " must leave exactly one posture");
+      check(MJ.postureOf(p) === id, "C13: postureOf must report the posture just applied");
+    }
+    // A condition does not disturb the posture.
+    MJ.applyEffect(p, "cover");
+    MJ.applyEffect(p, "blinded");
+    check(MJ.postureOf(p) === "cover" && MJ.hasEffect(p, "blinded"), "C13: a condition must coexist with a posture");
+
+    // Channels sum across everything active.
+    const s = subject();
+    MJ.applyEffect(s, "flanking");   // accuracy +2, defence -1
+    MJ.applyEffect(s, "blinded");    // accuracy -4, defence -2
+    check(MJ.effectModifier(s, "accuracy") === -2, "C13: accuracy must sum to -2 (have " + MJ.effectModifier(s, "accuracy") + ")");
+    check(MJ.effectModifier(s, "defence") === -3, "C13: defence must sum to -3 (have " + MJ.effectModifier(s, "defence") + ")");
+
+    // Stacks accumulate to the cap and stop.
+    const st = subject();
+    for (let i = 0; i < 8; i++) MJ.applyEffect(st, "rattled");
+    const rattled = st.effects.find((e) => e.id === "rattled");
+    check(rattled.stacks === (MJ.COMBAT_EFFECTS.rattled.maxStacks || 1), "C13: stacks must stop at the cap");
+    check(MJ.effectModifier(st, "accuracy") === -rattled.stacks, "C13: a stacked effect contributes once per stack");
+
+    // Timers count down and expire; untimed effects do not.
+    const t = subject();
+    MJ.applyEffect(t, "cover");      // no duration
+    MJ.applyEffect(t, "blinded");    // 2 rounds
+    MJ.applyEffect(t, "suppressed"); // 1 round
+    check(MJ.tickEffects(t).indexOf("suppressed") !== -1, "C13: a one-round effect must expire on the first tick");
+    check(MJ.hasEffect(t, "blinded"), "C13: a two-round effect must survive the first tick");
+    check(MJ.tickEffects(t).indexOf("blinded") !== -1, "C13: a two-round effect must expire on the second tick");
+    check(MJ.hasEffect(t, "cover"), "C13: an untimed effect must never expire on a tick");
+    for (let i = 0; i < 20; i++) MJ.tickEffects(t);
+    check(MJ.hasEffect(t, "cover"), "C13: an untimed effect must survive any number of ticks");
+
+    // Re-applying refreshes the clock rather than banking rounds.
+    const rf = subject();
+    MJ.applyEffect(rf, "blinded");
+    MJ.tickEffects(rf);
+    MJ.applyEffect(rf, "blinded");
+    check(rf.effects.find((e) => e.id === "blinded").roundsLeft === MJ.COMBAT_EFFECTS.blinded.rounds,
+      "C13: re-applying a timed effect must refresh, not accumulate");
+
+    // Actions: bought through the channel, floored at one.
+    const a = subject();
+    check(MJ.actionsFor(a) === 1, "C13: a mundane body gets one action");
+    MJ.applyEffect(a, "wired");
+    check(MJ.actionsFor(a) === 2, "C13: wired reflexes must buy an action through the channel");
+    MJ.clearEffect(a, "wired");
+    check(MJ.actionsFor(a) === 1, "C13: clearing the boon must return the action count");
+
+    // Injury is on the defence channel ONLY — the attack side already
+    // pays for wounds through getEffectiveSkills, and charging both
+    // would bill a hurt runner twice for one wound.
+    const w = subject();
+    w.physical = 6;
+    MJ.applyEffect(w, "wounded");
+    check(MJ.effectModifier(w, "accuracy") === 0, "C13: wounds must not touch the accuracy channel");
+    check(MJ.effectModifier(w, "defence") === -2, "C13: six boxes must cost two dice of defence (have " + MJ.effectModifier(w, "defence") + ")");
+    const clean = MJ.makeCombatant(w.source, { side: "crew", weaponId: "pistol", physical: 0 });
+    const hurtPool = MJ.dicePoolFor(w.source, "firearms", MJ.effectModifier(w, "accuracy"));
+    const cleanPool = MJ.dicePoolFor(clean.source, "firearms", MJ.effectModifier(clean, "accuracy"));
+    check(hurtPool <= cleanPool, "C13: a wounded attacker cannot out-roll their healthy self");
+
+    // Unknown ids do nothing at all, rather than throwing or landing.
+    const u = subject();
+    const before = (u.effects || []).length;
+    check(MJ.applyEffect(u, "nonesuch") === null, "C13: an unknown effect must not apply");
+    check((u.effects || []).length === before, "C13: an unknown effect must not change the list");
+    check(MJ.effectDef("nonesuch") === null, "C13: an unknown effect has no definition");
+
+    // Full defence forfeits the action, and the fight still resolves.
+    const fd = subject();
+    const foe = MJ.makeCombatant({ label: "guard T3", attributes: { body: 4, willpower: 3, agility: 4, intelligence: 3 }, skills: { firearms: 3 } }, { side: "enemy", weaponId: "pistol" });
+    const combat = MJ.beginCombat(MJ.makeRNG("fd"), [fd], [foe], {});
+    const entry = MJ.combatAct(combat, { target: foe, mode: "SS", stance: "fullDefence" });
+    check(entry && entry.event === "hold", "C13: full defence must forfeit the action");
+    check(MJ.postureOf(fd) === "fullDefence", "C13: the forfeited action still sets the posture");
+  }
+
   // ── Runner ──────────────────────────────────────────────────────
   function runStress() {
     clear();
@@ -1431,6 +1565,7 @@
       ["10. Integration layer (session commands, expiry teeth)", class10_integration],
       ["11. Armory (second roster: issue, chrome, craft, ledger)", class11_armory],
       ["12. Injury carries, exhaustion does not", class12_injury],
+      ["13. The combat modifier layer", class13_effects],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

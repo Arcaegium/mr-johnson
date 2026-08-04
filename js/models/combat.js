@@ -103,18 +103,177 @@
     return healed;
   }
 
-  // ── Stance: the scene-text stand-in for position ───────────────
-  // `defence` is dice added to the target's evasion; `accuracy`
-  // modifies the attacker's own pool. Flanking trades your own
-  // cover for a better angle; full defence gives up your action
-  // entirely to be very hard to hit. This is the seam the spatial
-  // layer plugs real geometry into.
-  const STANCES = {
-    open:       { label: "in the open",  defence: 0, accuracy: 0 },
-    cover:      { label: "behind cover", defence: 2, accuracy: -1 },
-    flanking:   { label: "flanking",     defence: -1, accuracy: 2 },
-    fullDefence:{ label: "full defence", defence: 4, accuracy: 0, forfeitsAction: true },
+  // ── Effects: everything that shifts the numbers ────────────────
+  // One layer for every modifier a combatant can be under — posture,
+  // cover, a status condition, a spell, a piece of chrome. The
+  // combat math never asks "what stance is this?"; it asks "what is
+  // the total on this channel?", so adding a new source of modifiers
+  // is adding a row here, not editing the resolver.
+  //
+  // CHANNELS — what an effect can move:
+  //   accuracy       dice on the holder's attack pool
+  //   defence        dice on the holder's defence pool
+  //   power          Power on the holder's attacks (armour gate)
+  //   damage         DV on the holder's attacks
+  //   armour         the holder's armour rating
+  //   soak           dice resisting damage the holder takes
+  //   initiative     the holder's place in the order
+  //   initiativeDice extra actions per round — the seam Wired
+  //                  Reflexes and Improved Reflexes land on
+  //
+  // FLAGS: `forfeitsAction` skips the holder's action.
+  //
+  // STACKING: effects sharing an `exclusive` group replace each
+  // other, so a combatant has exactly one posture and exactly one
+  // cover state. Everything else stacks, capped by `maxStacks`.
+  //
+  // DURATION: `rounds` counts down at the top of each round;
+  // absent means it lasts the whole fight until something clears it.
+  const CHANNELS = ["accuracy", "defence", "power", "damage", "armour", "soak", "initiative", "initiativeDice"];
+
+  const EFFECTS = {
+    // Postures — what the combatant is doing with their body. The
+    // spatial layer replaces these with real geometry; until then
+    // they are the choice a player makes about exposure.
+    open:        { label: "in the open",   kind: "posture", exclusive: "posture", channels: {} },
+    cover:       { label: "behind cover",  kind: "posture", exclusive: "posture", channels: { defence: 2, accuracy: -1 } },
+    flanking:    { label: "flanking",      kind: "posture", exclusive: "posture", channels: { defence: -1, accuracy: 2 } },
+    fullDefence: { label: "full defence",  kind: "posture", exclusive: "posture", channels: { defence: 4 }, forfeitsAction: true },
+
+    // Conditions — things done TO a combatant. All of these are
+    // reachable from the mechanics already in the game: a flashbang
+    // blinds, a burst pins, a stun baton rattles.
+    prone:      { label: "prone",       kind: "condition", channels: { defence: 2, accuracy: -2 } },
+    blinded:    { label: "blinded",     kind: "condition", channels: { accuracy: -4, defence: -2 }, rounds: 2 },
+    deafened:   { label: "deafened",    kind: "condition", channels: { initiative: -2 }, rounds: 2 },
+    suppressed: { label: "under fire",  kind: "condition", channels: { accuracy: -2, defence: -1 }, rounds: 1 },
+    rattled:    { label: "rattled",     kind: "condition", channels: { accuracy: -1 }, rounds: 1, maxStacks: 3 },
+    // Injury already costs dice on the ATTACK side through
+    // getEffectiveSkills, which every attack pool reads. Defence is
+    // raw Agility and never passes through there, so the penalty is
+    // applied on that channel only — counting it on both would
+    // charge a wounded runner twice for the same wound.
+    wounded:    { label: "wounded",     kind: "condition", channels: { defence: 0 }, derived: true },
+
+    // Boons — chrome, magic, drugs. Nothing generates these yet;
+    // they are here so the systems that will can plug in without
+    // touching the resolver.
+    wired:       { label: "wired reflexes",  kind: "boon", channels: { initiative: 4, initiativeDice: 1 } },
+    combatSense: { label: "combat sense",    kind: "boon", channels: { defence: 2 } },
+    painEditor:  { label: "pain editor",     kind: "boon", channels: { soak: 2 } },
   };
+
+  function effectDef(id) {
+    return EFFECTS[id] || null;
+  }
+
+  // Put an effect on a combatant. Anything in the same `exclusive`
+  // group it already carries comes off first — that is what makes a
+  // posture a posture rather than a pile.
+  function applyEffect(combatant, id, opts) {
+    const def = effectDef(id);
+    if (!def) return null;
+    opts = opts || {};
+    combatant.effects = combatant.effects || [];
+    if (def.exclusive) {
+      combatant.effects = combatant.effects.filter((e) => effectDef(e.id).exclusive !== def.exclusive);
+    }
+    const existing = combatant.effects.find((e) => e.id === id);
+    if (existing) {
+      const cap = def.maxStacks || 1;
+      existing.stacks = Math.min(cap, existing.stacks + (opts.stacks || 1));
+      // A fresh application refreshes the clock rather than adding
+      // to it: being suppressed again means another round pinned,
+      // not two rounds banked.
+      if (opts.rounds !== undefined || def.rounds !== undefined) {
+        existing.roundsLeft = opts.rounds !== undefined ? opts.rounds : def.rounds;
+      }
+      return existing;
+    }
+    const active = {
+      id: id,
+      stacks: Math.min(def.maxStacks || 1, opts.stacks || 1),
+      roundsLeft: opts.rounds !== undefined ? opts.rounds : def.rounds,
+      source: opts.source || null,
+    };
+    combatant.effects.push(active);
+    return active;
+  }
+
+  function clearEffect(combatant, id) {
+    if (!combatant.effects) return false;
+    const before = combatant.effects.length;
+    combatant.effects = combatant.effects.filter((e) => e.id !== id);
+    return combatant.effects.length !== before;
+  }
+
+  function hasEffect(combatant, id) {
+    return !!(combatant.effects || []).some((e) => e.id === id);
+  }
+
+  // The current posture's id, for anything that wants to name it.
+  function postureOf(combatant) {
+    const found = (combatant.effects || []).find((e) => {
+      const def = effectDef(e.id);
+      return def && def.kind === "posture";
+    });
+    return found ? found.id : "open";
+  }
+
+  // The only question the resolver asks. Sums every active effect on
+  // one channel, stacks included.
+  function modifier(combatant, channel) {
+    let total = 0;
+    for (const active of combatant.effects || []) {
+      const def = effectDef(active.id);
+      if (!def) continue;
+      const per = def.channels[channel];
+      if (per) total += per * (active.stacks || 1);
+      // Injury scales with the boxes actually taken rather than
+      // being a fixed step, at the same rate it costs skill dice.
+      if (active.id === "wounded" && channel === "defence") {
+        total -= Math.floor((combatant.physical || 0) / 3);
+      }
+    }
+    return total;
+  }
+
+  function forfeitsAction(combatant) {
+    return (combatant.effects || []).some((e) => {
+      const def = effectDef(e.id);
+      return def && def.forfeitsAction;
+    });
+  }
+
+  // Count down every timed effect and drop the expired ones. Called
+  // once per combatant per round.
+  function tickEffects(combatant) {
+    if (!combatant.effects) return [];
+    const expired = [];
+    combatant.effects = combatant.effects.filter((active) => {
+      if (active.roundsLeft === undefined) return true;
+      active.roundsLeft -= 1;
+      if (active.roundsLeft > 0) return true;
+      expired.push(active.id);
+      return false;
+    });
+    return expired;
+  }
+
+  // What a readout shows. Postures and conditions read differently
+  // to a player, so they come back separated and pre-labelled.
+  function describeEffects(combatant) {
+    return (combatant.effects || []).map((active) => {
+      const def = effectDef(active.id);
+      return {
+        id: active.id,
+        label: def.label + (active.stacks > 1 ? " x" + active.stacks : ""),
+        kind: def.kind,
+        roundsLeft: active.roundsLeft,
+        channels: def.channels,
+      };
+    });
+  }
 
   // ── Fire modes ─────────────────────────────────────────────────
   // Rate of fire buys accuracy against the target's ability to
@@ -180,10 +339,10 @@
       // bench worth using even for a runner who already owns the
       // best thing money buys.
       weaponQuality: opts.weaponQuality || 0,
-      // Action count. One is a mundane body; more is bought with
-      // Wired Reflexes (cyber) or Improved Reflexes (adept magic) —
-      // neither generated yet, so this is the seam they land on.
-      initiativeDice: opts.initiativeDice || source.initiativeDice || 1,
+      // Base action count. A mundane body gets one; the rest is
+      // bought, and anything that buys it does so through the
+      // `initiativeDice` channel rather than by writing here.
+      baseInitiativeDice: opts.initiativeDice || source.initiativeDice || 1,
       ammo: opts.ammo !== undefined ? opts.ammo : 30,
       // A runner walks in carrying whatever they have not healed.
       // Turning up to a firefight with four boxes already filled is
@@ -191,12 +350,25 @@
       physical: opts.physical !== undefined ? opts.physical : carriedDamage(source),
       stun: 0,
       down: false,
-      stance: opts.stance || "open",
+      effects: [],
     };
     c.physicalMax = physicalTrack(c);
     c.stunMax = stunTrack(c);
     c.physical = Math.min(c.physical, c.physicalMax);
+    applyEffect(c, EFFECTS[opts.stance] ? opts.stance : "open");
+    // Injury is carried as an effect like anything else, so a
+    // readout listing what is on a combatant lists it too.
+    if (c.physical > 0) applyEffect(c, "wounded");
+    c.stance = postureOf(c);
+    for (const id of opts.effects || []) applyEffect(c, id);
     return c;
+  }
+
+  // Actions this round: the body's own, plus whatever chrome, magic
+  // or drugs are adding. Never below one — being slowed takes your
+  // edge, not your turn.
+  function actionsFor(c) {
+    return Math.max(1, c.baseInitiativeDice + modifier(c, "initiativeDice"));
   }
 
   // What the fight leaves on the roster. Called for everyone still
@@ -211,8 +383,10 @@
   }
 
   // Flat, no roll — you can read the whole order before committing.
+  // Anything that makes a combatant faster does it on the
+  // `initiative` channel, so boosts and penalties share one path.
   function initiativeScore(c) {
-    return (c.attributes.agility || 0) + (c.attributes.intelligence || 0);
+    return (c.attributes.agility || 0) + (c.attributes.intelligence || 0) + modifier(c, "initiative");
   }
 
   // ── The pass structure ─────────────────────────────────────────
@@ -222,11 +396,11 @@
   // being constantly in motion.
   function buildRound(combat) {
     const alive = combat.combatants.filter((c) => !c.down);
-    const maxDice = alive.reduce((m, c) => Math.max(m, c.initiativeDice), 0);
+    const maxDice = alive.reduce((m, c) => Math.max(m, actionsFor(c)), 0);
     const order = [];
     for (let pass = 1; pass <= maxDice; pass++) {
       alive
-        .filter((c) => c.initiativeDice >= pass)
+        .filter((c) => actionsFor(c) >= pass)
         .sort((a, b) => initiativeScore(b) - initiativeScore(a))
         .forEach((c) => order.push({ actor: c, pass: pass }));
     }
@@ -259,6 +433,19 @@
 
   function nextRound(combat) {
     combat.round += 1;
+    // Timed effects burn down between rounds, before the order is
+    // built — so a combatant whose speed boost just lapsed gets the
+    // slower order this round, not next.
+    for (const c of combat.combatants) {
+      if (c.down) continue;
+      for (const id of tickEffects(c)) {
+        combat.log.push({ event: "effectEnded", round: combat.round, actor: c.name, effect: id });
+      }
+      // Injury tracks the boxes, so it goes on when the first one
+      // lands and comes off when they are treated between fights.
+      if (c.physical > 0) applyEffect(c, "wounded"); else clearEffect(c, "wounded");
+      c.stance = postureOf(c);
+    }
     combat.order = buildRound(combat);
     combat.cursor = 0;
   }
@@ -296,14 +483,12 @@
   // the weapon's rate of fire; the defender rolls evasion — Agility
   // — plus whatever their own stance is worth. Net hits carry into
   // damage, so a clean hit hurts more than a graze.
-  function attackPool(attacker, weapon, stanceId) {
-    const stance = STANCES[stanceId] || STANCES.open;
-    return Math.max(0, MJ.dicePoolFor(attacker.source, weapon.skill, stance.accuracy));
+  function attackPool(attacker, weapon) {
+    return Math.max(0, MJ.dicePoolFor(attacker.source, weapon.skill, modifier(attacker, "accuracy")));
   }
 
   function defencePool(defender, mode) {
-    const stance = STANCES[defender.stance] || STANCES.open;
-    const base = (defender.attributes.agility || 0) + stance.defence;
+    const base = (defender.attributes.agility || 0) + modifier(defender, "defence");
     return Math.max(0, base - (MODES[mode] ? MODES[mode].defencePenalty : 0));
   }
 
@@ -314,15 +499,15 @@
   // through is soaked with Body + remaining armour, one point of
   // damage removed per hit.
   function resolveDamage(combat, attacker, defender, weapon, netHits) {
-    const armour = Math.max(0, defender.armour + (weapon.ap || 0));
-    const power = (weapon.power || 0) + (attacker.weaponQuality || 0) +
+    const armour = Math.max(0, defender.armour + modifier(defender, "armour") + (weapon.ap || 0));
+    const power = (weapon.power || 0) + (attacker.weaponQuality || 0) + modifier(attacker, "power") +
       (weapon.useStrength ? (attacker.attributes.strength || 0) : 0);
     if (power <= armour) {
       return { penetrated: false, armour: armour, power: power, damage: 0 };
     }
-    const dv = (weapon.dv || 0) + (attacker.weaponQuality || 0) + netHits +
+    const dv = (weapon.dv || 0) + (attacker.weaponQuality || 0) + netHits + modifier(attacker, "damage") +
       (weapon.useStrength ? Math.floor((attacker.attributes.strength || 0) / 2) : 0);
-    const soakPool = (defender.attributes.body || 0) + armour;
+    const soakPool = Math.max(0, (defender.attributes.body || 0) + armour + modifier(defender, "soak"));
     const soakDice = MJ.rollDicePool(combat.rng, soakPool);
     const soaked = MJ.countHits(soakDice);
     const damage = Math.max(0, dv - soaked);
@@ -350,11 +535,14 @@
     const attacker = slot.actor;
     combat.cursor += 1;
 
-    if (choice && choice.stance) attacker.stance = choice.stance;
-    const stanceDef = STANCES[attacker.stance] || STANCES.open;
+    // A posture is chosen with the action, and choosing one replaces
+    // whatever posture they were holding. Any other effect on them
+    // stays exactly where it is.
+    if (choice && choice.stance) applyEffect(attacker, choice.stance);
+    attacker.stance = postureOf(attacker);
 
     // Full defence buys survivability with the entire action.
-    if (stanceDef.forfeitsAction || !choice || !choice.target) {
+    if (forfeitsAction(attacker) || !choice || !choice.target) {
       const entry = { event: "hold", round: combat.round, pass: slot.pass, actor: attacker.name, stance: attacker.stance };
       combat.log.push(entry);
       combatOver(combat);
@@ -375,7 +563,7 @@
     }
     attacker.ammo -= cost;
 
-    const atkDice = MJ.rollDicePool(combat.rng, attackPool(attacker, weapon, attacker.stance));
+    const atkDice = MJ.rollDicePool(combat.rng, attackPool(attacker, weapon));
     const defDice = MJ.rollDicePool(combat.rng, defencePool(target, mode));
     const atkHits = MJ.countHits(atkDice);
     const defHits = MJ.countHits(defDice);
@@ -387,6 +575,11 @@
       weapon: weapon.label, mode: MODES[mode].label,
       atkHits: atkHits, defHits: defHits, netHits: netHits,
       ammoLeft: attacker.ammo,
+      // What each side was under when the shot went out. A readout
+      // that can say WHY the numbers were what they were is the
+      // difference between a dice log and a fight worth watching.
+      actorEffects: describeEffects(attacker).map((e) => e.label),
+      targetEffects: describeEffects(target).map((e) => e.label),
     };
 
     if (netHits <= 0) {
@@ -424,8 +617,22 @@
   }
 
   MJ.WEAPONS = WEAPONS;
-  MJ.COMBAT_STANCES = STANCES;
   MJ.FIRE_MODES = MODES;
+  // The modifier layer. Everything that shifts a combat number goes
+  // through here, so a new source of modifiers is a row in EFFECTS
+  // rather than an edit to the resolver.
+  MJ.COMBAT_EFFECTS = EFFECTS;
+  MJ.COMBAT_CHANNELS = CHANNELS;
+  MJ.COMBAT_POSTURES = Object.keys(EFFECTS).filter((id) => EFFECTS[id].kind === "posture");
+  MJ.effectDef = effectDef;
+  MJ.applyEffect = applyEffect;
+  MJ.clearEffect = clearEffect;
+  MJ.hasEffect = hasEffect;
+  MJ.effectModifier = modifier;
+  MJ.tickEffects = tickEffects;
+  MJ.describeEffects = describeEffects;
+  MJ.postureOf = postureOf;
+  MJ.actionsFor = actionsFor;
   MJ.weaponProfile = weaponProfile;
   MJ.makeCombatant = makeCombatant;
   MJ.initiativeScore = initiativeScore;

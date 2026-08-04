@@ -407,6 +407,34 @@ shooter, so moving into hard cover against one threat can open them to another
 angle. **Reinforcements arrive**, pathing in from entry points on rising Alert,
 giving a window to reposition or run.
 
+### 6.1 Modifiers are one layer
+Every number a fight produces is a base plus a sum over the **effects** active on
+the combatant. Nothing in the resolver asks what posture someone is in; it asks
+what the total is on a channel. That is what lets cover, a flashbang, a stun
+baton's rattle, Wired Reflexes and a spell all be the same kind of thing.
+
+**Channels:** accuracy, defence, power, damage, armour, soak, initiative,
+initiativeDice.
+
+**Three kinds of effect:**
+- **Postures** — open, cover, flanking, full defence. Mutually exclusive: a
+  combatant always has exactly one. This is what the spatial layer eventually
+  drives from real geometry, and when it does it changes what *applies* cover,
+  not what cover *does*.
+- **Conditions** — prone, blinded, deafened, suppressed, rattled, wounded. These
+  stack alongside a posture, cap at their own stack limit, and most run on a
+  timer that counts down each round.
+- **Boons** — chrome, adept powers, drugs, spells. The `initiativeDice` channel
+  is how anything buys extra actions, so Wired Reflexes and Improved Reflexes
+  have a home before either exists.
+
+**Injury is one of them.** `wounded` goes on when a combatant has physical boxes
+and comes off when they are treated. It moves the *defence* channel only —
+attacks already pay for wounds through effective skills, and charging both would
+bill one wound twice.
+
+Adding a new modifier is adding a row, never editing the resolver.
+
 ---
 
 ## 8. THE ASTRAL REALM
@@ -603,16 +631,35 @@ Moving toward **tabs holding several widgets each**, adding a level: tab → wid
 ### 11.2 Site names ARE the seed
 Format: `Adverb-Adjective-Color-Noun-####` — the colour sits last among the
 adjectives, the way English stacks them: `Cheaply-Crooked-Emerald-Saddle-5299`.
-- Adjective → district (9), Color → owner (8), Noun → value × orientation (40),
-  Adverb + 4 digits = uniquifier. ~4.2B names. The same key names the same
-  building in every universe; addresses are shareable.
-- `decodeSiteName` is **positional**, and that is load-bearing: four words —
-  Amber, Crimson, Ivory, Scarlet — are in both the colour and adjective pools,
-  because each is a perfectly good member of either. The slot a word sits in is
-  what says which table reads it, so the slot ORDER carries meaning. A stress
-  probe holds it: swap the two slots and the name must mean something else.
-- The name is hashed to seed the site, so the word order is part of the seed —
-  a name is a key to one building under one grammar.
+
+**Each quality owns its own words.** There is no arithmetic anywhere in this —
+the tables ARE the mapping, both directions:
+
+| slot | table | what it says |
+|---|---|---|
+| Adjective | `DISTRICT_ADJECTIVES` | one list per district (9) |
+| Color | `OWNER_COLORS` | two colours per owner (8) |
+| Noun | `ORIENTATION_NOUNS` | *which* list = orientation; *where in it* = value 1–10 |
+| Adverb + 4 digits | `NAME_ADVERBS` | the uniquifier, meaning nothing |
+
+Writing a name is picking from the district's list, the owner's list, and the
+one noun that means this orientation at this value. Reading one back is the same
+tables the other way — each slot is a lookup, not a computation. `Candle` is an
+astral site of value 4, always and everywhere.
+
+- **Every word is unique within its own table**, which is what lets a slot be
+  read directly. The reverse index is built at load and throws if a word claims
+  two slots, so a table edit can't quietly create an ambiguous name.
+- **Words repeat across tables on purpose.** Amber, Crimson, Ivory and Scarlet
+  are each a perfectly good colour and a perfectly good adjective. The slot says
+  which table applies — which makes slot ORDER load-bearing rather than
+  cosmetic. A probe swaps the two slots and requires the name to mean something
+  else.
+- Address space: 9 × 8 × 4 × 10 = **2,880 distinct sites**, each reachable under
+  many names (adverb × adjective × colour × 10,000 digits). A probe round-trips
+  all 2,880 and requires zero holes.
+- The name is hashed to seed the site, so the word order is part of the seed — a
+  name is a key to one building under one grammar.
 
 ### 11.3 The threat read & live security
 **Three layers:**
