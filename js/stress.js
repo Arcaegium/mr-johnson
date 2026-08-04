@@ -1445,8 +1445,11 @@
   // resolver, so they are worth holding down.
   function class13_effects() {
     const rng = MJ.makeRNG("stress-effects");
+    // Counter, not Math.random: a probe that draws from live entropy
+    // is a probe whose failures cannot be reproduced.
+    let subjectNo = 0;
     const subject = () => {
-      const r = makeRoster(rng.fork("s" + Math.random()), 1)[0];
+      const r = makeRoster(rng.fork("s" + (subjectNo += 1)), 1)[0];
       return MJ.makeCombatant(r, { side: "crew", weaponId: "pistol", armour: 4 });
     };
 
@@ -1537,12 +1540,19 @@
     check(MJ.effectDef("nonesuch") === null, "C13: an unknown effect has no definition");
 
     // Full defence forfeits the action, and the fight still resolves.
+    // Whoever the initiative order puts first is who takes the
+    // posture — the probe asks the combat who that was rather than
+    // assuming, since attributes decide it and they vary by subject.
     const fd = subject();
     const foe = MJ.makeCombatant({ label: "guard T3", attributes: { body: 4, willpower: 3, agility: 4, intelligence: 3 }, skills: { firearms: 3 } }, { side: "enemy", weaponId: "pistol" });
     const combat = MJ.beginCombat(MJ.makeRNG("fd"), [fd], [foe], {});
-    const entry = MJ.combatAct(combat, { target: foe, mode: "SS", stance: "fullDefence" });
+    const first = MJ.combatActor(combat).actor;
+    const other = first === fd ? foe : fd;
+    const entry = MJ.combatAct(combat, { target: other, mode: "SS", stance: "fullDefence" });
     check(entry && entry.event === "hold", "C13: full defence must forfeit the action");
-    check(MJ.postureOf(fd) === "fullDefence", "C13: the forfeited action still sets the posture");
+    check(MJ.postureOf(first) === "fullDefence", "C13: the forfeited action still sets the actor's posture");
+    check(MJ.postureOf(other) !== "fullDefence", "C13: one combatant's posture must not land on another");
+    check(entry.actor === first.name, "C13: the hold must be logged against whoever actually acted");
   }
 
   // ── Runner ──────────────────────────────────────────────────────

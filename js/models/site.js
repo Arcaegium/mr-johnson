@@ -787,10 +787,18 @@
   // applies. That makes slot order load-bearing rather than
   // cosmetic, and a stress probe holds it.
   //
+  // The qualities are the CLASS; the name is the INDIVIDUAL. There
+  // are 9 x 8 x 4 x 10 = 2,880 quality combinations, but the full
+  // name string is what seeds generation — so two names carrying the
+  // same qualities are two different buildings that happen to share
+  // a district, an owner, a value and an orientation. Same security
+  // triple, different theme, different floor plan. 26.2 billion
+  // names in all, which is why theme and loot need no room in the
+  // name: they fall out of its hash.
+  //
   // Veterans can learn to read addresses — that's street knowledge,
   // and everything a name carries is information the UI already
-  // shows on known sites. Theme and loot need no room in the name:
-  // they derive from its hash.
+  // shows on known sites.
   const NAME_ADVERBS = [
     "Absurdly", "Almost", "Awfully", "Badly", "Barely", "Blindly",
     "Boldly", "Briskly", "Broadly", "Calmly", "Carefully", "Cheaply",

@@ -655,9 +655,15 @@ astral site of value 4, always and everywhere.
   which table applies — which makes slot ORDER load-bearing rather than
   cosmetic. A probe swaps the two slots and requires the name to mean something
   else.
-- Address space: 9 × 8 × 4 × 10 = **2,880 distinct sites**, each reachable under
-  many names (adverb × adjective × colour × 10,000 digits). A probe round-trips
-  all 2,880 and requires zero holes.
+- **The qualities are the class; the name is the individual.** There are
+  9 × 8 × 4 × 10 = **2,880 quality combinations**, and a probe round-trips all
+  of them with zero holes. But the FULL name string is what seeds generation, so
+  every distinct name is its own building — **26.2 billion of them** (64
+  adjectives across the districts × 2 colours × 8 owners × 40 orientation-value
+  nouns × 64 adverbs × 10,000 digits). Two names carrying the same qualities are
+  two different places that happen to share a district, an owner, a value and an
+  orientation: same security triple, different theme, different floor plan,
+  different patrols.
 - The name is hashed to seed the site, so the word order is part of the seed — a
   name is a key to one building under one grammar.
 

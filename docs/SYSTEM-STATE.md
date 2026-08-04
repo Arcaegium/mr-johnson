@@ -96,6 +96,8 @@ js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)
 js/stress.js          ~1.5k 13 probe classes. ~82.6k assertions, 0 failures.
+                           Deterministic by construction: no live entropy, so a
+                           failure always reproduces.
 ```
 
 **Two pages:** `index.html` (the playable shell) and `inspector.html` (benches +
