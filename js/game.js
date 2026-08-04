@@ -677,7 +677,15 @@
     });
     const runnerRecord = (r) => {
       const copy = Object.assign({}, r);
-      delete copy.gear; // rebuilt from item records on load
+      // Issued gear rebuilds from the armoury's own item records, so
+      // it is dropped here. PERSONAL kit is not in the armoury — it
+      // belongs to the runner and would simply vanish on reload — so
+      // it rides along on the dossier instead, minus the back-pointer
+      // that makes gear circular in the first place.
+      copy.personalKit = (r.gear || [])
+        .filter((it) => it.personal)
+        .map((it) => ({ id: it.id, templateId: it.templateId, label: it.label, tier: it.tier }));
+      delete copy.gear;
       return JSON.parse(JSON.stringify(copy));
     };
     return {
@@ -774,6 +782,15 @@
     };
     session.jobs = record.jobs.map(reviveJob);
     session.board = record.board.map((jr) => ({ job: reviveJob(jr), siteResults: [] }));
+    // Personal kit first, so a runner is never briefly empty-handed
+    // and the armoury's issued items can push on top of it.
+    for (const r of session.roster.concat(session.market)) {
+      r.gear = (r.personalKit || []).map((k) => ({
+        id: k.id, templateId: k.templateId, label: k.label, tier: k.tier,
+        personal: true, issuedTo: r,
+      }));
+      delete r.personalKit;
+    }
     // Items: rebuild the two-way gear refs.
     session.save.armory.items = record.items.map((ir) => {
       const item = { id: ir.id, templateId: ir.templateId, label: ir.label, tier: ir.tier, issuedTo: null };

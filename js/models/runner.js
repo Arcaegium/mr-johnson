@@ -837,6 +837,7 @@
       wounds: 0,
       karma: 0,
       attributeFund: 0, // banked share of past awards, waiting on the next attribute step
+      gear: [],         // personal kit below, plus whatever the operation issues
       market: {
         state: "unwatched", // "unwatched" | "watched"
         hired: null,        // null | { tier: "freelance"|"retainer"|"permanent", missionsRemaining } — mission-counted contracts (models/market.js)
@@ -850,6 +851,12 @@
         shelfDaysRemaining: r.int(3, 14),
       },
     };
+
+    // What they already own when you meet them. A professional turns
+    // up with a sidearm; nobody turns up with a milspec hardsuit —
+    // that stays the armoury's job, which is what keeps §03's
+    // "two deckers, one top-tier deck" decision real.
+    runner.gear = MJ.generatePersonalKit ? MJ.generatePersonalKit(runner) : [];
 
     return runner;
   }

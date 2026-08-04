@@ -48,7 +48,17 @@
     return cond;
   }
 
-  const snap = (o) => JSON.stringify(o);
+  // A structural fingerprint, cycle-safe. Gear is two-way — an item
+  // points back at the runner holding it — and every runner now
+  // arrives carrying personal kit, so a naive stringify hits that
+  // loop immediately. The back-pointer is replaced by the holder's
+  // handle rather than dropped, so "who is holding this" still
+  // shows up in the comparison and the probes keep their teeth.
+  const snap = (o) => JSON.stringify(o, (key, value) => {
+    if (key === "issuedTo" && value && value.identity) return "@" + value.identity.handle;
+    if (key === "source" && value && value.identity) return "@" + value.identity.handle;
+    return value;
+  });
   const AXES = ["physical", "astral", "matrix"];
 
   // Roster helper: unique handles so ledger bookkeeping can key on

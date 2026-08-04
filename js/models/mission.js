@@ -122,6 +122,39 @@
     return !!runner.market.hired && runner.market.phase !== "kia";
   }
 
+  // ── Reading your own crew ──────────────────────────────────────
+  // The third leg of the triangle. A job card advertises a site's
+  // security as an ESTIMATE (est P:~3 A:~5) that only experience
+  // confirms — but a player cannot judge whether ~5 is a problem
+  // without knowing what their own crew brings against it.
+  //
+  // This is legitimate to show in full, by the same rule that shows
+  // the dice pool in a mission prompt: it is their crew, they know
+  // what they hired and what they issued. The site's number stays an
+  // estimate; the gap between the two is the decision.
+  const AXIS_SKILLS = {
+    physical: ["stealth", "firearms", "marksmanship", "melee", "con", "intimidation", "larceny", "demolitions", "electronics"],
+    astral: ["assensing", "conjuring", "sorcery"],
+    matrix: ["hacking", "computer", "electronics"],
+  };
+
+  // Best pool any one crew member can bring to that axis — a team is
+  // as good as its specialist, not its average.
+  function crewCapability(runners) {
+    const out = {};
+    for (const axis of Object.keys(AXIS_SKILLS)) {
+      let best = 0;
+      for (const runner of runners || []) {
+        for (const skill of AXIS_SKILLS[axis]) {
+          const pool = MJ.dicePoolFor(runner, skill, MJ.gearBonusFor(runner, skill));
+          if (pool > best) best = pool;
+        }
+      }
+      out[axis] = best;
+    }
+    return out;
+  }
+
   // ── Player-initiated mission records ────────────────────────────
   // Same record family as job.js's job-derived missions — `kind`
   // distinguishes; a job mission has no kind and resolves as
@@ -617,36 +650,48 @@
   // moment somebody pulls a trigger.
   const DEATH_ON_TAKEDOWN = 0.05; // 1 in 20; the other 19 take a wound
 
-  function enemiesFor(run, obstacle) {
-    const foes = [MJ.makeCombatant({
-      label: obstacle.label + " T" + obstacle.tier,
+  // Tier is how much security a site has BOUGHT — coverage, density,
+  // budget — not how good any individual is. Mapping it straight onto
+  // skill made a tier-8 guard roll 14 dice against a median crew's 8,
+  // i.e. better trained than any runner the player could afford, which
+  // is not what a security rating is supposed to mean. Skill and
+  // attributes therefore rise at roughly HALF tier, so the ladder runs
+  // from a rent-a-cop to genuine corp security without ever leaving
+  // the range a real crew competes in. What high tier actually buys
+  // the site is more of them, better armed and better armoured — the
+  // density the alert system already trades in.
+  function enemyStatBlock(obstacle) {
+    const t = obstacle.tier;
+    const skill = 1 + Math.ceil(t / 2);       // T1 -> 2, T10 -> 6
+    return {
+      label: obstacle.label + " T" + t,
       attributes: {
-        agility: 2 + Math.ceil(obstacle.tier / 2),
-        intelligence: 2 + Math.floor(obstacle.tier / 3),
-        body: 2 + Math.ceil(obstacle.tier / 2),
-        willpower: 2 + Math.ceil(obstacle.tier / 2),
-        strength: 2 + Math.floor(obstacle.tier / 2),
+        agility: 2 + Math.ceil(t / 3),        // T1 -> 3, T10 -> 6
+        intelligence: 2 + Math.floor(t / 3),
+        body: 2 + Math.ceil(t / 3),
+        willpower: 2 + Math.ceil(t / 3),
+        strength: 2 + Math.floor(t / 3),
       },
-      skills: { firearms: obstacle.tier, melee: obstacle.tier, marksmanship: obstacle.tier },
-    }, { side: "enemy", armour: obstacle.armour, weaponId: obstacle.weapon, ammo: 999 })];
+      skills: { firearms: skill, melee: skill, marksmanship: skill },
+    };
+  }
+
+  function enemiesFor(run, obstacle) {
+    const spawn = (o) => {
+      const c = MJ.makeCombatant(enemyStatBlock(o),
+        { side: "enemy", armour: o.armour, weaponId: o.weapon, ammo: 999 });
+      c.sourceObstacle = o;
+      return c;
+    };
+    const foes = [spawn(obstacle)];
     // Anything else that can fight and shares this ground joins in.
     // Opening fire in a room with two guards is a fight with two
     // guards — that is what makes clearing the eyes first matter.
     for (const o of run.obstacles) {
       if (o === obstacle || !o.fights || run.neutralized.has(o)) continue;
       if (!o.rooms || !obstacle.rooms || !o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1)) continue;
-      foes.push(MJ.makeCombatant({
-        label: o.label + " T" + o.tier,
-        attributes: {
-          agility: 2 + Math.ceil(o.tier / 2), intelligence: 2 + Math.floor(o.tier / 3),
-          body: 2 + Math.ceil(o.tier / 2), willpower: 2 + Math.ceil(o.tier / 2),
-          strength: 2 + Math.floor(o.tier / 2),
-        },
-        skills: { firearms: o.tier, melee: o.tier, marksmanship: o.tier },
-      }, { side: "enemy", armour: o.armour, weaponId: o.weapon, ammo: 999 }));
-      foes[foes.length - 1].sourceObstacle = o;
+      foes.push(spawn(o));
     }
-    foes[0].sourceObstacle = obstacle;
     return foes;
   }
 
@@ -1425,6 +1470,8 @@
     return results;
   }
 
+  MJ.crewCapability = crewCapability;
+  MJ.AXIS_SKILLS = AXIS_SKILLS;
   MJ.RECON_LENSES = RECON_LENSES;
   MJ.isDispatchable = isDispatchable;
   MJ.createReconMission = createReconMission;

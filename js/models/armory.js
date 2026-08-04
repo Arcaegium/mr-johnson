@@ -165,11 +165,111 @@
     return { id: nextItemId++, templateId: templateId, label: t.label, tier: t.tier, issuedTo: null };
   }
 
+  // ── Personal kit: what a professional owns before you hire them ─
+  // §03 says gear "is owned outright by the Johnson's operation, not
+  // generated as part of a runner's dossier," and the reason it
+  // gives is the allocation decision — "two decker runners but only
+  // one top-tier deck." That reason survives intact here, because
+  // personal kit is deliberately capped BELOW the good stuff: the
+  // armoury is the only route past mid-tier, so the one Farsight
+  // still forces a choice about who carries it.
+  //
+  // What it fixes is the absurdity underneath: a hired street
+  // samurai was turning up to a firefight with their fists, because
+  // every weapon in the game had to be bought and issued by hand. A
+  // professional owns a sidearm. They do not own a milspec hardsuit.
+  //
+  // Tier scales off the skill the item serves — a rank-9 shooter
+  // owns better hardware than a rank-2 ganger — because that is the
+  // same thing their price is already derived from.
+  const PERSONAL_TIER_CAP = 4;
+
+  // Best personal-grade option per skill, worst first.
+  const KIT_BY_SKILL = {
+    firearms:     ["holdout", "heavyPistol", "hornetSmg"],
+    marksmanship: ["holdout", "sniperRig"],
+    heavyWeapons: ["heavyPistol", "doorknocker"],
+    melee:        ["shockBaton", "monoblade"],
+    demolitions:  ["demoKit"],
+    hacking:      ["deckMk1"],
+    rigging:      ["hummingbird", "droneMk1"],
+    sorcery:      ["wardingCharm", "sorceryFocus"],
+  };
+  const PERSONAL_ARMOR = ["linedCoat", "kevlarLong"];
+
+  function personalTierFor(rank) {
+    return Math.max(1, Math.min(PERSONAL_TIER_CAP, Math.ceil(rank / 2)));
+  }
+
+  // Pick the best entry whose tier the runner's rank justifies.
+  function bestKitFor(list, rank) {
+    const cap = personalTierFor(rank);
+    let choice = null;
+    for (const id of list) {
+      const t = ITEM_TEMPLATES[id];
+      if (!t || t.tier > cap) continue;
+      if (!choice || t.tier > ITEM_TEMPLATES[choice].tier) choice = id;
+    }
+    return choice;
+  }
+
+  // Everything this runner turns up carrying. Marked `personal` so
+  // the armoury can refuse to sell or reassign it — it is theirs,
+  // and it leaves with them.
+  function generatePersonalKit(runner) {
+    const skills = MJ.getEffectiveSkills(runner);
+    const kit = [];
+    const take = (id) => {
+      if (!id) return;
+      const item = makeItem(id);
+      item.personal = true;
+      item.issuedTo = runner;
+      // Deterministic id, NOT the global counter. Kit is minted
+      // during runner generation, so a shared counter made an item's
+      // id depend on how many runners happened to be generated
+      // first — which differs between runs and broke the "same seed,
+      // byte-identical state" guarantee outright. A runner's own kit
+      // is a pure function of the runner, so its ids must be too.
+      item.id = "kit:" + runner.identity.handle + ":" + kit.length;
+      kit.push(item);
+    };
+
+    // The tool for whatever they are actually best at, among the
+    // skills that HAVE a tool.
+    let bestSkill = null;
+    for (const skill of Object.keys(KIT_BY_SKILL)) {
+      const rank = skills[skill] || 0;
+      if (rank > 0 && (!bestSkill || rank > skills[bestSkill])) bestSkill = skill;
+    }
+    if (bestSkill) take(bestKitFor(KIT_BY_SKILL[bestSkill], skills[bestSkill]));
+
+    // A sidearm, if their trade did not already give them one. Even
+    // a decker owns something to point at people.
+    const gunRank = Math.max(skills.firearms || 0, skills.marksmanship || 0);
+    if (gunRank > 0 && bestSkill !== "firearms" && bestSkill !== "marksmanship") {
+      take(bestKitFor(KIT_BY_SKILL.firearms, gunRank));
+    }
+
+    // Something to stop a bullet, scaled to how dangerous their work
+    // is — the shooters and the sluggers turn up in real armour, the
+    // face turns up in a nice coat.
+    const combatRank = Math.max(
+      skills.firearms || 0, skills.marksmanship || 0,
+      skills.melee || 0, skills.heavyWeapons || 0);
+    take(bestKitFor(PERSONAL_ARMOR, Math.max(1, combatRank)));
+
+    return kit;
+  }
+
   // ── Issue / reclaim: exclusive, always-consistent both ways ─────
   function issueItem(item, runner) {
     const t = ITEM_TEMPLATES[item.templateId];
     if (t.category === "cyberware") return { ok: false, error: "cyberware is implanted, not issued" };
     if (t.category === "formula") return { ok: false, error: "formulas are taught, not carried" };
+    // Personal kit is theirs and leaves with them — it was never in
+    // the armoury to reassign, and pooling it would turn every hire
+    // into a free equipment delivery.
+    if (item.personal) return { ok: false, error: "that is their own kit, not the operation's" };
     reclaimItem(item); // off the old carrier first — one item, one holder
     item.issuedTo = runner;
     runner.gear = runner.gear || [];
@@ -321,6 +421,9 @@
   MJ.reclaimItem = reclaimItem;
   MJ.gearBonusFor = gearBonusFor;
   MJ.woundGuardFor = woundGuardFor;
+  MJ.generatePersonalKit = generatePersonalKit;
+  MJ.personalTierFor = personalTierFor;
+  MJ.PERSONAL_TIER_CAP = PERSONAL_TIER_CAP;
   MJ.combatWeaponFor = combatWeaponFor;
   MJ.armourRatingFor = armourRatingFor;
   MJ.findConsumable = findConsumable;

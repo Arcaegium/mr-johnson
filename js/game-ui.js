@@ -344,6 +344,16 @@
       committed.has(x.r)
         ? `<label class="muted"><input type="checkbox" checked disabled> ${x.r.identity.handle} (queued)</label>`
         : `<label><input type="checkbox" class="crew-check" data-ridx="${x.i}"${prevCrew.has(String(x.i)) ? " checked" : ""}> ${x.r.identity.handle}</label>`).join("");
+    // What the selected crew actually brings, per axis — the read
+    // that makes a site's estimated security mean something. Their
+    // own crew, so it is exact; the site's number stays an estimate.
+    const picked = Array.from(document.querySelectorAll(".crew-check:checked"))
+      .map((c) => S.roster[+c.dataset.ridx])
+      .concat(Array.from(committed));
+    const cap = MJ.crewCapability(picked);
+    const capLine = picked.length
+      ? `<div class="row" style="margin-top:6px">this crew brings — P:<b class="w-num">${cap.physical}d</b> A:<b class="w-num">${cap.astral}d</b> M:<b class="w-num">${cap.matrix}d</b> <span class="muted">(best single runner per axis)</span></div>`
+      : `<div class="row muted" style="margin-top:6px">pick a crew to see what they bring</div>`;
     const queue = S.queue.map((q, i) =>
       `<div class="queue-item"><span class="muted">${i + 1}.</span> ${q.label} <span class="muted">[${q.runners.map((r) => r.identity.handle).join(", ")}]</span>` +
       ` <button class="sm" data-act="queue-up" data-idx="${i}">↑</button><button class="sm" data-act="queue-down" data-idx="${i}">↓</button><button class="sm" data-act="queue-del" data-idx="${i}">✕</button></div>`).join("");
@@ -356,6 +366,7 @@
       `<div style="margin-top:6px"><select id="action-select">${actHtml || "<option disabled>nothing to do here</option>"}</select></div>` +
       (items.length ? `<div style="margin-top:6px"><select id="item-select">${itemHtml}</select></div>` : "") +
       `<div class="checks" style="margin:8px 0">${checks || '<span class="muted">no dispatchable runners — hire someone (a dispatch is what a contract buys)</span>'}</div>` +
+      (checks ? capLine : "") +
       `<button class="sm" data-act="queue-add">Add to Queue</button>` +
       `<div style="margin-top:10px">${queue || '<span class="muted">Queue is empty — End Day will just tick the world.</span>'}</div>` +
       (yesterday ? `<div class="good" style="margin-top:10px">YESTERDAY'S PLAN</div>${yesterday}<button class="sm" data-act="repeat-plan">requeue all</button>` : "") +
@@ -539,7 +550,11 @@
   // Changing the activity re-derives the action list; changing the
   // craft discipline re-derives the item list.
   document.addEventListener("change", (e) => {
-    if (e.target && (e.target.id === "site-select" || e.target.id === "action-select")) render();
+    if (!e.target) return;
+    if (e.target.id === "site-select" || e.target.id === "action-select") render();
+    // Ticking a runner changes what the crew brings, so the capability
+    // read has to follow the selection rather than the last render.
+    else if (e.target.classList && e.target.classList.contains("crew-check")) renderDispatch();
   });
 
   window.addEventListener("DOMContentLoaded", render);
