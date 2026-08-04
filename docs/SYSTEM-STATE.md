@@ -7,8 +7,7 @@ right now**, what is a placeholder, and what is built-but-unreachable.
 Update this whenever a system lands. If it disagrees with the code, the code
 wins and this file is stale — verify before trusting a line here.
 
-Last verified: after the astral-tether fix (`654fa2e`) + readability pass
-(`5e59a34`).
+Last verified at commit `7c7db34`.
 
 ---
 
@@ -20,8 +19,8 @@ matters and is set in `index.html` / `inspector.html`.
 ```
 js/core/rng.js        115  makeRNG — xmur3 + mulberry32. float/int/range/chance/
                            pick/weighted/shuffle/fork. weighted takes {item,weight}.
-                           fork(label) derives purely from (seed+label) — forking a
-                           CONSTANT label in a loop returns the identical child.
+                           fork(label) derives purely from (seed+label): fork a
+                           UNIQUE label per slot to get independent sub-streams.
 js/core/clock.js       20  advanceDay
 js/core/save.js        88  SCHEMA_VERSION defaultSave saveGame loadGame deleteSave (IndexedDB)
 js/core/resolve.js    243  THE DICE. rollDicePool countHits thresholdForTier
@@ -96,13 +95,13 @@ the stress suite). Both load the same modules.
 
 ## 2. THE CRITICAL SHARED DEFINITIONS
 
-Things that MUST have exactly one definition. Each of these exists because a
-duplicate silently drifted.
+Anything the resolver, the UI and the chooser all need reads from a single
+function, so all three agree by construction.
 
 - **`MJ.dicePoolFor(runner, skill, bonus)`** — Skill + Attribute + situational.
-  Read by `resolveTask`, `missionPrompt`, and the approach-ranking chooser.
-  *Was duplicated in missionPrompt and fell a whole attribute short of what got
-  rolled — the popup advertised 8d and rolled 10.*
+  The one definition of a pool. Read by `resolveTask` (which rolls it),
+  `missionPrompt` (which shows it), and the approach-ranking chooser (which
+  ranks by it), so the number offered is always the number rolled.
 - **`applyCriticalGlitch(run, runner)`** — armour → patch → wound. Shared by the
   single-roll and extended paths.
 - **`MJ.combatLoadoutFor(runner)`** — weapon + its quality + armour in ONE read,
@@ -110,8 +109,9 @@ duplicate silently drifted.
 - **`MJ.effectiveTier(item)`** — tier + crafted quality. Every mechanical reader
   of tier must go through this.
 - **`attemptKey(index, approach)`** vs **`discoveryKey(index, skill)`** — budgets
-  are per-affordance, discoveries are per-skill. *Sharing one key meant trying
-  "slip past unseen" silently spent "silent takedown".*
+  are per-AFFORDANCE (a guard's two stealth plays are different swings);
+  discoveries are per-SKILL (learning he is sensor-equipped rules out sneaking
+  however you found out).
 
 ---
 
@@ -136,12 +136,12 @@ duplicate silently drifted.
   vs armour 11 the shotgun landed 0/bounced 784, the rifle landed 327/bounced 0.
 - Dual tracks (`8 + ceil(attr/2)`), stances (open/cover/flanking/fullDefence),
   fire modes (SS/SA/BF/FA) with ammunition, surprise round.
-- **Stalemate detection** — a fight neither side can finish is a break-off, not a
-  win. *Was scored as a win because the loop was bounded in actions, not rounds.*
+- **Stalemate detection** — bounded in ROUNDS. A fight neither side can finish is
+  a break-off: the crew disengages, the obstacle stands, every round fed the
+  alert.
 - **Death:** 1-in-20 on a full takedown; wounds scale with overflow damage.
-  `runner.dead` is its own flag — **NOT** `market.phase = "kia"`, which belongs
-  to the watch-list machine and broke 444 assertions when misused. `settleDay`
-  sweeps the dead off the roster.
+  `runner.dead` is its own flag; `market.phase` belongs to the watch-list state
+  machine, which hiring suppresses. `settleDay` sweeps the dead off the roster.
 
 ### Threat / alert / witnessing
 Full model per `UNDERSTANDING.md` §11.3–11.4. All of it live:
@@ -152,14 +152,12 @@ matrix→Patrol/Black ICE, meatspace→Guard/Camera).
 
 ### The three pillars
 - **Meatspace** — `routeObstacles`: shortest path, collecting obstacles from
-  entry, edges, room post-slots, **patrols and spirit zones** (*those two were
-  generated and unreachable for a long time — a site with two guards and a
-  spirit could resolve with zero obstacles*).
+  entry points, edges, room post-slots, and **patrols and spirit zones** whose
+  circuit the route crosses.
 - **Matrix** — `generateHost` builds a node graph (SPU/Datastore/Slave/Data
   store/CPU) scaled by `security.matrix`; ice as ordinary obstacles;
   `hostRoute` with quiet vs greedy routing; **data haul** capped by deck
-  Storage. *Before this, `security.matrix` generated literally nothing — 0
-  matrix obstacles across 600 sites.*
+  Storage.
 - **Astral** — `astralRoute`: ignores the room graph entirely; obstacles are
   wards on the objective room + spirits in zones covering it; **every ward
   crossed inbound is crossed again outbound** ("the way back"); **tether**
@@ -177,14 +175,14 @@ matrix→Patrol/Black ICE, meatspace→Guard/Camera).
 `serializeSession` / `deserializeSession` round-trip: runners (incl.
 `attributeFund`, `personalKit`), armoury items (incl. `crafted`/`quality`/
 `mark`), sites (compressed to seeds), jobs, board, known sites.
-**Item ids for personal kit are derived from the runner**, not a global counter
-— *a global counter broke "same seed → byte-identical state".*
+**Item ids for personal kit derive from the runner**, keeping "same seed →
+byte-identical state" true.
 
 ---
 
 ## 4. WHAT IS BUILT BUT INVISIBLE / UNREACHABLE
 
-**This list is the justification for the console rebuild.** See
+**This is the coverage target for the console build-out.** See
 `BUILD-PLAN.md` §5.
 
 | system | exists | surfaced? |
@@ -209,9 +207,9 @@ matrix→Patrol/Black ICE, meatspace→Guard/Camera).
 Anything here is a dial, not a decision.
 
 - `STARTING_MONEY = 25000`, `MARKET_SLOTS = 8`, `WATCH_CAP_MULTIPLIER = 2`.
-- `NUYEN_PER_VALUE = 6` — halved from 12 when attributes entered pricing.
-  **Must move with `computePrice`.** Guard condition: a median job leg must
-  out-earn the crew it takes (was 0.64, restored to 1.27).
+- `NUYEN_PER_VALUE = 6` — the karma-scale → nuyen conversion. **Moves with
+  `computePrice`.** Guard condition: a median job leg out-earns the crew it takes
+  (currently 1.27x).
 - `PERMANENT_UPKEEP_RATE = 0.02`/day. `RETAINER_DISCOUNT = 0.7`,
   `PERMANENT_MULTIPLIER = 10`.
 - `ATTRIBUTE_SHARE = 0.25`, `ATTRIBUTE_COST_MULT = 5`.
@@ -219,12 +217,13 @@ Anything here is a dial, not a decision.
   `PERSONAL_TIER_CAP = 4`, `TETHER_PER_MAGIC = 6`, `DEATH_ON_TAKEDOWN = 0.05`,
   `DRAIN_DOWN_THRESHOLD = 8`, `MAX_ROUNDS = 10` (combat), `MAX_COMBAT_ROUNDS`.
 - Enemy stat block: skill `1 + ceil(tier/2)`, attributes `2 + ceil(tier/3)`.
-  *Was skill = tier, which made a T8 guard roll 14 dice against a median crew's
-  8.*
+  Tier is how much security a site BOUGHT — coverage and budget — so individual
+  competence rises at about half tier and stays in the range a crew competes in.
+  High tier buys a site MORE of them, better armed.
 - Reputation: flat +1 per job, no defined effect.
 - `missionCount`: flat uniform 1–3.
-- Wounds still a flat integer penalty to the key skill in
-  `getEffectiveSkills` — the **scaled** wound from combat is separate.
+- `getEffectiveSkills` applies a flat integer wound penalty to the key skill;
+  the scaled wound magnitude from combat is recorded separately.
 
 ---
 
@@ -238,18 +237,18 @@ Anything here is a dial, not a decision.
 - **How to run headless:** load `inspector.html` in the preview tab, then
   `javascript_tool`: click every `btn-*` id, then scrape `document.body.innerText`
   for `/VERDICT/` and `/^✗/`.
-- **Screenshots do not work** in this environment (the pane does not composite).
-  Verify by executing JS against the page and asserting on values.
+- **Verify by executing JS against the page and asserting on returned values** —
+  that is the reliable signal here.
 
 ---
 
 ## 7. IMMEDIATE NEXT WORK
 
 1. **The console rebuild** (see `BUILD-PLAN.md` §5 and `UNDERSTANDING.md` §10
-   PENDING AMENDMENT). Decisions still needed from the user: home/level-0 tab?
+   CURRENT DIRECTION). Decisions still open: home/level-0 tab?
    where Medicae and Contacts land? is Runners one widget or three?
 2. **Runner career record** — data model first, then the sheet.
-3. **Site name reorder** to `Adverb-Adjective-Color-Noun-####`. **Seed-format
-   break.** Verify the colour and adjective word lists are disjoint first, or an
-   old name silently decodes to a *different site*.
+3. **Site name reorder** to `Adverb-Adjective-Color-Noun-####`. Encode and decode
+   move together. Confirm the colour and adjective word lists are disjoint first,
+   so any name in the older order fails cleanly.
 4. **Simultaneity** — the last Phase 2 item, gated on the console.

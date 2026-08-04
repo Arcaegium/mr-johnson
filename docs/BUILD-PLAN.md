@@ -1,9 +1,7 @@
 # Mr. Johnson — Build Plan
 
-Companion to `UNDERSTANDING.md`. **Read that first.** This file is how we
-build; that file is what we are building.
-
-Written for Claude's recall. Explicit over elegant.
+Companion to `UNDERSTANDING.md`. **Read that first.** It is what we are
+building; this is how.
 
 ---
 
@@ -14,63 +12,40 @@ Written for Claude's recall. Explicit over elegant.
 
 The fun lives in the **systems** — roster market, economy, growth, Discipline
 mispricing, job interconnection, the whole Johnson loop. Those are data, menus
-and math: buildable and *provable* in text, where iteration is instant and
-free. The tactical missions are content those systems generate; their visuals
-are a **rendering layer**, not the game.
+and math: buildable and *provable* in text, where iteration is instant and free.
+The tactical missions are content those systems generate; their visuals are a
+**rendering layer**.
 
 So: build the entire game as text/simulation first — a real, complete, playable
-thing — and skin it only once the core has earned it. Simulation mode is a lie
-detector.
+thing — and skin it once the core has earned it. Simulation mode is a lie
+detector: it says cheaply whether the loop is fun before a sprite is drawn.
 
-**Why this game suits it:** the whole design is *data* per "systems are
-expensive, rows are cheap." Obstacles are affordance lists; skills gate them;
-job grammar generates objectives. The design came out text-ready by accident.
+**Why this game suits it:** the whole design is *data*, per "systems are
+expensive, rows are cheap." Obstacles are affordance lists; skills gate them; job
+grammar generates objectives. The design came out text-ready by accident — a text
+renderer reads the data the generators already produce and prints choices.
 
 ---
 
-## 2. THE FIDELITY LADDER — AND THE THING I KEEP MISREADING
+## 2. THE FIDELITY LADDER
 
 Three renderings of the **same** underlying systems.
 
 | rung | what it is | when |
 |---|---|---|
-| **Quick-resolve** | one aggregate roll, instant. The skip button and the always-available fallback that keeps the game playable while anything else is half-built. | exists from Phase 1 |
+| **Quick-resolve** | one aggregate roll, instant. The skip button, and the always-available fallback that keeps the game playable while anything else is half-built. | exists from Phase 1 |
 | **Scene-text** | describe the scene from site data, offer the affordance rolls, resolve, mark, advance. Interactive, choice-driven, no rendering. Every system, no skin. | ← we build here first |
 | **Full spatial** | top-down positioning, radius movement, cover geometry, the visual pillars. Laid over the proven text core, added per pillar. | Phase 3+ |
 
-### ⚠ THE LADDER IS ABOUT RENDERING, NOT MECHANICAL DEPTH
+**The ladder is about rendering.** Scene-text abstracts the *spatial* tactical
+feel — exact positioning, cover angles, the radius dance — into scene choices,
+and that specific feel is what the visual layer restores. **Geometry is what
+scene-text defers.** Initiative, the action economy, the three-gate chain, health
+tracks, Drain, the tether and ammunition all belong at this rung, built to the
+depth `UNDERSTANDING.md` specifies.
 
-> Scene-text abstracts the **spatial** tactical feel — exact positioning, cover
-> angles, the radius dance — into scene choices; that specific feel is precisely
-> what the visual layer restores.
-
-**Geometry is the ONLY thing scene-text defers.** Initiative, action economy,
-the three-gate chain, health tracks, Drain, the tether, ammunition — all belong
-at scene-text.
-
-**Failure already committed:** reading this rung as "scene-text means one roll
-per obstacle" stalled Phase 2 for a long stretch, because quick-resolve — the
-*skip button* — was mistaken for the target and then hardened with invented
-constraints. See `UNDERSTANDING.md` §0.1.
-
-### ⚠ AND THE CONSOLE IS NOT THE PRODUCT
-
-The text shell renders **the hub console**, which is ONE PIECE of the game. We
-started with it because dispatch, roster, economy and gear must exist and be
-operable before a street or a cyberspace has anything to render.
-
-**The console is an instrument panel over the mechanics.** It is finished when
-every mechanic is reachable and every piece of state is legible — **not** when
-it looks good. It should stay ugly. Do not self-initiate polish; do not solve
-web-app problems (breakpoints, mobile overflow, viewport gutters) as though they
-were the work. See `UNDERSTANDING.md` §0.2.
-
-**Corollary for the eventual visual layer:** the console and the pillar worlds
-will both need to read the same state and issue the same operations — a street
-mission needs the crew, their loadout, the site, the intel. Build a layer that
-*describes* console state and operations, so the text renderer and the CRT
-renderer are two consumers of one model rather than two implementations. Same
-move `MJ.decide` made for prompts, one level up.
+**Quick-resolve is the skip button.** It stays available forever as the fast
+path, and it is measured against the played path rather than standing in for it.
 
 ---
 
@@ -78,21 +53,22 @@ move `MJ.decide` made for prompts, one level up.
 
 | area | approach | cost |
 |---|---|---|
-| Engine | vanilla JS + HTML + Canvas, no build step, classic `<script>` tags, global `MJ` namespace. Reassess a free lib (Phaser) only for the spatial phase. | $0 |
+| Engine | vanilla JS + HTML + Canvas, no build step, classic `<script>` tags, global `MJ` namespace. Reassess a free lib (Phaser) for the spatial phase. | $0 |
 | Hub UI | adapt the Profile project — already Arcaegium's terminal-widget visual language in working code | $0 |
 | Backend | none, ever. Client-side only; IndexedDB save storing **seeds + deltas**. | $0 |
 | Hosting | GitHub Pages under arcaegium.com | $0 |
 | Art | procedural/canvas + placeholders; CC0 packs and AI-assisted pixel art per visual phase; paid commission only if the game proves out | deferred |
-| Labor | Claude writes code; user directs, tests, makes the calls | time |
+| Labor | Claude writes code; the user directs, tests, and makes the calls | time |
 
-**Local test:** `python -m http.server 8123` from the project folder, or the
-preview server named `mrjohnson`. The Browser pane does not composite this page
-reliably — **verify by executing `javascript_tool` against the loaded page**,
-not by reading rendered output or screenshots.
+**Local test:** `python serve.py` (or the preview server named `mrjohnson`) on
+port 8123.
 
-**Script tags cache independently of the page.** A cache-busting query string on
-the page URL does NOT force sub-resource scripts to re-fetch. Use
-`location.reload()` after edits, and confirm the change took.
+**Verification method:** execute `javascript_tool` against the loaded page and
+assert on returned values. That is how this project is checked — the Browser
+pane does not composite these pages, so measurement is the reliable signal.
+
+**Script tags cache independently of the page.** Use `location.reload()` after
+edits and confirm the change took effect.
 
 ---
 
@@ -101,47 +77,52 @@ the page URL does NOT force sub-resource scripts to re-fetch. Use
 | phase | what gets built | ends when |
 |---|---|---|
 | **0** Foundation | three data models (runner, site, save), seeded RNG, day clock, save/load. A dev harness to inspect generated state. | generate runners and sites from seeds, save and reload them. **✅ DONE** |
-| **1** Management Game | hub console, job board, roster/market, hire/watch/retain, gear armory, **quick-resolve missions**, market state machine. | **GO/NO-GO GATE** — is the roster loop fun? **✅ DONE (console UI still owes debt — see §5)** |
+| **1** Management Game | hub console, job board, roster/market, hire/watch/retain, gear armory, **quick-resolve missions**, market state machine. | **GO/NO-GO GATE** — is the roster loop fun? **✅ DONE** (console work continues, §5) |
 | **2** Text Missions | all three pillars as **scene-text**. Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve, multi-front ops. Play-through vs quick-resolve becomes a real choice. | the **whole game** is playable in text — every pillar, every system. **◀ CURRENT** |
 | **3+** Visual Layer | rendering laid over the proven core, one pillar at a time (Matrix cheapest first). Then depth & content: crafting benches, tag/combo, faction-heat, job variety, balance, art. | never — the "infinite game" content, added at leisure from a position of a working, fun game |
 
-**The critical property:** after Phase 1 you have a shippable game, and every
+**The critical property:** after Phase 1 there is a shippable game, and every
 phase after is independent and optional. Stop, pause or reorder between phases
 and it stays playable.
 
 ---
 
-## 5. THE CONSOLE DEBT (Phase 1 unfinished business)
+## 5. THE CONSOLE BUILD-OUT
 
-Phase 1 nominally delivered the hub console; it delivered a **deliberately ugly
-v0** and the mechanics have since massively outgrown it. This is not Phase 3
-work and does not conflict with finishing Phase 2.
+The hub console is the instrument panel over the mechanics
+(`UNDERSTANDING.md` §0.II, §10). Phase 1 delivered a working v0; the mechanics
+have since grown well past what it surfaces, so the next pass gives every system
+a home.
 
-**It also unblocks the one Phase 2 item that is parked:** *simultaneity*
-(multi-front ops) was deferred because it "requires much more developed UI to
-properly convey the necessary and appropriate information." The console rebuild
-IS that UI.
+**It also unblocks the last Phase 2 item.** *Simultaneity* — multi-front
+operations — needs a UI that can convey several teams acting in one day against
+one site. The console build-out is that UI.
 
-### Currently built, working, and INVISIBLE OR UNREACHABLE
-This list is the actual justification for the rebuild — not aesthetics.
+### The coverage goal
+`SYSTEM-STATE.md` §4 holds the live table of what is built and where it should
+surface. In summary, the console should give a home to:
 
-- **Runners:** no full skill list (zeros hidden), no record of what they have
-  done (data does not exist), bench value vs field value invisible, health
-  tracks / initiative / weapon profile exist only inside a fight.
-- **Sites:** the host graph, room layout, obstacle inventory, loot table, and
-  the live Min/Current/Max per axis — all generated, none displayed.
-- **Recon:** produces confirmed intel that surfaces as one `~3 → 3✓`. The
-  obstacle knowledge it buys has no home. The user wants it landing **on the
-  contract**, because that is where prep decisions happen.
-- **Gear:** Power, AP, armour rating, crafted quality/mark — all real in combat,
-  none of it on a card.
-- **Everything from the combat/pillar work:** Drain, tether, extended-test
-  progress, ammunition, the Matrix data haul — visible for one frame during a
-  run, then gone.
+- **Runners:** the full skill list including zeros, career record, bench value
+  alongside field value, health tracks, initiative, weapon profile.
+- **Sites:** the host graph, room layout, obstacle inventory, loot table, and the
+  live Min/Current/Max per axis.
+- **Recon:** the obstacle knowledge it buys, surfaced **on the contract**, since
+  that is where prep decisions are made.
+- **Gear:** Power, AP, armour rating, crafted quality and mark, on a card.
+- **Run state:** Drain, tether, extended-test progress, ammunition, the data
+  haul — legible during a run and recorded after it.
 
 ### The bar
-A console that cannot show the systems cannot be used to **judge** the systems,
-which is the entire point of building this rung first.
+A console that can show the systems is one that can be used to **judge** the
+systems, which is why this rung is built first. It stays plain; the drawn CRT
+terminal in Phase 3 is a later rendering of the same model.
+
+### The model/renderer split
+The console and the pillar worlds both read the same state and issue the same
+operations — a street mission needs the crew, their loadout, the site, the intel.
+A layer that *describes* console state and operations lets the text renderer and
+the CRT renderer be two consumers of one model. Same move `MJ.decide` made for
+prompts, one level up.
 
 ---
 
@@ -151,11 +132,11 @@ which is the entire point of building this rung first.
 |----|------|--------|
 | P2.0 | Attributes into the dice pool | **DONE** |
 | P2.1 | Extended tests | **DONE** |
-| P2.2 | Turn-based mode | **DONE** (engine + wired) |
+| P2.2 | Turn-based mode | **DONE** — engine and wired |
 | P2.3 | Combat, health, Drain, death | **DONE** |
 | P2.4 | Planes and witnessing | **DONE** |
-| P2.5 | Pillar scene-text | **MOSTLY** — Matrix and astral genres built; **simultaneity remains**, gated on the console rebuild |
-| P2.6 | Retire the scaffolding | partial — `attempts: N` off violent affordances; obstacles still checks in places |
+| P2.5 | Pillar scene-text | **MOSTLY** — Matrix and astral genres built; **simultaneity remains**, following the console build-out |
+| P2.6 | Obstacles as situations | ongoing |
 
 ---
 
@@ -164,56 +145,62 @@ which is the entire point of building this rung first.
 | risk | mitigation |
 |---|---|
 | Scope — enormous design, tiny team | always-playable phasing; shippable at Phase 1 |
-| The loop might not be fun | simulation-first: find out at Phase 1, cheapest medium |
+| The loop might not be fun | simulation-first: find out at Phase 1, in the cheapest medium |
 | Solo + AI sustainability | each phase self-contained, leaves a working build |
 | Art cost/time | deferred to Phase 3+, only spent on a proven game |
-| **A placeholder gets mistaken for the design** | cost most of a session once. Re-read `UNDERSTANDING.md` before extending anything. If a constraint is not written down, do not invent one to make a scaffold behave — say the system is missing. |
-| **The console gets mistaken for the product** | cost a planning cycle. The console is an instrument over the mechanics; measure it by coverage and legibility, never by looks. |
+| Design drift between sessions | `UNDERSTANDING.md` is read at the start of every session and updated when a call changes; commit messages carry the reasoning |
 
 ---
 
-## 8. WORKING PRACTICES THAT HAVE PROVEN NECESSARY
+## 8. WORKING PRACTICES
 
-- **Measure before tuning.** Every balance number that got set by intuition was
-  wrong and every one set against a measured distribution was right. The astral
-  tether (Magic×2 → ×6) and enemy skill scaling (tier → half-tier) were both
-  caught this way.
-- **Verify every changed path, not a sample.** A missed call site broke prod
-  once.
-- **Move the suite baseline deliberately and say why.** Never let assertion
-  counts renumber silently.
-- **One definition per concept.** `dicePoolFor` exists because the popup
-  computed its own pool and silently fell an entire attribute short of what got
-  rolled. Two definitions of one thing will drift.
-- **Probes over silence.** When a bug is found, add the probe that would have
-  caught it.
-- **PS5.1 corrupts UTF-8** on `Get-Content | -replace` round-trips. Use the Edit
-  tool or Python for bulk text changes; grep for `â€` as a canary.
-- **`git commit -F <file>`**, never a here-string with quotes in it.
-- Commit messages carry the reasoning — they are the densest surviving record of
-  *why*, and they have been load-bearing for recall.
+- **Measure, then set the dial.** Sample the real distribution — how many ticks a
+  run actually consumes, how many dice a crew actually brings — and set the
+  number against it. Every balance value in the game should be traceable to a
+  measurement.
+- **Exercise every changed path.** A refactor is verified when each call site has
+  been run, not sampled.
+- **Move the suite baseline deliberately and say which assertions changed and
+  why.** The count is a signal; keep it meaningful.
+- **One definition per concept.** `dicePoolFor`, `applyCriticalGlitch`,
+  `combatLoadoutFor`, `effectiveTier` — anything the resolver, the UI and the
+  chooser all need reads from a single function, so all three agree by
+  construction.
+- **Add the probe with the fix.** Every bug found becomes an assertion.
+- **Play it, not just test it.** The suite proves the plumbing; a real
+  playthrough is what shows whether the output reads well.
+- **PS5.1 note:** use the Edit tool or Python for bulk text changes;
+  `Get-Content | -replace` round-trips corrupt UTF-8. Grep `â€` as a canary.
+- **`git commit -F <file>`** for anything with quotes in it.
+- **Commit messages carry the reasoning.** They are the densest surviving record
+  of *why* and have proven load-bearing for recall.
 
 ---
 
 ## 9. DEFERRED POLISH BACKLOG
 
-Not blockers. Flagged so they are not lost.
+Flagged so it is not lost; none of it blocks a system from being provably fun.
 
-- **Flavor text volume** — personality/aims lines are small placeholder pools.
+- **Flavor text volume** — personality and aims lines are small starter pools,
+  cheapest to expand in a dedicated content pass.
 - **Obstacle placement tuning** — room post-slot counts by size and patrol/zone
-  counts are provisional. More importantly: edges place obstacles evenly
-  regardless of distance from the objective. Revisit so transitions closer to
-  the objective roll **concentrated, layered** security — the classic image of a
-  maglock, a camera, a turret and an armoured guard all between the crew and the
-  payload — rather than one type spread thin.
-- **Immunities need a scannable in-fiction tell.** Every Watsonian immunity
-  needs an observable artifact a scout can notice in advance (a visible sensor
-  rig, telltale shielding, an aura reading unusually old). The data already
-  carries `blocked`/`reason`; the scan interaction and its UI are missing.
-- **Reputation's scaling and impact** — flat +1 per job, undefined meaning.
-- **Job/mission sequencing** — flat uniform 1–3; no player-facing concept of
-  running extra non-contracted prep missions before the closing one.
-- **Route-type missions** — reserved `locationType`, ungeneratable.
-- **Ammunition depth** — tracked in combat; no restock economy.
-- **Adept powers** — do not exist; Magic on a non-mage is inert.
+  counts are provisional. Transitions closer to the objective should be able to
+  roll **concentrated, layered** security — a maglock, a camera, a turret and an
+  armoured guard all between the crew and the payload — rather than one type
+  spread evenly along the route.
+- **Immunities want a scannable in-fiction tell.** Every Watsonian immunity
+  deserves an observable artifact a scout can notice in advance: a visible sensor
+  rig, telltale shielding, an aura reading unusually old. The data already
+  carries `blocked`/`reason`; the scan interaction and its UI complete it. Same
+  "recon is a sensor, not a dial" principle the job board already runs on.
+- **Reputation** — define what a job is worth in it and what it unlocks, once
+  there is a purchase system for it to modify.
+- **Job/mission sequencing** — a real distribution behind mission count, plus the
+  player-facing concept of running extra non-contracted prep missions before the
+  closing one. Karma to everyone involved, nuyen once.
+- **Route-type missions** — movement between two sites, the Gauntlet transit
+  case; a reserved `locationType` awaiting a route-shaped site model.
+- **Ammunition economy** — restock as a purchase and a logistics decision.
+- **Adept powers** — Killing Hands, Improved Reflexes and the rest, which give
+  Magic meaning on a non-mage.
 - **Leadership effects layer** — see `UNDERSTANDING.md` §13.6.

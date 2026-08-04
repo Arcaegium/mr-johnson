@@ -16,8 +16,8 @@ browser's local storage. Saves live on the device you played on.
 ## Design documents
 
 > **Working on this? Read `docs/UNDERSTANDING.md` first, every time.** It is
-> written for an AI assistant's recall and opens with the four mistakes that
-> have actually been made on this project. `docs/BUILD-PLAN.md` is how we build;
+> written for an AI assistant's recall and opens with the four pillars of
+> perspective that orient every decision. `docs/BUILD-PLAN.md` is how we build;
 > `docs/SYSTEM-STATE.md` is what is currently in the code.
 
 | document | in this repo | living artifact |
