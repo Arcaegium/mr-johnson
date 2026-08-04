@@ -556,7 +556,12 @@
     };
   }
 
-  function generateLayout(rng, security) {
+  // `cond` is the condition's structural nudges — how much cover the
+  // place offers, how many patrols walk it, how many ways in it has.
+  // All of them clamp, so no condition can produce a site with no
+  // route in or a negative number of anything.
+  function generateLayout(rng, security, cond) {
+    cond = cond || {};
     const roomCount = rng.int(4, 7);
     const rooms = [];
     for (let i = 0; i < roomCount; i++) {
@@ -565,7 +570,9 @@
         id: i,
         label: i === 0 ? "Objective Room" : `Room ${i}`,
         size: size,
-        coverFlags: rng.shuffle(["low", "high", "open"]).slice(0, rng.int(1, 2)),
+        // A derelict or half-built place is full of things to get
+        // behind; a posh lobby is a shooting gallery.
+        coverFlags: rng.shuffle(["low", "high", "open"]).slice(0, Math.max(1, Math.min(3, rng.int(1, 2) + (cond.cover || 0)))),
         anchors: i === 0 ? [rng.pick(ANCHOR_TYPES)] : [],
         postSlots: slots,          // physical: guard/camera/maglock posts
         astralObstacles: [],       // astral: this room's own ward or stationed spirit
@@ -593,7 +600,13 @@
     // Alternate route: a second entry point feeding directly into a
     // mid-chain room — a structurally distinct, shorter path to the
     // objective, reusing the main chain's own edges from there on.
-    if (roomCount >= 3) {
+    // A fortified site seals it; a half-built one has a third hole
+    // in the wall where the loading bay will eventually go.
+    // Generator invariant 2 (≥1 additional distinct solution chain)
+    // survives either way: the shortest path always exists, and a
+    // fortified site still has its main entry.
+    const extraEntries = Math.max(0, Math.min(2, 1 + (cond.entries || 0)));
+    if (roomCount >= 3 && extraEntries > 0) {
       const midRoom = chainOrder[Math.floor(chainOrder.length / 2)];
       entryPoints.push({
         id: 1,
@@ -601,11 +614,19 @@
         roomId: midRoom,
         physicalObstacles: [],
       });
+      if (extraEntries > 1) {
+        entryPoints.push({
+          id: 2,
+          type: rng.pick(ENTRY_TYPES),
+          roomId: chainOrder[Math.max(1, Math.floor(chainOrder.length / 4))],
+          physicalObstacles: [],
+        });
+      }
     }
 
     // Physical patrol routes: 0-2 per site (provisional default —
     // build plan backlog).
-    const patrolCount = rng.int(0, 2);
+    const patrolCount = Math.max(0, Math.min(4, rng.int(0, 2) + (cond.patrols || 0)));
     const patrols = [];
     for (let i = 0; i < patrolCount; i++) {
       const route = generatePatrolRoute(rng, roomCount, edges);
@@ -624,7 +645,7 @@
 
     // Astral spirit zones: 0-2 per site, roaming 2-3 rooms with no
     // adjacency requirement (walls don't stop them).
-    const spiritZoneCount = rng.int(0, 2);
+    const spiritZoneCount = Math.max(0, Math.min(4, rng.int(0, 2) + (cond.zones || 0)));
     const spiritZones = [];
     for (let i = 0; i < spiritZoneCount; i++) {
       spiritZones.push(generateSpiritZone(rng, roomCount));
@@ -667,23 +688,49 @@
     "squatter encampment", "forest shrine", "crash site",
   ];
 
-  function generateLootTable(rng, value, orientation) {
+  // Some conditions rule places in and out. A gutted building can be
+  // a tenement or a parking structure; it is not an arcology floor.
+  // A half-built one is a shell of whatever it will become.
+  const CONDITION_THEMES = {
+    decayed: [
+      "tenement block", "warehouse complex", "parking structure", "street clinic",
+      "shipping depot", "nightclub", "temple",
+    ],
+    raw: [
+      "arcology floor", "corporate tower", "tenement block", "warehouse complex",
+      "parking structure", "datacenter",
+    ],
+  };
+
+  function themePoolFor(isWild, cond) {
+    // The wilds have their own vocabulary and ignore condition
+    // steering — a flooded cavern system is still a cavern system.
+    if (isWild) return WILD_THEMES;
+    const steer = cond && cond.themes;
+    return (steer && CONDITION_THEMES[steer]) || URBAN_THEMES;
+  }
+
+  function generateLootTable(rng, value, orientation, cond) {
     // The probability chart of what can be found here: harvest draws
     // from it (and future loot systems will too). Orientation leans
     // the weights, value scales the amounts and the odds of an
-    // actual item turning up.
+    // actual item turning up, and the site's condition decides
+    // whether there is anything left worth taking — a gutted place
+    // has been picked over, a posh one has not.
+    cond = cond || {};
     const weights = {
       "resource:scrap": orientation === "physical" ? 5 : orientation === "balanced" ? 3 : 2,
       "resource:reagents": orientation === "astral" ? 5 : orientation === "balanced" ? 3 : 1,
       "resource:data": orientation === "matrix" ? 5 : orientation === "balanced" ? 3 : 1,
     };
+    const loot = cond.loot || 0;
     return {
       entries: Object.keys(weights).map((kind) => ({
         kind: kind,
         weight: weights[kind],
-        amountMax: 1 + Math.ceil(value / 3) + rng.int(0, 1),
+        amountMax: Math.max(1, 1 + Math.ceil(value / 3) + rng.int(0, 1) + loot),
       })),
-      itemDropChance: Math.min(0.35, 0.05 + value * 0.02),
+      itemDropChance: Math.max(0.02, Math.min(0.5, 0.05 + value * 0.02 + loot * 0.1)),
     };
   }
 
@@ -694,14 +741,18 @@
 
     const value = options.value || rollValue(r);
     const orientation = options.orientation || rollOrientation(r);
-    const security = deriveSecurity(r, value, orientation);
-    const layout = generateLayout(r, security);
+    // Condition shifts the budget BEFORE it is spent, so it changes
+    // what the site can afford to post rather than being repainted
+    // over a fixed roster of guards.
+    const condition = options.condition || r.pick(CONDITION_IDS);
+    const security = applyCondition(deriveSecurity(r, value, orientation), condition);
+    const layout = generateLayout(r, security, CONDITIONS[condition]);
     const host = generateHost(r, security);
     const population = generatePopulation(r, security);
     const district = options.district || r.pick(DISTRICTS);
     const isWild = WILD_DISTRICTS.indexOf(district) !== -1;
-    const theme = r.pick(isWild ? WILD_THEMES : URBAN_THEMES);
-    const lootTable = generateLootTable(r, value, orientation);
+    const theme = r.pick(themePoolFor(isWild, CONDITIONS[condition]));
+    const lootTable = generateLootTable(r, value, orientation, CONDITIONS[condition]);
 
     return {
       identity: {
@@ -709,6 +760,10 @@
         owningFaction: options.faction || r.pick(FACTIONS),
         value: value,             // 1-10 — what the job board matches a job slot's tier against
         orientation: orientation, // "physical" | "astral" | "matrix" | "balanced"
+        // What state the place is IN — the first word of its name.
+        // Same district, same owner, same value, different night.
+        condition: condition,
+        conditionLabel: CONDITIONS[condition].label,
         theme: theme,             // what the place LOOKS like — canonical per name
       },
       security: security,
@@ -799,19 +854,56 @@
   // Veterans can learn to read addresses — that's street knowledge,
   // and everything a name carries is information the UI already
   // shows on known sites.
-  const NAME_ADVERBS = [
-    "Absurdly", "Almost", "Awfully", "Badly", "Barely", "Blindly",
-    "Boldly", "Briskly", "Broadly", "Calmly", "Carefully", "Cheaply",
-    "Cleanly", "Clearly", "Coldly", "Crudely", "Curiously", "Daily",
-    "Darkly", "Dearly", "Deeply", "Dimly", "Doubly", "Dryly",
-    "Eagerly", "Early", "Easily", "Evenly", "Exactly", "Faintly",
-    "Fairly", "Fiercely", "Finally", "Firmly", "Fondly", "Freely",
-    "Freshly", "Gently", "Gladly", "Grandly", "Gravely", "Greatly",
-    "Grimly", "Half", "Hardly", "Hastily", "Highly", "Honestly",
-    "Hourly", "Idly", "Justly", "Keenly", "Kindly", "Lately",
-    "Lightly", "Loosely", "Loudly", "Madly", "Mildly", "Mostly",
-    "Nearly", "Neatly", "Newly", "Nicely",
-  ];
+  // ── Condition: the first word, and the one that changes the most ─
+  // The same building in a different state. "Downtown / Ares" is a
+  // place; "Derelict / Downtown / Ares" and "Posh / Downtown / Ares"
+  // are two very different nights out. Change one word in an address
+  // and you get the same district, the same owner, the same value —
+  // wearing a different life.
+  //
+  // Eight conditions, eight words each, so the name space is exactly
+  // what it was when this slot was a meaningless uniquifier. The
+  // words within a condition are flavour: a Crumbling site and a
+  // Gutted one are the same mechanical condition, described
+  // differently.
+  const CONDITION_WORDS = {
+    derelict:  ["Derelict", "Crumbling", "Gutted", "Abandoned", "Rotting", "Sagging", "Forsaken", "Hollowed"],
+    posh:      ["Posh", "Plush", "Opulent", "Lavish", "Pristine", "Immaculate", "Refined", "Stately"],
+    fortified: ["Fortified", "Hardened", "Bunkered", "Armored", "Reinforced", "Bastioned", "Walled", "Garrisoned"],
+    haunted:   ["Haunted", "Cursed", "Restless", "Shrouded", "Whispering", "Veiled", "Blighted", "Keening"],
+    wired:     ["Wired", "Networked", "Automated", "Humming", "Meshed", "Instrumented", "Sensored", "Gridlit"],
+    bustling:  ["Bustling", "Crowded", "Teeming", "Thronged", "Packed", "Swarming", "Lively", "Heaving"],
+    flooded:   ["Flooded", "Drowned", "Waterlogged", "Sunken", "Silted", "Brackish", "Seeping", "Tidal"],
+    raw:       ["Raw", "Unfinished", "Scaffolded", "Skeletal", "Framed", "Bare", "Halfbuilt", "Rough"],
+  };
+
+  // What each condition DOES. `security` shifts the triple before
+  // anything is bought with it, so the condition changes how much
+  // opposition the site can afford rather than being repainted on
+  // top of a fixed budget. Value is untouched: a derelict tier-9
+  // target is still a tier-9 payday, defended like less — and the
+  // player can read that off the first word of the address, so it
+  // is intel rather than a trap.
+  const CONDITIONS = {
+    derelict:  { label: "derelict",  security: { physical: -3, astral: 1, matrix: -2 }, cover: 1, patrols: -1, zones: 1, loot: -1, themes: "decayed" },
+    posh:      { label: "posh",      security: { physical: 1, astral: 0, matrix: 2 },  cover: -1, loot: 1 },
+    // Fortified hardens the ways in; it does not brick them up.
+    // Removing an entry point costs the site its second distinct
+    // route to the objective (generator invariant 2), which is the
+    // player's whole ability to plan an approach. The physical
+    // bump and the extra patrol are what "hardened" means here.
+    fortified: { label: "fortified", security: { physical: 3, astral: 0, matrix: 1 },  patrols: 1 },
+    haunted:   { label: "haunted",   security: { physical: -1, astral: 3, matrix: -1 }, zones: 1, themes: "decayed" },
+    // No hostNodes dial: node count already tracks matrix security,
+    // so the +3 grows the crawl on its own. A second knob pointed at
+    // the same number would be a dial that looks like it does
+    // something and does it twice.
+    wired:     { label: "wired",     security: { physical: 0, astral: -1, matrix: 3 } },
+    bustling:  { label: "bustling",  security: { physical: 1, astral: 0, matrix: 0 },  cover: 1, patrols: 1 },
+    flooded:   { label: "flooded",   security: { physical: -2, astral: -1, matrix: -2 }, cover: 1, themes: "decayed" },
+    raw:       { label: "raw",       security: { physical: -1, astral: 0, matrix: -2 }, entries: 1, cover: 1, themes: "raw" },
+  };
+
   // Each district owns its adjectives outright. Adding a word to a
   // district widens that district's names and nothing else.
   const DISTRICT_ADJECTIVES = {
@@ -891,16 +983,18 @@
     return out;
   }
 
+  const CONDITION_OF = indexWords(CONDITION_WORDS, "condition");
   const DISTRICT_OF = indexWords(DISTRICT_ADJECTIVES, "district");
   const OWNER_OF = indexWords(OWNER_COLORS, "owner");
   const ORIENTATION_OF = indexWords(ORIENTATION_NOUNS, "orientation");
+  const CONDITION_IDS = Object.keys(CONDITION_WORDS);
 
-  // Write the name that means these qualities: a word from the
-  // district's list, a word from the owner's, and the one noun that
-  // means this orientation at this value.
-  // Adverb-Adjective-Color-Noun-NNNN — the colour sits last among
-  // the adjectives, the way English stacks them: a Boldly-Bitter-
-  // Coral-Anthem, never a Boldly-Coral-Bitter one.
+  // Write the name that means these qualities: a word for the
+  // condition, one from the district's list, one from the owner's,
+  // and the one noun that means this orientation at this value.
+  // Condition-Adjective-Color-Noun-NNNN — the colour sits last among
+  // the adjectives, the way English stacks them: a Derelict-Bitter-
+  // Coral-Anthem, never a Derelict-Coral-Bitter one.
   function encodeSiteName(qualities, rng) {
     const adjectives = DISTRICT_ADJECTIVES[qualities.district];
     const colors = OWNER_COLORS[qualities.owner];
@@ -908,8 +1002,13 @@
     if (!adjectives || !colors || !nouns) return null;
     const noun = nouns[qualities.value - 1];
     if (!noun) return null;
+    // Condition is a quality like any other; callers that do not
+    // care get one dealt from their own stream.
+    const conditionId = qualities.condition || rng.pick(CONDITION_IDS);
+    const conditionWords = CONDITION_WORDS[conditionId];
+    if (!conditionWords) return null;
     return [
-      rng.pick(NAME_ADVERBS),
+      rng.pick(conditionWords),
       rng.pick(adjectives),
       rng.pick(colors),
       noun,
@@ -925,17 +1024,32 @@
   function decodeSiteName(name) {
     const parts = String(name).split("-");
     if (parts.length !== 5 || !/^\d{4}$/.test(parts[4])) return null;
-    if (NAME_ADVERBS.indexOf(parts[0]) === -1) return null;
+    const condition = CONDITION_OF[parts[0]];
     const district = DISTRICT_OF[parts[1]];
     const owner = OWNER_OF[parts[2]];
     const noun = ORIENTATION_OF[parts[3]];
-    if (!district || !owner || !noun) return null;
+    if (!condition || !district || !owner || !noun) return null;
     return {
+      condition: condition.key,
       district: district.key,
       owner: owner.key,
       orientation: noun.key,
       value: noun.position + 1,
     };
+  }
+
+  // The condition's shift to the security triple, applied BEFORE
+  // anything is bought with it — so a derelict site genuinely cannot
+  // afford the guards a fortified one posts, rather than having them
+  // painted over afterwards.
+  function applyCondition(security, conditionId) {
+    const cond = CONDITIONS[conditionId];
+    if (!cond) return security;
+    const out = {};
+    for (const axis of ["physical", "astral", "matrix"]) {
+      out[axis] = Math.max(1, Math.min(10, security[axis] + (cond.security[axis] || 0)));
+    }
+    return out;
   }
 
   // Mint the universe's site #index. Layout, population, and
@@ -957,6 +1071,7 @@
       faction: q.owner,
       value: q.value,
       orientation: q.orientation,
+      condition: q.condition,
     });
     site.identity.name = name;
     // Resting security posture rides the name too — the same
@@ -1090,6 +1205,9 @@
   MJ.deriveSecurity = deriveSecurity;
   MJ.generateSite = generateSite;
   MJ.siteIdentityFromIndex = siteIdentityFromIndex;
+  MJ.CONDITIONS = CONDITIONS;
+  MJ.CONDITION_IDS = CONDITION_IDS;
+  MJ.CONDITION_WORDS = CONDITION_WORDS;
   MJ.encodeSiteName = encodeSiteName;
   MJ.decodeSiteName = decodeSiteName;
   MJ.mintSite = mintSite;

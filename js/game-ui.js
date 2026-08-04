@@ -34,9 +34,12 @@
   }
 
   // ── The dispatch builder: Location -> Action (user spec) ────────
+  // Condition first, the way the address reads it — it is the single
+  // biggest predictor of what the crew walks into, so it leads.
   function siteTag(site) {
     const idx = site.identity.universeIndex !== undefined ? `#${site.identity.universeIndex} ` : "";
-    return `${idx}${site.identity.district} (${site.identity.owningFaction})`;
+    const cond = site.identity.conditionLabel ? `${site.identity.conditionLabel} ` : "";
+    return `${idx}${cond}${site.identity.district} (${site.identity.owningFaction})`;
   }
 
   // The full leg line, board and contracts alike (user ruling: the

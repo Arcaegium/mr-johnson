@@ -629,18 +629,27 @@ Moving toward **tabs holding several widgets each**, adding a level: tab → wid
 **Save stores seeds + deltas, never generated content.**
 
 ### 11.2 Site names ARE the seed
-Format: `Adverb-Adjective-Color-Noun-####` — the colour sits last among the
-adjectives, the way English stacks them: `Cheaply-Crooked-Emerald-Saddle-5299`.
+Format: `Condition-Adjective-Color-Noun-####` — the colour sits last among the
+adjectives, the way English stacks them: `Derelict-Crooked-Emerald-Saddle-5299`.
 
 **Each quality owns its own words.** There is no arithmetic anywhere in this —
 the tables ARE the mapping, both directions:
 
 | slot | table | what it says |
 |---|---|---|
+| Condition | `CONDITION_WORDS` | 8 conditions, 8 flavour words each |
 | Adjective | `DISTRICT_ADJECTIVES` | one list per district (9) |
 | Color | `OWNER_COLORS` | two colours per owner (8) |
 | Noun | `ORIENTATION_NOUNS` | *which* list = orientation; *where in it* = value 1–10 |
-| Adverb + 4 digits | `NAME_ADVERBS` | the uniquifier, meaning nothing |
+| 4 digits | — | no declared quality, but **every digit changes the building** |
+
+**The digits are not decoration.** They carry no *declared* quality, but the
+whole name string is the generation seed, so changing them changes theme, room
+count, edges, patrol routes, spirit zones and host size — and on a *balanced*
+site, the security triple too (value ±2 per axis). Measured over 300 digit
+variations of one address: 12 themes, 141 distinct layout shapes, 116 distinct
+security triples. On a *leaned* site the triple is fixed by value+orientation,
+so only shape and theme move.
 
 Writing a name is picking from the district's list, the owner's list, and the
 one noun that means this orientation at this value. Reading one back is the same
@@ -666,6 +675,40 @@ astral site of value 4, always and everywhere.
   different patrols.
 - The name is hashed to seed the site, so the word order is part of the seed — a
   name is a key to one building under one grammar.
+
+### 11.2b Condition — the first word, and the one that changes most
+Eight conditions, eight flavour words each (64 words, the same slot width the
+uniquifier used to have). The condition is a **quality like any other**: it is in
+the name, it round-trips, and it drives generation.
+
+`derelict` `posh` `fortified` `haunted` `wired` `bustling` `flooded` `raw`
+
+It shifts the security triple **before anything is bought with it**, so it
+changes what the site can afford to post rather than being repainted over a fixed
+roster of guards. It also nudges cover, patrol count, spirit zones, entry points,
+loot and the theme pool.
+
+**Value is untouched.** A derelict tier-9 target is still a tier-9 payday,
+defended like less — and the player reads that off the first word of the address,
+so it is intel rather than a trap.
+
+Same address, one word changed (Renton / Ares / matrix-leaning, value 10):
+
+| condition | security | obstacles | ways in |
+|---|---|---|---|
+| `Derelict` | P1 A5 M8 | 9 | 2 |
+| `Fortified` | P7 A4 M10 | 29 | 2 |
+| `Raw` | P3 A4 M8 | 15 | 3 |
+
+**Two rules a condition may never break**, both held by probes: security clamps
+to 1–10, and no condition may leave a site with fewer than two distinct routes to
+the objective. An early `fortified` that removed an entry point broke the second
+in 400/400 sites — a fortified building is one where every door is hard, not one
+with fewer doors.
+
+**No dead dials.** A probe fails the suite if a condition declares a key the
+generator never reads, so a player can never find a number that turns out not to
+matter.
 
 ### 11.3 The threat read & live security
 **Three layers:**

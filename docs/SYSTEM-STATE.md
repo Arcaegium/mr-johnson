@@ -7,7 +7,7 @@ right now**, what is a placeholder, and what is built-but-unreachable.
 Update this whenever a system lands. If it disagrees with the code, the code
 wins and this file is stale — verify before trusting a line here.
 
-Last verified at commit `e7c8fc9` + the name-table and modifier-layer pass.
+Last verified at commit `4946fb9` + the site-condition pass.
 
 ---
 
@@ -39,6 +39,10 @@ js/models/site.js    1030  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
                            generateHost NODE_TYPES planeOfAffordance SKILL_PLANE
                            deriveSecurity generateSite mintSite mintSiteByName
                            encodeSiteName decodeSiteName siteIdentityFromIndex
+                           CONDITIONS CONDITION_IDS CONDITION_WORDS
+                           -- condition is the name's FIRST word and a real
+                              quality: shifts the security triple before it is
+                              spent, plus cover/patrols/zones/entries/loot/theme
                            allObstacles findPaths usableNonLoudWays
 js/models/alert.js    274  THE THREAT READ. initSecurityState threatBand witnessAct
                            grantHeadroom engageAlert alertLevel alertEngaged
@@ -95,7 +99,7 @@ js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
                            MJ.missionPopup (drives the mission stepper through it)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)
-js/stress.js          ~1.5k 13 probe classes. ~82.6k assertions, 0 failures.
+js/stress.js          ~1.6k 14 probe classes. ~86k assertions, 0 failures.
                            Deterministic by construction: no live entropy, so a
                            failure always reproduces.
 ```

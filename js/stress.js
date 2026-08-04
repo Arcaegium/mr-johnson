@@ -868,28 +868,50 @@
     // the slot order load-bearing rather than cosmetic. A name built
     // with the colour in the adjective slot must decode differently.
     const rngSlot = MJ.makeRNG("stress-name-slots");
-    let slotChecked = 0;
     for (let i = 0; i < 60; i++) {
       const want = {
         district: rngSlot.pick(MJ.SITE_DISTRICTS), owner: rngSlot.pick(MJ.OWNERS),
         value: rngSlot.int(1, 10), orientation: rngSlot.pick(["physical", "astral", "matrix"]),
       };
       const built = MJ.encodeSiteName(want, rngSlot.fork("s" + i)).split("-");
-      const swapped = [built[0], built[2], built[1], built[3], built[4]].join("-");
       const straight = MJ.decodeSiteName(built.join("-"));
       check(straight && straight.district === want.district && straight.owner === want.owner,
         "C8: the adjective slot must read district and the colour slot owner");
-      const other = MJ.decodeSiteName(swapped);
       // Swapping the two slots either reads as a different site or
       // falls out of the grammar; what it must never do is decode to
       // the same qualities, which would mean the order carried none.
-      if (other) {
-        slotChecked += 1;
-        check(other.district !== want.district || other.owner !== want.owner || built[1] === built[2],
+      const other = MJ.decodeSiteName([built[0], built[2], built[1], built[3], built[4]].join("-"));
+      if (other && built[1] !== built[2]) {
+        check(other.district !== want.district || other.owner !== want.owner,
           "C8: swapping adjective and colour must change what the name means");
       }
     }
-    check(slotChecked > 0, "C8: slot-order probe never produced a decodable swap");
+    // The ambiguous case, CONSTRUCTED rather than waited for: words in
+    // both pools are the only way a swap stays legal, so build one
+    // deliberately instead of hoping a random draw lands on it.
+    // Hoping was the old probe's mistake — it asserted a 1.5% event
+    // would show up in 60 tries, which tests the sample, not the code.
+    const cond = MJ.CONDITION_WORDS[MJ.CONDITION_IDS[0]][0];
+    const AMBIGUOUS = [
+      // adjective slot / colour slot — each word legal in both tables
+      { name: cond + "-Amber-Crimson-Anchor-0001", straight: { district: "Downtown", owner: "Ork Underground" },
+        swapped: { district: "Tacoma", owner: "Ares" } },
+      { name: cond + "-Ivory-Scarlet-Anchor-0002", straight: { district: "Bellevue", owner: "Ork Underground" },
+        swapped: { district: "Puyallup", owner: "Unowned" } },
+    ];
+    for (const probe of AMBIGUOUS) {
+      const p = probe.name.split("-");
+      const straight = MJ.decodeSiteName(probe.name);
+      const swapped = MJ.decodeSiteName([p[0], p[2], p[1], p[3], p[4]].join("-"));
+      check(!!straight && !!swapped, "C8: both orderings of an ambiguous name must be legal names");
+      if (!straight || !swapped) continue;
+      check(straight.district === probe.straight.district && straight.owner === probe.straight.owner,
+        "C8: " + probe.name + " must read " + probe.straight.district + "/" + probe.straight.owner);
+      check(swapped.district === probe.swapped.district && swapped.owner === probe.swapped.owner,
+        "C8: swapping it must read " + probe.swapped.district + "/" + probe.swapped.owner);
+      check(straight.district !== swapped.district || straight.owner !== swapped.owner,
+        "C8: the two orderings must name different places");
+    }
     // Every quality in the space must be writable AND readable. The
     // tables are the whole mechanism now, so a missing district list
     // or a value with no noun is a hole in the address space rather
@@ -1437,6 +1459,93 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 14: site condition — the first word of the address ────
+  // The condition is the one quality a player can flip by hand to see
+  // the same place in a different life, so it has to be REAL: every
+  // dial declared on a condition must be read by the generator, and
+  // flipping the word must move the site without ever producing one
+  // that cannot be run.
+  function class14_conditions() {
+    const rng = MJ.makeRNG("stress-conditions");
+
+    // No dead dials. A key on a condition that nothing reads is a
+    // number a player could discover does not matter.
+    const READ_DIALS = ["label", "security", "cover", "patrols", "zones", "entries", "loot", "themes"];
+    for (const id of MJ.CONDITION_IDS) {
+      const cond = MJ.CONDITIONS[id];
+      check(!!cond, "C14: condition " + id + " must have a definition");
+      check(!!cond.label, "C14: condition " + id + " needs a label");
+      for (const key of Object.keys(cond)) {
+        check(READ_DIALS.indexOf(key) !== -1,
+          "C14: condition " + id + " declares \"" + key + "\", which the generator never reads");
+      }
+      // Every condition must actually DO something beyond its name.
+      const moves = Object.keys(cond).filter((k) => k !== "label" && k !== "themes");
+      check(moves.length > 0, "C14: condition " + id + " changes nothing");
+    }
+
+    // Words: eight conditions, and every word unique within the table
+    // (indexWords would have thrown at load, so this pins the count).
+    const allWords = [];
+    for (const id of MJ.CONDITION_IDS) allWords.push(...MJ.CONDITION_WORDS[id]);
+    check(new Set(allWords).size === allWords.length, "C14: a condition word appears twice");
+    check(allWords.length === 64, "C14: the condition slot should carry 64 words (have " + allWords.length + ")");
+
+    // The name's condition is the site's condition — the whole point.
+    // Flip only the first word and everything else must hold.
+    const tail = "-Humble-Scarlet-Mountain-4192";
+    const seen = {};
+    for (const id of MJ.CONDITION_IDS) {
+      for (const word of MJ.CONDITION_WORDS[id]) {
+        const site = MJ.mintSiteByName(word + tail);
+        check(!!site, "C14: " + word + tail + " must mint");
+        if (!site) continue;
+        check(site.identity.condition === id,
+          "C14: " + word + " must produce the " + id + " condition (got " + site.identity.condition + ")");
+        const q = MJ.decodeSiteName(word + tail);
+        check(q.condition === site.identity.condition, "C14: the name's condition must be the site's condition");
+        // Everything the other slots encode is untouched by the flip.
+        check(site.identity.district === "Downtown" && site.identity.owningFaction === "Ork Underground" &&
+          site.identity.value === 9 && site.identity.orientation === "balanced",
+          "C14: flipping the condition must not move the other qualities");
+      }
+      seen[id] = true;
+    }
+    check(Object.keys(seen).length === 8, "C14: all eight conditions must be reachable");
+
+    // A condition may never strand a site: security stays in range,
+    // and there is always more than one way to the objective.
+    let single = 0, outOfRange = 0, checked = 0;
+    for (const id of MJ.CONDITION_IDS) {
+      for (let i = 0; i < 120; i++) {
+        const q = {
+          condition: id,
+          district: rng.pick(MJ.SITE_DISTRICTS), owner: rng.pick(MJ.OWNERS),
+          value: rng.int(1, 10), orientation: rng.pick(["physical", "astral", "matrix", "balanced"]),
+        };
+        const name = MJ.encodeSiteName(q, rng.fork("c" + id + i));
+        const site = MJ.mintSiteByName(name);
+        checked += 1;
+        if (MJ.findPaths(site).length < 2) single += 1;
+        for (const axis of ["physical", "astral", "matrix"]) {
+          if (site.security[axis] < 1 || site.security[axis] > 10) outOfRange += 1;
+        }
+      }
+    }
+    check(single === 0, "C14: no condition may leave a site with one route in (" + single + "/" + checked + ")");
+    check(outOfRange === 0, "C14: condition shifts must clamp security to 1-10 (" + outOfRange + " out of range)");
+
+    // And it must MOVE things: the softest and hardest conditions on
+    // the same address should differ in what the crew walks into.
+    const derelict = MJ.mintSiteByName("Derelict" + tail);
+    const fortified = MJ.mintSiteByName("Fortified" + tail);
+    check(MJ.allObstacles(derelict).length < MJ.allObstacles(fortified).length,
+      "C14: a derelict site must field less than a fortified one (" +
+      MJ.allObstacles(derelict).length + " vs " + MJ.allObstacles(fortified).length + ")");
+    check(derelict.security.physical < fortified.security.physical,
+      "C14: derelict must be physically softer than fortified");
+  }
+
   // ── Class 13: the combat modifier layer ─────────────────────────
   // Every number a fight produces is a base plus a sum over active
   // effects. The rules that make that safe — postures replace, stacks
@@ -1576,6 +1685,7 @@
       ["11. Armory (second roster: issue, chrome, craft, ledger)", class11_armory],
       ["12. Injury carries, exhaustion does not", class12_injury],
       ["13. The combat modifier layer", class13_effects],
+      ["14. Site condition — the first word of the address", class14_conditions],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
