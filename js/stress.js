@@ -230,6 +230,61 @@
       }
     }
     check(promptsChecked > 50, "C2: prompt-pool probe must actually exercise prompts");
+
+    // ── Witnessing is per-PLANE ─────────────────────────────────
+    // A decker working a host from a terminal out of a guard's sight
+    // is invisible to that guard, and the camera he kills does not
+    // phone anyone. Doing the same job by hand, in the room, is a
+    // physical act with a witness. Same obstacle, same outcome,
+    // different world — this is the rule that makes the three
+    // pillars genuinely separate rather than reskins.
+    const planeRunner = () => {
+      const r = MJ.mintRunner("stress-plane", 1);
+      r.market.hired = { tier: "permanent", missionsRemaining: 99, blockSize: 99 };
+      r.skills = { hacking: 14, stealth: 14, electronics: 14 };
+      return r;
+    };
+    const planeStage = (label) => {
+      const site = MJ.mintSite("stress-plane-u", 2);
+      MJ.initSecurityState(MJ.makeRNG("sp" + label), site);
+      const run = MJ.beginMission(MJ.makeRNG("spr" + label),
+        { site: site, kind: "jobObjective", objective: {} }, [planeRunner()], 1);
+      const cam = MJ.generateObstacleInstance(MJ.makeRNG("spc"), "camera", 1);
+      const grd = MJ.generateObstacleInstance(MJ.makeRNG("spg"), "guard", 1);
+      cam.rooms = [7]; grd.rooms = [7];
+      run.obstacles = [cam, grd];
+      run.index = 0;
+      return run;
+    };
+    const planeTake = (run, re) => {
+      const p = MJ.missionPrompt(run);
+      const o = p.options.find((x) => re.test(x.verb));
+      if (!o) return null;
+      MJ.missionChoose(run, { skill: o.skill, runner: o.runner, approach: o.approach });
+      return run.tasks[run.tasks.length - 1];
+    };
+
+    const viaMatrix = planeStage("m");
+    const hackTask = planeTake(viaMatrix, /kill it remotely/);
+    check(hackTask && hackTask.success && !hackTask.read,
+      "C2: a Matrix act must not be witnessed by a guard who only senses meatspace");
+    const takedownTask = planeTake(viaMatrix, /silent takedown/);
+    check(takedownTask && takedownTask.success && !takedownTask.read,
+      "C2: a dead camera must not report itself — no witness left, nothing registers");
+    check(MJ.threatBand(viaMatrix.state, 1) === "normal",
+      "C2: the whole Matrix-then-takedown route must leave the site reading normal");
+
+    const byHand = planeStage("h");
+    const loopTask = planeTake(byHand, /loop the feed/);
+    check(loopTask && loopTask.read,
+      "C2: doing the same job BY HAND in front of a guard must register");
+
+    const spiritInst = MJ.generateObstacleInstance(MJ.makeRNG("spdual"), "spirit", 1);
+    check(spiritInst.dualNatured && spiritInst.senses.indexOf("astral") !== -1 &&
+      spiritInst.senses.indexOf("physical") !== -1,
+      "C2: a materialised spirit must be dual-natured — astral AND physical");
+    const maglockInst = MJ.generateObstacleInstance(MJ.makeRNG("spml"), "maglock", 1);
+    check(maglockInst.senses.length === 0, "C2: a maglock senses nothing on any plane");
     check(MJ.resolveTask(rngB, rb, obU, untrained, { bonusDice: 2 }).poolSize === 0, "C2: bonus dice must never rescue untrained");
 
     // Job pay formula + chain wiring, in bulk.

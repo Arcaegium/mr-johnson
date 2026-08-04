@@ -129,11 +129,38 @@
   // turns a curiosity into someone with a purpose.
   const THREAT = { NORMAL: "normal", AWKWARD: "awkward", QUESTIONABLE: "questionable", THREATENING: "threatening" };
 
+  // ── Which world an act happens in ──────────────────────────────
+  // An act is only witnessed by things that perceive on ITS plane.
+  // A decker jacked into a terminal out of a guard's line of sight
+  // kills the camera and the guard does not know — the work happened
+  // in the Matrix, and a dead camera does not phone anyone. He can
+  // then walk up and put the guard down, and still nothing has been
+  // witnessed, because nothing was there to witness it.
+  //
+  // The plane follows the SKILL by default, because the skill is
+  // what says where the runner's attention actually is. The
+  // exception that matters: doing the same job with your hands is a
+  // physical act even when the target is a machine — "loop the feed"
+  // is someone at the camera with a splice, "kill it remotely" is
+  // someone in the host. Same obstacle, same result, different
+  // witnesses. An affordance can override with `plane`.
+  const SKILL_PLANE = {
+    hacking: "matrix",
+    sorcery: "astral", conjuring: "astral", assensing: "astral", enchanting: "astral",
+  };
+
+  function planeOfAffordance(affordance) {
+    if (!affordance) return "physical";
+    if (affordance.plane) return affordance.plane;
+    return SKILL_PLANE[affordance.skill] || "physical";
+  }
+
   const OBSTACLE_TEMPLATES = {
     // Meatspace idiom
     maglock: {
       label: "Maglock door",
-      perceives: false, // a lock forms no opinions
+      // A lock forms no opinions, on any plane.
+      senses: [],
       affordances: [
         { skill: "electronics", verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
         { skill: "larceny",     verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
@@ -144,7 +171,10 @@
     },
     guard: {
       label: "Guard",
-      perceives: true,
+      // Eyes, in meatspace only. A guard cannot see a decker working
+      // in the Matrix or a mage moving on the astral — that is the
+      // whole point of those being separate worlds.
+      senses: ["physical"],
       // Shoots back. A camera does not, a maglock cannot — only
       // things that can fight turn a violent approach into an
       // actual exchange rather than target practice.
@@ -168,7 +198,10 @@
     },
     camera: {
       label: "Camera",
-      perceives: true,
+      // Watches the room. It does not watch the host it lives on —
+      // a camera has no idea it is being hacked, and it certainly
+      // does not announce having been switched off.
+      senses: ["physical"],
       affordances: [
         // A looped feed is a blind camera — it is still bolted to the
         // wall, but it cannot witness anything after this.
@@ -188,7 +221,7 @@
       // still escalates what the act LOOKS like — but only if
       // something with eyes (a spirit, a guard, a camera) is there to
       // see you doing it.
-      perceives: false,
+      senses: [],
       affordances: [
         { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL, attempts: 1 },
         // The ward keeps you out on its own — that safeguard is why
@@ -200,7 +233,11 @@
     },
     spirit: {
       label: "Spirit",
-      perceives: true,
+      // DUAL-NATURED: a materialised spirit perceives the astral and
+      // the physical at once, which is exactly what makes it the
+      // hardest thing on a site to work around.
+      senses: ["astral", "physical"],
+      dualNatured: true,
       fights: true,
       armour: 4, weapon: "unarmed",
       affordances: [
@@ -280,16 +317,21 @@
       }
     }
 
-    // `perceives` rides the instance: a guard, camera, ward, or
-    // spirit can form an opinion about what you just tried; a
-    // maglock cannot, and neither can an air-gapped box.
+    // `senses` rides the instance: WHICH WORLDS this thing can
+    // witness an act in. A guard has eyes in meatspace only; a
+    // materialised spirit is dual-natured and sees both the astral
+    // and the physical; a maglock sees nothing anywhere. `perceives`
+    // stays as a convenience for "can it witness anything at all".
     // `fights` and its loadout ride along too: a guard shoots back,
     // a maglock does not, and that is the difference between a fight
     // and target practice. Armour and attributes scale with tier —
     // a T9 guard is corp security in a hardsuit, a T1 is a rent-a-cop.
     return {
       type: typeId, label: template.label, tier, projection,
-      perceives: !!template.perceives, fights: !!template.fights,
+      senses: (template.senses || []).slice(),
+      perceives: (template.senses || []).length > 0,
+      dualNatured: !!template.dualNatured,
+      fights: !!template.fights,
       armour: template.fights ? (template.armour || 0) + Math.floor(tier / 2) : 0,
       weapon: template.weapon || "unarmed",
       affordances,
@@ -827,7 +869,9 @@
   MJ.OWNERS = OWNERS;
   MJ.ORIENTATIONS = ORIENTATIONS;
   MJ.OBSTACLE_TEMPLATES = OBSTACLE_TEMPLATES;
-  MJ.generateObstacleInstance = generateObstacleInstance; // mission.js spawns responders with this
+  MJ.generateObstacleInstance = generateObstacleInstance;
+  MJ.planeOfAffordance = planeOfAffordance;
+  MJ.SKILL_PLANE = SKILL_PLANE; // mission.js spawns responders with this
   MJ.PHYSICAL_OBSTACLE_TYPES = PHYSICAL_OBSTACLE_TYPES;
   MJ.ASTRAL_ROOM_TYPES = ASTRAL_ROOM_TYPES;
   MJ.rollValue = rollValue;

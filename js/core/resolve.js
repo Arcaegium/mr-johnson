@@ -112,6 +112,49 @@
     };
   }
 
+  // ── Force and Drain: the mage's own gamble ─────────────────────
+  // Every other approach in the game asks "can you do this?" Magic
+  // asks "how hard do you want to push?" — and answers with a bill.
+  // Force is chosen per casting: it raises the effect AND the Drain
+  // that comes back at you, resisted with Willpower. That is the
+  // whole decision, and it is the reason Willpower carries no skills
+  // and still earns a place on the sheet.
+  //
+  // Drain lands on the STUN track, so a mage who overreaches drops
+  // themselves — the same track combat fills, which is what makes
+  // "cast big early" a real risk rather than a free opener.
+  //
+  // Overcasting — Force above the caster's Magic — is where Drain
+  // turns PHYSICAL. That is the line between tired and injured, and
+  // it is deliberately available: a desperate mage can reach past
+  // what they safely hold, and pay for it in a way rest will not fix.
+  function drainValueFor(force, overcast) {
+    // Half Force, floor 2, and overcasting hurts more.
+    return Math.max(2, Math.ceil(force / 2) + (overcast ? 2 : 0));
+  }
+
+  function resistDrain(rng, runner, force) {
+    const magic = (runner.attributes && runner.attributes.magic) || 0;
+    const overcast = force > magic;
+    const dv = drainValueFor(force, overcast);
+    const pool = ((runner.attributes && runner.attributes.willpower) || 0) + magic;
+    const dice = rollDicePool(rng, pool);
+    const hits = countHits(dice);
+    const damage = Math.max(0, dv - hits);
+    return {
+      force: force, magic: magic, overcast: overcast,
+      drainValue: dv, resistPool: pool, hits: hits,
+      damage: damage,
+      physical: overcast, // overcast Drain is physical, not stun
+    };
+  }
+
+  // The most a caster can reach. Overcasting is allowed up to Magic
+  // + 2 — past that a mage simply cannot hold the form at all.
+  function maxForceFor(runner) {
+    return ((runner.attributes && runner.attributes.magic) || 0) + 2;
+  }
+
   // ── Extended tests: work that takes as long as it takes ────────
   // Some tasks aren't one swing. Cracking an on-prem host, picking a
   // serious lock, coaxing a spirit — you chip at it, accumulating
@@ -191,6 +234,9 @@
   MJ.thresholdForTier = thresholdForTier;
   MJ.dicePoolFor = dicePoolFor;
   MJ.resolveTask = resolveTask;
+  MJ.drainValueFor = drainValueFor;
+  MJ.resistDrain = resistDrain;
+  MJ.maxForceFor = maxForceFor;
   MJ.beginExtendedTest = beginExtendedTest;
   MJ.extendedTestStep = extendedTestStep;
   MJ.resolveExtendedTest = resolveExtendedTest;

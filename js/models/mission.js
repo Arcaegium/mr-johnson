@@ -433,25 +433,38 @@
   // maglock never was. Patrols and spirit zones count anywhere along
   // their circuit, which is what makes a wide patrol route genuinely
   // worse to work under than a stationary post.
-  function otherPerceiver(run, target) {
+  const sensesPlane = (o, plane) => (o.senses || []).indexOf(plane) !== -1;
+
+  function otherPerceiver(run, target, plane) {
     const here = target.rooms;
     if (!here) return false;
     return run.obstacles.some((o) =>
-      o !== target && o.perceives && !run.neutralized.has(o) &&
+      o !== target && sensesPlane(o, plane) && !run.neutralized.has(o) &&
       o.rooms && o.rooms.some((r) => here.indexOf(r) !== -1));
   }
 
   function wasWitnessed(run, obstacle, affordance, succeeded) {
     if (affordance && affordance.loud) return true; // gunfire carries regardless
+
+    // WHICH WORLD did this happen in? Only things that perceive on
+    // that plane can have seen it. A guard has eyes in meatspace
+    // only, so a decker working a host from a terminal out of his
+    // sight is invisible to him — and the camera he kills does not
+    // phone anyone about it. A materialised spirit is dual-natured
+    // and catches both.
+    const plane = MJ.planeOfAffordance(affordance);
+
     // A clean quiet act is seen only by something OTHER than what you
     // just handled. Take down the one guard in the room and there is
     // nobody left to have an opinion; do it in front of a camera, or
     // his partner, and "silent" was never on the table.
-    if (succeeded) return otherPerceiver(run, obstacle);
-    // It failed. The thing you fumbled saw it if it has eyes...
-    if (obstacle.perceives) return true;
-    // ...and if it does not (a maglock, a ward), something else may.
-    if (otherPerceiver(run, obstacle)) return true;
+    if (succeeded) return otherPerceiver(run, obstacle, plane);
+    // It failed. The thing you fumbled saw it if it has eyes ON THIS
+    // PLANE — fumbling a hack is witnessed by the host's watchers,
+    // not by the guard leaning on the door outside.
+    if (sensesPlane(obstacle, plane)) return true;
+    // ...and if it does not, something else on this plane may.
+    if (otherPerceiver(run, obstacle, plane)) return true;
     // Nothing here perceives — but if they are already suspicious
     // they are watching the place, not the equipment.
     const band = MJ.threatBand(run.state, run.day);
@@ -784,6 +797,38 @@
     };
   }
 
+  // Drain lands on the caster, not the target. Stun normally — they
+  // are wrung out, and it clears with rest. PHYSICAL if they
+  // overcast, because reaching past what you can hold is an injury,
+  // and that is the line the mage chooses to cross or not.
+  //
+  // Enough Drain drops them out of the run, exactly like a takedown:
+  // a mage who overreaches on the second door is not walking to the
+  // fifth. Wounds land through the same path as any other casualty.
+  const DRAIN_DOWN_THRESHOLD = 8;
+
+  function applyDrain(run, runner, drain) {
+    if (!drain || drain.damage <= 0) return drain;
+    if (!run.drainTaken) run.drainTaken = new Map();
+    const total = (run.drainTaken.get(runner) || 0) + drain.damage;
+    run.drainTaken.set(runner, total);
+    if (total >= DRAIN_DOWN_THRESHOLD) {
+      if (!run.downed) run.downed = new Set();
+      if (!run.downed.has(runner)) {
+        run.downed.add(runner);
+        drain.dropped = true;
+        drain.casualty = resolveTakedown(run, {
+          source: runner,
+          physical: drain.physical ? total : 0,
+          physicalMax: DRAIN_DOWN_THRESHOLD,
+          stun: drain.physical ? 0 : total,
+          stunMax: DRAIN_DOWN_THRESHOLD,
+        });
+      }
+    }
+    return drain;
+  }
+
   // A critical glitch lands the same way whoever caused it and
   // however: armor eats it first (reusable this mission), then a
   // patch (consumed), and only then does the wound land. Shared so
@@ -922,6 +967,20 @@
     const approach = typeof choice.approach === "number" ? choice.approach
       : obstacle.affordances.findIndex((a) => a.skill === skill);
     const affordance = obstacle.affordances[approach];
+
+    // Magic asks a question no other approach does: how hard are you
+    // pushing? Force adds dice to the casting AND raises the Drain
+    // that comes back, so a mage who reaches for a big result is
+    // deliberately risking dropping themselves. Default is a safe
+    // cast at their own Magic; the popup can offer more.
+    let drain = null;
+    if (affordance && MJ.SKILL_PLANE[skill] === "astral" && (runner.attributes.magic || 0) > 0) {
+      const force = Math.max(1, Math.min(MJ.maxForceFor(runner),
+        choice.force || runner.attributes.magic));
+      drain = MJ.resistDrain(run.rng, runner, force);
+      run.castForce = force;
+      applyDrain(run, runner, drain);
+    }
 
     // A violent approach against something that can fight back opens
     // COMBAT rather than resolving as one roll. This is what finally
@@ -1087,6 +1146,7 @@
       boosted: boostLabel, guarded: guarded,
       rejected: outcome.ok === false ? outcome.error : null,
       read: read, tipped: tipped,
+      drain: drain,
     };
     run.tasks.push(task);
 
