@@ -21,7 +21,7 @@ html, body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .wrap {
@@ -73,8 +73,8 @@ input[type="text"] {
   border: 1px solid var(--line);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 14px;
-  padding: 7px 10px;
+  font-size: 15px;
+  padding: 8px 11px;
   border-radius: 3px;
   min-width: 220px;
 }
@@ -85,7 +85,7 @@ button {
   border: 1px solid var(--accent-2);
   color: var(--accent-2);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 7px 14px;
@@ -109,22 +109,22 @@ button:hover { background: var(--accent-2); color: var(--bg); }
 /* ── v0 playable shell (index.html) — still bench styling, not the
    real hub aesthetic ─────────────────────────────────────────── */
 .game-wrap { max-width: 1400px; margin: 0 auto; padding: 20px 22px 60px; }
-.statline { color: var(--accent); letter-spacing: 0.06em; margin-top: 6px; font-size: 0.9rem; }
+.statline { color: var(--accent); letter-spacing: 0.06em; margin-top: 6px; font-size: 1rem; }
 .panels { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px; align-items: start; }
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 12px 14px;
-  font-size: 12.5px;
-  line-height: 1.45;
+  padding: 14px 16px;
+  font-size: 14.5px;
+  line-height: 1.55;
 }
 .panel h2 {
-  font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase;
+  font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--accent-2); margin: 0 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 6px;
   display: flex; justify-content: space-between; align-items: center;
 }
-.log-top { height: 280px; font-size: 13px; }
+.log-top { height: 300px; font-size: 14.5px; }
 .card { border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; }
 .card .head { color: var(--accent); }
 .row { padding: 6px 0; border-bottom: 1px dotted var(--line); }
@@ -139,19 +139,24 @@ details.shopcat[open] summary { color: var(--accent-2); }
 .panel, .card, .row, .queue-item { min-width: 0; }
 .panel select, .panel input[type="text"] { max-width: 100%; }
 #site-lookup { width: 100%; }
-.game-log { overflow-wrap: anywhere; }
+/* Site keys are long unbreakable-looking tokens
+   ("Highly-Umber-Cloudy-Orchard-7195") and job lines run long. At a
+   larger type size those started pushing the panel wider than its
+   own grid column on narrow screens, which scrolls the whole page
+   sideways. Let anything inside a panel break rather than push. */
+.panel, .game-log { overflow-wrap: anywhere; }
 
 .warn { color: #d4735e; }
 .good { color: var(--accent-2); }
 .gated { color: var(--dim); font-style: italic; }
-button.sm { font-size: 11px; padding: 3px 8px; letter-spacing: 0.04em; }
+button.sm { font-size: 13px; padding: 5px 10px; letter-spacing: 0.04em; }
 select, input.sm {
   background: var(--bg); border: 1px solid var(--line); color: var(--ink);
-  font-family: var(--mono); font-size: 12px; padding: 4px 6px; border-radius: 3px; max-width: 100%;
+  font-family: var(--mono); font-size: 14px; padding: 6px 8px; border-radius: 3px; max-width: 100%;
 }
 .game-log {
   background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
-  padding: 8px 10px; height: 220px; overflow-y: auto; white-space: pre-wrap; font-size: 12px; line-height: 1.5;
+  padding: 10px 12px; height: 240px; overflow-y: auto; white-space: pre-wrap; font-size: 14px; line-height: 1.6;
 }
 .queue-item { display: flex; gap: 6px; align-items: center; padding: 4px 0; }
 .checks label { color: var(--ink); display: inline-block; margin-right: 10px; }
@@ -189,19 +194,19 @@ a.navlink:hover { text-decoration: underline; }
   background: var(--panel); border: 1px solid var(--line);
   width: 100%; max-width: 620px; max-height: 100%;
   display: flex; flex-direction: column;
-  font-family: var(--mono); font-size: 13px; color: var(--ink);
+  font-family: var(--mono); font-size: 15px; color: var(--ink);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
 }
 .modal-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
-.modal-title { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; }
-.modal-sub { margin-top: 3px; font-size: 12px; }
+.modal-title { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; font-size: 13.5px; }
+.modal-sub { margin-top: 4px; font-size: 14px; }
 .modal-context { padding: 10px 16px; border-bottom: 1px solid var(--line); line-height: 1.6; }
 .modal-transcript {
   padding: 10px 16px; border-bottom: 1px solid var(--line);
-  max-height: 190px; overflow-y: auto; line-height: 1.7; font-size: 12px;
+  max-height: 230px; overflow-y: auto; line-height: 1.75; font-size: 14px;
 }
 .modal-heading { padding: 12px 16px 4px; line-height: 1.5; }
-.modal-heading .ask { color: var(--dim); margin-top: 6px; font-size: 12px; }
+.modal-heading .ask { color: var(--dim); margin-top: 7px; font-size: 14px; }
 .modal-options { padding: 6px 16px 12px; overflow-y: auto; }
 .modal-actions { padding: 10px 16px; border-top: 1px solid var(--line); text-align: right; }
 
@@ -209,12 +214,12 @@ button.opt {
   display: block; width: 100%; text-align: left;
   margin: 4px 0; padding: 8px 10px;
   background: #0d131a; border: 1px solid var(--line); color: var(--ink);
-  font-family: var(--mono); font-size: 13px; letter-spacing: 0; cursor: pointer;
+  font-family: var(--mono); font-size: 15px; letter-spacing: 0; cursor: pointer;
   /* The panel shouts its buttons in caps; prose options must not. */
   text-transform: none;
 }
 button.opt:hover { background: #18222d; border-color: var(--accent-2); color: var(--ink); }
-button.opt .opt-meta { display: block; margin-top: 3px; font-size: 11.5px; }
+button.opt .opt-meta { display: block; margin-top: 4px; font-size: 13px; }
 button.opt.dead { opacity: 0.45; cursor: not-allowed; }
 button.opt.dead:hover { background: #0d131a; border-color: var(--line); }
 button.warn-btn { border-color: #d4735e; color: #d4735e; }
@@ -227,25 +232,35 @@ button.warn-btn:hover { background: #d4735e; color: var(--bg); }
    end of this file drops it back inline. */
 .hud {
   position: fixed;
-  top: 96px;
-  right: max(12px, calc((100vw - 1400px) / 2 - 130px));
-  width: 118px;
+  top: 92px;
+  /* Sits in the gutter beside the 1400px wrap. The offset is the
+     card's own width plus a margin, so widening the card only means
+     changing these two numbers together. */
+  right: max(14px, calc((100vw - 1400px) / 2 - 232px));
+  width: 210px;
   z-index: 20;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 10px 12px;
+  padding: 14px 16px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 17px;
 }
 .hud:empty { display: none; }
-.hud-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 3px 0; }
-.hud-k { color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
+.hud-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; padding: 7px 0;
+}
+.hud-row + .hud-row { border-top: 1px dotted var(--line); }
+.hud-k { color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; }
+/* Digits are what the eye actually comes here for. */
+.hud b { font-size: 19px; font-variant-numeric: tabular-nums; }
 
-/* No gutter left to float in (1400 wrap + 130 either side): tuck the
-   HUD against the viewport edge instead of beside the content. */
-@media (max-width: 1660px) {
-  .hud { right: 10px; top: 10px; }
+/* Below this there is no gutter wide enough for the card (1400 wrap
+   + 224 either side), so it tucks against the viewport edge instead
+   of sitting beside the content. */
+@media (max-width: 1850px) {
+  .hud { right: 12px; top: 12px; }
 }
 
 /* ── Phone / tablet: one column, finger-sized controls ───────────
@@ -255,10 +270,12 @@ button.warn-btn:hover { background: #d4735e; color: var(--bg); }
   /* Nothing to float beside on a phone — put it back in the flow so
      it never covers the controls. */
   .hud {
-    position: static; width: auto; margin: 0 0 10px;
-    display: flex; gap: 16px; flex-wrap: wrap;
+    position: static; width: auto; margin: 0 0 12px;
+    display: flex; gap: 18px; flex-wrap: wrap; font-size: 15px;
   }
   .hud-row { padding: 0; gap: 6px; }
+  .hud-row + .hud-row { border-top: none; }
+  .hud b { font-size: 16px; }
   .game-wrap { padding: 14px 12px 48px; }
   .panels { grid-template-columns: 1fr; }
   .panel { font-size: 13.5px; }
