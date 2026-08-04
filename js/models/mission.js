@@ -471,7 +471,24 @@
   // you have been out — a fast loud run burns Drain but few ticks, a
   // slow careful one conserves Drain and eats the tether. Same
   // duality as the Matrix's cards-versus-Alert, different clothes.
-  const TETHER_PER_MAGIC = 2; // astral runs at 2 dice to meatspace's 1
+  // In the source a projection lasts MAGIC HOURS — generous enough
+  // that it is essentially never the thing that ends a single
+  // infiltration. The first pass here read "2 dice to meatspace's 1"
+  // as the budget itself and gave a Magic 5 mage ten ticks, which at
+  // a combat round apiece is barely a minute out of body. Measured
+  // against real runs it was catastrophic: the MEDIAN run spends 2
+  // and p90 spends 9, so 15% of runs were ending on a forced
+  // snap-back.
+  //
+  // A tick here is an EXCHANGE, not a six-second round — a careful
+  // assensing pass is minutes of work — so the budget should be
+  // generous the way the fiction is. Sized so it catches only the
+  // long tail: at Magic 5 that is 30 against a p99 of 19, so an
+  // ordinary run never feels it and a genuinely drawn-out one still
+  // can. It bites hardest where it should, on a weak projector — a
+  // Magic 2 mage gets 12, right at p95, so sending one on a long
+  // astral job is a real risk rather than a formality.
+  const TETHER_PER_MAGIC = 6;
 
   function tetherFor(runners) {
     let best = 0;

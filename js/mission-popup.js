@@ -184,7 +184,11 @@
       lines.push('<span class="dimmed">tether </span>' + num(run.tether) +
         '<span class="dimmed"> of </span>' + num(run.tetherMax) +
         '<span class="dimmed"> turns left</span>' +
-        (run.tether <= 2 ? " " + no("— the pull is getting hard") : ""));
+        // Warn on the last quarter rather than a flat 2 — the budget
+        // scales with Magic now, so a fixed number would shout at a
+        // weak projector and never reach a strong one.
+        (run.tether <= Math.max(2, Math.ceil(run.tetherMax / 4))
+          ? " " + no("— the pull is getting hard") : ""));
     }
     const band = run.site && run.site.securityState ? MJ.threatBand(run.site.securityState, run.day) : "normal";
     if (band !== "normal") {
