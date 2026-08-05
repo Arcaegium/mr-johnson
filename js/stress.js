@@ -1540,6 +1540,130 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 19: the astral pillar's verbs ─────────────────────────
+  // What a projecting mage can do that nobody else can, and what it
+  // costs. The pillar is defined by its clock: out here the currency
+  // is TIME OUT OF BODY, and every verb spends it.
+  function class19_astral() {
+    const rng0 = MJ.makeRNG("stress-astral");
+    const mageFor = (label) => {
+      const m = MJ.generateRunner(rng0.fork("m" + label), {});
+      m.attributes.magic = 5; m.attributes.willpower = 5;
+      m.skills.sorcery = 5; m.skills.conjuring = 4; m.skills.assensing = 5; m.wounds = 0;
+      MJ.watchRunner(m, rng0); MJ.hireRunner(m, "permanent");
+      return m;
+    };
+    // Find a warded astral site — wards are the only real barrier
+    // out there, so the pillar is not properly exercised without one.
+    let run = null, mage = null;
+    for (let i = 0; i < 400 && !run; i++) {
+      const site = MJ.mintSite("stress-astral-u", i);
+      const m = mageFor(i);
+      const r = MJ.beginMission(rng0.fork("r" + i), MJ.createAstralMission(site), [m], 1);
+      if (r.obstacles.length && r.obstacles.some((o) => o.type === "ward")) { run = r; mage = m; }
+    }
+    check(!!run, "C19: the probe needs a warded astral site to mean anything");
+    if (!run) return;
+
+    check(MJ.isAstralRun(run), "C19: an astral mission must read as an astral run");
+    check(MJ.astralProjector(run) === mage, "C19: the projector is the strongest Magic on the crew");
+
+    const p = MJ.astralPrompt(run);
+    check(p && p.pillar === "astral", "C19: the astral prompt must name its own pillar");
+    check(p.tether > 0 && p.tetherMax > 0, "C19: the tether is the astral's clock and must be present");
+    for (const v of ["assense", "drift", "manifest", "engage"]) {
+      check(p.options.some((o) => o.verb === v), "C19: the astral must offer " + v);
+    }
+    // A street run has none of this — the pillars are genuinely
+    // different grammars, not one grammar with different nouns.
+    const streetSite = MJ.mintSite("stress-astral-u", 2);
+    const streetRun = MJ.beginMission(rng0.fork("st"), { site: streetSite, kind: "jobObjective", objective: {} }, [mage], 1);
+    check(MJ.astralPrompt(streetRun) === null, "C19: astral verbs must not exist on a street run");
+
+    // ── Every verb spends the clock ──────────────────────────────
+    const before = run.tether;
+    MJ.astralAct(rng0.fork("a1"), run, "assense");
+    check(run.tether < before, "C19: assensing costs time out of body");
+
+    // ── Assensing buys a better look at the Lattice ──────────────
+    const fresh = () => {
+      for (let i = 0; i < 400; i++) {
+        const site = MJ.mintSite("stress-astral-u", i);
+        const m = mageFor("f" + i);
+        const r = MJ.beginMission(rng0.fork("fr" + i), MJ.createAstralMission(site), [m], 1);
+        if (r.obstacles.length && r.obstacles.some((o) => o.type === "ward")) return r;
+      }
+      return null;
+    };
+    const blindRun = fresh();
+    if (blindRun) {
+      const blind = MJ.astralEngage(rng0.fork("eb"), blindRun, { force: 4 });
+      const blindDepth = MJ.latticeRead(blind.lattice).depth;
+      blindRun.lattice = null; blindRun.latticeFor = null;
+      MJ.astralAct(rng0.fork("as"), blindRun, "assense");
+      const studied = MJ.astralEngage(rng0.fork("es"), blindRun, { force: 4 });
+      const studiedDepth = MJ.latticeRead(studied.lattice).depth;
+      const rank = ["blind", "vague", "strong", "exact"];
+      check(rank.indexOf(studiedDepth) >= rank.indexOf(blindDepth),
+        "C19: reading a construct first must never make the Lattice HARDER to see (" +
+        blindDepth + " -> " + studiedDepth + ")");
+      check(studied.studied > 0, "C19: a studied construct must record what was learned");
+    }
+
+    // ── Wards are the only wall; the Lattice is how they resolve ──
+    const warded = fresh();
+    if (warded) {
+      const ward = warded.obstacles.find((o) => o.type === "ward");
+      warded.index = warded.obstacles.indexOf(ward);
+      const drift = MJ.astralAct(rng0.fork("d"), warded, "drift");
+      check(drift.blocked, "C19: a ward must stop an astral form — it is the one thing out there that is a wall");
+      const eng = MJ.astralEngage(rng0.fork("ew"), warded, { force: 4 });
+      check(eng.ok && eng.mode === "unwind", "C19: a ward is UNWOUND, not rolled against");
+      // Drive it, then resolve back into the run.
+      let g = 0;
+      while (!MJ.latticeDone(eng.lattice) && g++ < 30) {
+        const open = eng.lattice.threads.filter((t) => !t.cut);
+        if (!open.length) break;
+        MJ.latticePull(eng.lattice, open[0].id);
+      }
+      const res = MJ.astralResolve(rng0.fork("rw"), warded);
+      check(res.ok, "C19: an open Lattice must resolve back into the run");
+      if (res.success) check(warded.neutralized.has(ward), "C19: a broken ward stops being a barrier");
+      check(warded.tether < warded.tetherMax, "C19: working a Lattice costs time out of body");
+    }
+
+    // A spirit is UNRAVELLED, not unwound — different construct,
+    // different puzzle.
+    const spiritRun = (() => {
+      for (let i = 0; i < 400; i++) {
+        const site = MJ.mintSite("stress-astral-u", i);
+        const m = mageFor("sp" + i);
+        const r = MJ.beginMission(rng0.fork("sr" + i), MJ.createAstralMission(site), [m], 1);
+        const idx = r.obstacles.findIndex((o) => o.type === "spirit");
+        if (idx >= 0) { r.index = idx; return r; }
+      }
+      return null;
+    })();
+    if (spiritRun) {
+      const eng = MJ.astralEngage(rng0.fork("es2"), spiritRun, { force: 4 });
+      check(eng.mode === "unravel", "C19: a spirit's binding is UNRAVELLED, like defusing a bomb");
+    }
+
+    // ── Manifesting is power with an immediate price ─────────────
+    const manRun = fresh();
+    if (manRun) {
+      const bandBefore = MJ.threatBand(manRun.state, manRun.day);
+      const m = MJ.astralAct(rng0.fork("mf"), manRun, "manifest");
+      check(m.ok && m.manifested, "C19: a mage must be able to manifest");
+      check(MJ.threatBand(manRun.state, manRun.day) === "threatening",
+        "C19: manifesting is seen by the living — instantly threatening (was " + bandBefore + ")");
+      check(MJ.astralAct(rng0.fork("mf2"), manRun, "manifest").ok === false,
+        "C19: you cannot manifest twice");
+    }
+
+    check(MJ.astralAct(rng0, run, "nonesuch").ok === false, "C19: the astral has its own verbs and only those");
+  }
+
   // ── Class 18: bound helpers — spirits and agents ────────────────
   // One model, two skins. The load-bearing property is that a helper
   // gives the crew WIDTH, not power: it owes N tasks and each one is
@@ -2272,6 +2396,7 @@
       ["16. The Lattice — the astral's own grammar", class16_lattice],
       ["17. Spells in meatspace", class17_spells],
       ["18. Bound helpers — spirits and agents", class18_helpers],
+      ["19. The astral pillar's verbs", class19_astral],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

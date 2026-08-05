@@ -2078,6 +2078,10 @@
   MJ.streetRoute = routeObstacles;
   MJ.astralRoute = astralRoute;
   MJ.tetherFor = tetherFor;
+  // The astral pillar's clock, exported so models/astral.js can spend
+  // it. Every verb out there costs a tick — that is the whole economy
+  // of being out of body.
+  MJ.tickTether = tickTether;
   MJ.hostRoute = hostRoute;
   MJ.hostPaths = hostPaths;
   MJ.createCraftingMission = createCraftingMission;
