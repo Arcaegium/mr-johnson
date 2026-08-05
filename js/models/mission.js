@@ -972,7 +972,12 @@
   // rather than inventing ice the unbuilt Matrix pillar would have
   // to contradict later.
   const RESPONDER_TYPES = {
-    physical: ["guard", "camera"],
+    // A RESPONSE IS SOMETHING THAT COMES. A camera is bolted to a
+    // wall — it cannot be dispatched, cannot walk into the corridor
+    // the crew is standing in, and "RESPONSE: Camera T3 — they are
+    // coming" is a sentence about a light fitting. What a building
+    // sends when it decides you are a problem is people.
+    physical: ["guard"],
     astral: ["spirit"],
     // Ice, now that the Matrix pillar exists. This used to spawn
     // maglocks and cameras — the note above said it did so rather

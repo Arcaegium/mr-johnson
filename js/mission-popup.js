@@ -451,9 +451,19 @@
       const cells = [];
 
       if (site) {
-        const st = site.securityState;
-        const axes = st ? ["physical", "astral", "matrix"]
-          .map((a) => a[0].toUpperCase() + ":" + num(st.axes[a].current)).join(" ") : "—";
+        // ONLY WHAT THEY EARNED. This printed securityState.current
+        // for all three axes — so a crew that walked a corridor came
+        // home reporting the astral and Matrix ratings of a building
+        // they never touched either of. The debrief is the crew's
+        // account of a night, not the game's own sheet: an axis they
+        // proved reads confirmed, an axis they did not stays a guess.
+        const view = MJ.siteIntelView(site, session.day);
+        const axes = ["physical", "astral", "matrix"].map((a) => {
+          const L = a[0].toUpperCase();
+          return view[a].confirmed
+            ? L + ":" + num(view[a].confirmed.value)
+            : L + ':<span class="dimmed">~' + view[a].estimated + "</span>";
+        }).join(" ");
         cells.push(cell("the site now reads", esc(res.threatBand || "normal") + "<br>" +
           '<span class="dimmed">security </span>' + axes +
           (res.incident && res.incident.ratcheted ? "<br>" + no("they have not stood down") : "")));
@@ -486,8 +496,12 @@
         context: contextLines(run),
         transcript: transcript,
         heading: '<div class="res-verdict">' + verdict + '</div>' +
-          '<span class="dimmed">' + num(res.obstaclesFaced || 0) + " obstacle" +
-          ((res.obstaclesFaced || 0) === 1 ? "" : "s") + " faced</span>" +
+          // `obstaclesFaced` is the route INDEX — how many they got
+          // PAST, not how many they met. A crew that cleared two and
+          // died on the third met three, and "2 obstacles faced"
+          // quietly loses the one that killed them.
+          '<span class="dimmed">' + num(res.obstaclesFaced || 0) + " of " +
+          num((run.obstacles || []).length) + " cleared</span>" +
           '<div class="res-grid">' + cells.join("") + "</div>",
         options: [],
         actions: [{ id: "close", label: "back to the hub", tone: "warn-btn" }],

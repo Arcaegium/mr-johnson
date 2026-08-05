@@ -87,6 +87,14 @@
     filamentWhip: { label: "Filament Whip",          category: "weapon", tier: 7, skill: "melee",        craftSkill: "electronics", combat: "blade" },
     demoKit:      { label: "Demolitions Kit",        category: "weapon", tier: 4, skill: "demolitions",  craftSkill: "electronics" },
     // ── Armor (woundGuard = absorbs crit-glitch wounds/mission) ──
+    // The bottom rung, and it has to exist. Personal kit caps a
+    // runner's armour at ceil(rank/2), so a combat rank of 1 or 2
+    // allows tier 1 only — and with nothing at tier 1 the armour slot
+    // came up EMPTY. Measured: 39% of all runners walked in with no
+    // armour at all, 0% at ranks 1-2 and 100% from rank 3, which is a
+    // threshold, not a curve. A decker and a mage turning up naked to
+    // a firefight is not "lightly equipped", it is one SMG burst each.
+    paddedVest:   { label: "Padded Vest",            category: "armor", tier: 1, craftSkill: "electronics" },
     linedCoat:    { label: "Lined Streetcoat",       category: "armor", tier: 2, craftSkill: "electronics" },
     kevlarLong:   { label: "Kevlar Longcoat",        category: "armor", tier: 3, craftSkill: "electronics" },
     riotCarapace: { label: "Riot Carapace",          category: "armor", tier: 6, craftSkill: "electronics" },
@@ -195,7 +203,7 @@
     rigging:      ["hummingbird", "droneMk1"],
     sorcery:      ["wardingCharm", "sorceryFocus"],
   };
-  const PERSONAL_ARMOR = ["linedCoat", "kevlarLong"];
+  const PERSONAL_ARMOR = ["paddedVest", "linedCoat", "kevlarLong"];
 
   function personalTierFor(rank) {
     return Math.max(1, Math.min(PERSONAL_TIER_CAP, Math.ceil(rank / 2)));
