@@ -234,6 +234,88 @@ trade, expressed in machinery that already exists.
 8. ~~Street grammar — move / observe / approach / engage.~~ **DONE** (this pass).
 9. **Docs** — fold into `UNDERSTANDING.md` §3 and `SYSTEM-STATE.md`. *Remaining.*
 
+## 3.6 VERBS × PROPERTIES — the affordance system's replacement
+
+**Decided 2026-08-04.** This supersedes hand-authored affordance lists.
+
+### The rule
+> **Every verb is attemptable against every thing within its pillar.** The
+> qualities of the thing decide whether there is even a challenge to roll, let
+> alone what the result is.
+
+An obstacle is **a point on the map where something interferes with the mission
+— an opportunity to raise the alert.** Not a barrier. Guards, spirits, cameras,
+turrets, doors, wards, ice are all *things at encounter points*, and you can
+kick, shoot, cast at, hack or talk to any of them. What differs is what happens.
+
+### Why the old shape was wrong
+Eight templates each carried 4–5 bespoke affordances. That made the MENU the
+authority on what is possible, so a maglock could only be breached with
+demolitions because nobody had written a "kick it" line — not because kicking a
+door is impossible. The world should decide, not the author of a list.
+
+### The two layers
+
+**1. PRESENCE — which planes a thing can be touched on at all.** Distinct from
+`senses`, which is only what it PERCEIVES. A maglock senses nothing but is
+physically present *and* matrix-present (an electronic lock — that is why
+hacking it works).
+
+| thing | physical | matrix | astral |
+|---|---|---|---|
+| maglock | ✓ | ✓ | — |
+| camera | ✓ | ✓ | — |
+| guard | ✓ | — | ✓ (living aura) |
+| spirit | ✓ (dual-natured) | — | ✓ |
+| ward | — | — | ✓ |
+| ice | — | ✓ | — |
+
+A verb from pillar P is attemptable against a thing present on plane P. This is
+what stops you sleazing a spirit or banishing a guard.
+
+**2. NATURE — what kind of thing it is, deciding which verbs LAND.**
+
+| property | what it gates |
+|---|---|
+| `living` | direct mana, stun damage, being talked to |
+| `sapient` | con and intimidate mean something — a camera has no opinion |
+| `summoned` | banishable. A ward has astral presence but is not a spirit, so it is UNWOUND, not banished |
+| `armour` / `structure` | how much force before anything happens, and how much it takes total |
+| `fights` | whether it answers back |
+| `senses[]` | which planes it perceives on (already exists) |
+
+### Force against things: the three-gate chain, reused
+Any damaging attack can be aimed at any physically-present thing, and resolves
+through the chain combat already uses: **Hit → Penetrate (Power vs Armour) →
+Damage (accumulating against Structure).**
+
+So a pistol at Power 6 sparks off a hardened door at Armour 12 forever, however
+many times you fire — while a rifle at Power 9 AP −3, or a Force-6 fireball, or
+purpose-built demolitions, gets through. **Perseverance only pays if you can
+penetrate at all**, which is exactly right and needs no special case.
+
+Kicking is a **melee attack** with the `unarmed` profile that already exists —
+not a new mechanism. Demolitions stays a trained skill requiring equipment: you
+cannot attempt it without both, because that is a different category from
+having feet.
+
+### Hopeless verbs (user ruling)
+> Offered, resolves as failure, and then future attempts are annotated as
+> ineffective — **even if still possible.**
+
+**Nothing is ever removed from the menu.** This finishes the thread that began
+with attempt caps: an option can become *known futile*, never *gone*. It also
+CHANGES existing behaviour — Watsonian immunities currently delete the option,
+and must become annotations instead.
+
+### What this touches
+`OBSTACLE_TEMPLATES` (properties replace affordance lists) · a new per-pillar
+verb registry · `missionPrompt` (options built from verbs × properties) ·
+`resolveTask` · the discovery system (annotate, not remove) · every probe that
+assumes the old shape.
+
+---
+
 ## 4b. WHAT LANDED — THREE PILLARS, THREE CLOCKS
 
 The exercise is complete when each pillar pressures a crew in its own way and
