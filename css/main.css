@@ -526,3 +526,72 @@ body { padding-bottom: 76px; }
 .pick-head .who { flex: 1; }
 .pick-head .cost { color: var(--dim); font-size: 0.78rem; }
 .pick-body { border-top: 1px solid var(--line); padding: 8px 10px; font-size: 0.85rem; }
+
+/* ── The plan rail ────────────────────────────────────────────────
+   Today's plan is not a widget you open — it is the thing you are
+   building all day, so it holds a fixed column of its own and
+   scrolls on its own. Queued dispatches land here and get reordered
+   here, each one showing the job, what is guarding it, and who is
+   going. */
+.planrail {
+  position: fixed; top: 0; bottom: 0; left: 0; width: 300px; z-index: 30;
+  background: #0a1016; border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+}
+.planrail-head {
+  padding: 12px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: baseline; gap: 8px;
+}
+.planrail-head .pt {
+  text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.76rem; color: var(--accent-2);
+}
+.planrail-head .pn { color: var(--accent); }
+.planrail-body { overflow-y: auto; padding: 10px; flex: 1; }
+.planrail-foot { border-top: 1px solid var(--line); padding: 10px 12px; }
+
+.qcard { border: 1px solid var(--line); border-radius: 2px; margin-bottom: 8px; background: #0e141b; }
+.qcard-head {
+  display: flex; gap: 6px; align-items: baseline;
+  padding: 7px 8px; border-bottom: 1px solid var(--line);
+}
+.qcard-head .qn { color: var(--dim); font-size: 0.74rem; }
+.qcard-head .qlabel { flex: 1; font-size: 0.82rem; }
+.qcard-body { padding: 7px 8px; font-size: 0.78rem; }
+.qcard-body .qrow { margin-bottom: 4px; }
+.qcard-body .qk {
+  font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--dim); display: block;
+}
+.qcard-ops { display: flex; gap: 3px; }
+
+/* The window shifts over to make room; the footer keeps clear of it. */
+body.railed .game-wrap { margin-left: 316px; }
+body.railed .framebar { left: 300px; }
+
+@media (max-width: 900px) {
+  .planrail { position: static; width: auto; border-right: none; border-bottom: 1px solid var(--line); }
+  body.railed .game-wrap { margin-left: 0; }
+  body.railed .framebar { left: 0; }
+  .planrail-body { max-height: 30vh; }
+}
+
+/* Security read in the dispatch dialog — right-aligned against the
+   job, so what you bring sits opposite what is waiting. */
+.crew-head { display: flex; gap: 14px; align-items: flex-start; }
+.crew-head .cwhat { flex: 1; }
+.crew-head .csec { text-align: right; font-size: 0.8rem; white-space: nowrap; }
+.crew-head .csec .sk {
+  font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--dim); display: block; margin-bottom: 2px;
+}
+.slots { font-size: 0.8rem; }
+.slots.full { color: var(--accent); }
+
+/* ── Mission results ─────────────────────────────────────────── */
+.res-verdict { font-size: 1.05rem; letter-spacing: 0.05em; margin-bottom: 4px; }
+.res-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.res-cell { border: 1px solid var(--line); border-radius: 2px; padding: 7px 9px; }
+.res-cell .rk {
+  font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--dim); display: block; margin-bottom: 3px;
+}

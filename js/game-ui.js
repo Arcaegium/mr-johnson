@@ -36,12 +36,18 @@
     entry: null,        // the ONE open card, by identity key
     focus: null,        // a card to highlight without opening
     crew: new Set(),    // runners picked in the dispatch dialog
-    plan: false,
+    counts: {},         // widget -> last seen count, for the empty->populated open
     led: {},            // tab -> teaching widget last auto-opened
     pending: null,      // { mission, label } awaiting a crew
     crewTab: "hired",   // section of the dispatch dialog
     scout: "",          // market class filter
   };
+
+  // A dispatch is four runners, whatever the roster holds. The design
+  // says every job is runnable by a crew of 1-4 and that composition,
+  // not headcount, is the real decision — so the cap is a rule of the
+  // world rather than a UI convenience.
+  const MAX_CREW = 4;
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
@@ -89,7 +95,11 @@
     const status = !withStatus ? "" : m.resolved ? ' — <span class="ink">✓ done</span>'
       : (m.requiresMission && !m.requiresMission.resolved) ? "" : ' — <span class="warn">open</span>';
     return `<div class="good">leg ${k + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain}) @ ${siteTag(m.site)}${gated}${status}<br>` +
-      (m.site.identity.name ? `&nbsp;&nbsp;<span class="ink">"${esc(m.site.identity.name)}"</span>${m.site.identity.theme ? ` <span class="muted">· ${esc(m.site.identity.theme)}</span>` : ""}<br>` : "") +
+      // The address is a way IN, not a label: accepting a job and then
+      // hunting for the site on another tab is a decision unwound for
+      // no reason. Click it and you are standing at that location with
+      // its card open, choosing what to do there.
+      (m.site.identity.name ? `&nbsp;&nbsp;<a class="sitelink" data-act="goto-site" data-sk="${keyFor(m.site, "s")}">"${esc(m.site.identity.name)}"</a>${m.site.identity.theme ? ` <span class="muted">· ${esc(m.site.identity.theme)}</span>` : ""}<br>` : "") +
       `&nbsp;&nbsp;<span class="muted">est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</span></div>`;
   }
 
@@ -178,8 +188,15 @@
     return { crew, watch };
   }
 
-  const runnerRows = (list) => list.map((r) =>
-    entry(keyFor(r, "r"), runnerLine(r), `${fmtContract(r)}${r.wounds ? " · " + woundRead(r) : ""}`,
+  // In the market EVERY row is unwatched, so saying so tells the
+  // player nothing. What they are actually shopping for is the
+  // Discipline line — Generalist, or Specialist and at what — since
+  // that is the label price is set against and the label that can be
+  // WRONG. Reading it against the skills is how bargains get spotted.
+  const runnerRows = (list, market) => list.map((r) =>
+    entry(keyFor(r, "r"), runnerLine(r),
+      market ? esc(MJ.describeDiscipline(r))
+             : `${fmtContract(r)}${r.wounds ? " · " + woundRead(r) : ""}`,
       () => runnerDetail(r) + runnerActions(r))).join("");
 
   // ── Contracts ───────────────────────────────────────────────────
@@ -318,7 +335,8 @@
     runners: [
       { id: "w-hired", label: "Hired", count: () => splitRoster().crew.length,
         sum: () => `${splitRoster().crew.length}/${S.save.johnson.boardCapacity} under contract`,
-        body: () => runnerRows(splitRoster().crew) || emptyNote("nobody under contract") },
+        body: () => (runnerRows(splitRoster().crew) || emptyNote("nobody under contract")) +
+          `<div class="actionbar"><button class="sm" data-act="expand-capacity">expand capacity — more crew slots</button></div>` },
       { id: "w-watch", label: "Watchlist", count: () => splitRoster().watch.length,
         sum: () => `${S.roster.length}/${MJ.game.watchCapacity(S)} watched`,
         body: () => runnerRows(splitRoster().watch) || emptyNote("nobody on watch") },
@@ -329,7 +347,7 @@
             FAMILIES.map((f) => `<option value="${f}"${UI.scout === f ? " selected" : ""}>${f}</option>`).join("") +
           `</select><button class="sm" data-act="refresh-market">sweep the circuit ¥100</button>` +
           `<span class="muted">a sweep costs, so the draw is a decision</span></div>` +
-          (runnerRows(S.market) || emptyNote("market is empty")) },
+          (runnerRows(S.market, true) || emptyNote("market is empty")) },
     ],
     contracts: [
       { id: "w-active", label: "Active", count: () => S.jobs.filter((j) => !j.paid && !j.expired).length,
@@ -369,7 +387,10 @@
         body: () => {
           const lookup = `<div class="det"><span class="dk">call in a site by key</span>` +
             `<input type="text" class="sm" id="site-lookup" placeholder="Boldly-Quiet-Crimson-Bicycle-0417" /> ` +
-            `<button class="sm" data-act="discover-name">look it up</button></div>`;
+            `<button class="sm" data-act="discover-name">look it up</button></div>` +
+            `<div class="det"><span class="dk">or send someone to find one</span>` +
+            `<button class="sm" data-act="dispatch" data-plan="search:scrap">search out a scrap yard</button> ` +
+            `<button class="sm" data-act="dispatch" data-plan="search:reagents">search out a reagent grove</button></div>`;
           if (!S.knownSites.length) return lookup + emptyNote("no known sites — accept a job, search, or call one in");
           return lookup + MJ.siteListView(S.knownSites, S.day).map((row, i) => {
             const site = S.knownSites[i];
@@ -432,23 +453,52 @@
     const j = S.save.johnson;
     const stat = (k, v) => `<div class="frame-stat"><span class="k">${k}</span><span class="v">${v}</span></div>`;
     $("frame").innerHTML =
-      `<div class="frame-stats">${stat("Day", S.day)}${stat("Nuyen", "¥" + j.money)}${stat("Rep", j.reputation)}${stat("Capacity", j.boardCapacity)}</div>` +
-      `<div class="frame-plan"><button class="plan-toggle" data-act="toggle-plan">today's plan <span class="n">${S.queue.length}</span> queued ${UI.plan ? "▾" : "▸"}</button></div>`;
-    $("plancard").innerHTML = UI.plan ? `<div class="plan-card">${planCard()}</div>` : "";
+      `<div class="frame-stats">${stat("Day", S.day)}${stat("Nuyen", "¥" + j.money)}${stat("Rep", j.reputation)}${stat("Capacity", j.boardCapacity)}</div>`;
   }
 
-  function planCard() {
-    const queue = S.queue.map((q, i) =>
-      `<div class="queue-item"><span class="muted">${i + 1}.</span> ${esc(q.label)} <span class="muted">[${q.runners.map((r) => esc(r.identity.handle)).join(", ")}]</span> ` +
-      `<button class="sm" data-act="queue-up" data-idx="${i}">↑</button><button class="sm" data-act="queue-down" data-idx="${i}">↓</button><button class="sm" data-act="queue-del" data-idx="${i}">✕</button></div>`).join("");
-    const yesterday = (S.lastPlan || []).map((p, i) =>
-      `<div class="queue-item muted">${esc(p.label)} <button class="sm" data-act="repeat-one" data-idx="${i}">requeue</button></div>`).join("");
-    return `<div class="det"><span class="dk">queued for today</span>${queue || emptyNote("nothing queued — Play Day will just tick the world")}</div>` +
-      `<div class="det"><span class="dk">legwork — not done at a site</span>` +
-        `<button class="sm" data-act="dispatch" data-plan="search:scrap">search: scrap yard</button> ` +
-        `<button class="sm" data-act="dispatch" data-plan="search:reagents">search: reagent grove</button></div>` +
-      (yesterday ? `<div class="det"><span class="dk">yesterday</span>${yesterday}<button class="sm" data-act="repeat-plan">requeue all</button></div>` : "") +
-      `<div class="actionbar"><button class="sm" data-act="expand-capacity">expand capacity</button></div>`;
+  // ── The plan rail ───────────────────────────────────────────────
+  // Not a panel you visit — the thing you build all day. Each queued
+  // dispatch shows what the player needs to judge the SHAPE of the
+  // day at a glance: where it is, what is guarding it, who is going,
+  // and what that crew actually brings on each axis. Comparing those
+  // last two against each other IS the decision.
+  function crewShape(runners) {
+    if (!runners.length) return '<span class="muted">nobody assigned</span>';
+    const cap = MJ.crewCapability(runners);
+    return runners.map((r) => `${esc(r.identity.handle)} <span class="muted">${esc(r.classification.focusLabel)}</span>`).join("<br>") +
+      `<div style="margin-top:3px"><span class="muted">brings P:</span><b class="w-num">${cap.physical}d</b>` +
+      `<span class="muted"> A:</span><b class="w-num">${cap.astral}d</b>` +
+      `<span class="muted"> M:</span><b class="w-num">${cap.matrix}d</b></div>`;
+  }
+
+  function siteSecurityLine(site) {
+    if (!site) return '<span class="muted">not at a site</span>';
+    const v = MJ.siteIntelView(site, S.day);
+    return `P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}`;
+  }
+
+  function renderPlanRail() {
+    document.body.classList.add("railed");
+    const cards = S.queue.map((q, i) => {
+      const site = q.mission && q.mission.site;
+      return `<div class="qcard">` +
+        `<div class="qcard-head"><span class="qn">${i + 1}</span><span class="qlabel">${esc(q.label)}</span>` +
+          `<span class="qcard-ops">` +
+            `<button class="sm" data-act="queue-up" data-idx="${i}">↑</button>` +
+            `<button class="sm" data-act="queue-down" data-idx="${i}">↓</button>` +
+            `<button class="sm" data-act="queue-del" data-idx="${i}">✕</button>` +
+          `</span></div>` +
+        `<div class="qcard-body">` +
+          `<div class="qrow"><span class="qk">guarding it</span>${siteSecurityLine(site)}</div>` +
+          `<div class="qrow"><span class="qk">going</span>${crewShape(q.runners)}</div>` +
+        `</div></div>`;
+    }).join("");
+    $("planrail").innerHTML =
+      `<div class="planrail-head"><span class="pt">today's plan</span><span class="pn">${S.queue.length}</span>` +
+        `<span class="muted" style="font-size:0.74rem">queued</span></div>` +
+      `<div class="planrail-body">${cards || emptyNote("nothing queued yet — pick a location and choose what to do there")}</div>` +
+      ((S.lastPlan || []).length
+        ? `<div class="planrail-foot"><button class="sm" data-act="repeat-plan">requeue yesterday</button></div>` : "");
   }
 
   function renderTabs() {
@@ -467,6 +517,10 @@
       if (UI.led[UI.tab] !== teach.lead) { UI.led[UI.tab] = teach.lead; UI.open.add(teach.lead); }
     }
     list = list.concat(pinned);
+    // A widget that just stopped being empty opens itself, so the
+    // thing the player put there is visibly THERE. The widget only —
+    // never the card, which would throw a dossier at somebody who
+    // asked for a list.
     $("tabbody").innerHTML = list.map((w) => {
       const open = UI.open.has(w.id);
       const n = w.count();
@@ -487,12 +541,22 @@
   function render() {
     if (!S) {
       $("statline").textContent = "No game running — enter a seed (or leave blank) and hit New Game.";
-      ["frame", "plancard", "tabbar", "tabbody"].forEach((id) => { $(id).innerHTML = ""; });
+      ["frame", "planrail", "tabbar", "tabbody"].forEach((id) => { $(id).innerHTML = ""; });
+      document.body.classList.remove("railed");
       return;
     }
     $("statline").textContent = `Universe "${S.universeSeed}"`;
     healLearned();
+    for (const tab of Object.keys(WIDGETS)) {
+      for (const w of WIDGETS[tab]) {
+        const n = w.count();
+        if (UI.counts[w.id] === undefined) UI.counts[w.id] = n;
+        else if (UI.counts[w.id] === 0 && n > 0) { UI.open.add(w.id); UI.counts[w.id] = n; }
+        else UI.counts[w.id] = n;
+      }
+    }
     renderFrame();
+    renderPlanRail();
     renderTabs();
     renderBody();
     renderLog();
@@ -513,12 +577,14 @@
       document.body.appendChild(host);
     }
     const picked = [...UI.crew].filter((r) => S.roster.indexOf(r) !== -1 && MJ.isDispatchable(r));
+    const full = picked.length >= MAX_CREW;
+    const site = UI.pending.mission && UI.pending.mission.site;
     const cap = MJ.crewCapability(picked);
     const sections = { hired: splitRoster().crew, watchlist: splitRoster().watch, market: S.market };
     const rows = (sections[UI.crewTab] || []).map((r) => {
       const k = keyFor(r, "r");
       const on = UI.crew.has(r);
-      const usable = UI.crewTab === "hired" && MJ.isDispatchable(r);
+      const usable = UI.crewTab === "hired" && MJ.isDispatchable(r) && (on || !full);
       const open = UI.entry === "pick:" + k;
       return `<div class="pick${on ? " on" : ""}${usable || UI.crewTab !== "hired" ? "" : " out"}">` +
         `<div class="pick-head" data-entry="pick:${k}">` +
@@ -531,16 +597,23 @@
     }).join("") || emptyNote("nobody here");
     host.innerHTML =
       `<div class="crew-scrim"><div class="crew-modal">` +
-        `<div class="crew-head"><div class="ct">assign a crew</div><div class="cs">${esc(UI.pending.label)}</div></div>` +
+        `<div class="crew-head">` +
+          `<div class="cwhat"><div class="ct">assign a crew</div><div class="cs">${esc(UI.pending.label)}</div></div>` +
+          // What is waiting, opposite what you are bringing — the
+          // comparison IS the decision, so it should not need a tab
+          // change to make.
+          `<div class="csec"><span class="sk">what is guarding it</span>${siteSecurityLine(site)}</div>` +
+        `</div>` +
         `<div class="crew-tabs">` +
           ["hired", "watchlist", "market"].map((t) =>
             `<button class="tab${UI.crewTab === t ? " active" : ""}" data-act="crew-tab" data-ct="${t}">${t}<span class="badge">${(sections[t] || []).length}</span></button>`).join("") +
         `</div>` +
         `<div class="crew-body">${rows}</div>` +
         `<div class="crew-foot">` +
+          `<span class="slots${full ? " full" : ""}">${picked.length}/${MAX_CREW} slots</span>` +
           (picked.length
-            ? `<span class="muted">${picked.length} assigned — brings P:</span><b class="w-num">${cap.physical}d</b><span class="muted"> A:</span><b class="w-num">${cap.astral}d</b><span class="muted"> M:</span><b class="w-num">${cap.matrix}d</b>`
-            : '<span class="muted">nobody assigned yet</span>') +
+            ? `<span class="muted"> — brings P:</span><b class="w-num">${cap.physical}d</b><span class="muted"> A:</span><b class="w-num">${cap.astral}d</b><span class="muted"> M:</span><b class="w-num">${cap.matrix}d</b>`
+            : '<span class="muted"> — nobody assigned yet</span>') +
           `<span class="spacer"></span>` +
           `<button class="sm" data-act="crew-cancel">cancel</button>` +
           `<button class="sm" data-act="crew-confirm"${picked.length ? "" : " disabled"} style="border-color:var(--accent);color:var(--accent)">queue it</button>` +
@@ -641,7 +714,6 @@
       UI.open.has(id) ? UI.open.delete(id) : UI.open.add(id);
       render(); return;
     }
-    if (action === "toggle-plan") { UI.plan = !UI.plan; render(); return; }
 
     if (!S) { $("statline").textContent = "Start a New Game first."; return; }
     const idx = el && el.dataset.idx !== undefined ? +el.dataset.idx : -1;
@@ -654,15 +726,30 @@
       UI.pending = built; UI.crew.clear(); UI.crewTab = "hired"; UI.entry = null;
       render(); return;
     }
+    // A site link is navigation, not a command: land on Locations with
+    // that address already open and its intents in front of you.
+    if (action === "goto-site") {
+      const site = S.knownSites.find((x) => keyFor(x, "s") === el.dataset.sk);
+      if (site) {
+        UI.tab = "locations";
+        UI.open.add("w-sites");
+        UI.entry = keyFor(site, "s");
+        UI.focus = null;
+      }
+      render(); return;
+    }
     if (action === "crew-tab") { UI.crewTab = el.dataset.ct; UI.entry = null; render(); return; }
     if (action === "crew-cancel") { UI.pending = null; UI.crew.clear(); render(); return; }
     if (action === "crew-toggle") {
       const r = runnerByKey(el.dataset.rk);
-      if (r) UI.crew.has(r) ? UI.crew.delete(r) : UI.crew.add(r);
+      if (r) {
+        if (UI.crew.has(r)) UI.crew.delete(r);
+        else if (UI.crew.size < MAX_CREW) UI.crew.add(r);
+      }
       render(); return;
     }
     if (action === "crew-confirm") {
-      const crew = [...UI.crew].filter((r) => MJ.isDispatchable(r));
+      const crew = [...UI.crew].filter((r) => MJ.isDispatchable(r)).slice(0, MAX_CREW);
       const res = MJ.game.queueDispatch(S, UI.pending.mission, crew, UI.pending.label);
       if (!res.ok) MJ.game.note(S, "can't queue — " + res.error, "dispatch", { refused: true });
       else { UI.pending = null; UI.crew.clear(); }

@@ -357,11 +357,82 @@
       for (; seen < run.tasks.length; seen++) transcript.push(describeTask(run.tasks[seen]));
     }
 
+    // ── The debrief ─────────────────────────────────────────────
+    // A run used to end by vanishing: the modal closed, the hub came
+    // back, and the player had to go read the log to find out what
+    // had just happened to their people. A run is the whole point of
+    // the day — it gets a verdict, what it cost, and what came home.
     function finish() {
       absorb();
-      MJ.decide.close();
       const res = MJ.game.resolveEntry(session, day, entry);
-      done(res);
+      showResult(res);
+    }
+
+    function showResult(res) {
+      const run = entry.run || {};
+      const site = run.site;
+      const verdict = res.error ? no("REFUSED")
+        : res.aborted ? no("WITHDREW")
+        : res.success ? ok("SUCCESS") : no("FAILED");
+
+      // Everyone who came home carrying something, and everyone who
+      // did not come home at all.
+      const fallen = [], hurt = [];
+      for (const t of res.tasks || []) {
+        for (const c of t.casualties || []) {
+          (c.died ? fallen : hurt).push(c.died
+            ? nm(c.runner) + " " + no("KILLED")
+            : nm(c.runner) + " down — " + num(c.wounds) + " boxes");
+        }
+        for (const inj of t.injured || []) hurt.push(nm(inj.runner) + " — " + num(inj.wounds) + " boxes");
+      }
+
+      const cell = (k, v) => '<div class="res-cell"><span class="rk">' + k + "</span>" + v + "</div>";
+      const cells = [];
+
+      if (site) {
+        const st = site.securityState;
+        const axes = st ? ["physical", "astral", "matrix"]
+          .map((a) => a[0].toUpperCase() + ":" + num(st.axes[a].current)).join(" ") : "—";
+        cells.push(cell("the site now reads", esc(res.threatBand || "normal") + "<br>" +
+          '<span class="dimmed">security </span>' + axes +
+          (res.incident && res.incident.ratcheted ? "<br>" + no("they have not stood down") : "")));
+      }
+      if (res.karmaAward) cells.push(cell("karma", num("+" + res.karmaAward) + '<span class="dimmed"> each</span>'));
+      if (res.yield) cells.push(cell("salvage", num(res.yield.amount) + " " + esc(String(res.yield.kind).replace("resource:", ""))));
+      if (res.bonusItem) cells.push(cell("found", nm(res.bonusItem.label)));
+      if (res.dataHaul) cells.push(cell("data haul", num(res.dataHaul.files || res.dataHaul.amount || 0) + " files"));
+      // Pay is a JOB-level event that lands when the day settles, not
+      // when a leg finishes — so the honest thing to say here is
+      // whether this leg CLOSED the contract, and what that is worth.
+      const job = (session.jobs || []).find((j) => j.missions.indexOf(run.mission) !== -1);
+      if (job) {
+        const done = MJ.isJobComplete(job);
+        cells.push(cell("contract #" + job.contractNumber,
+          done && !job.paid
+            ? ok("COMPLETE") + '<br><span class="dimmed">pays </span>' + num("¥" + job.pay) +
+              '<span class="dimmed"> + 1 rep on settle</span>'
+            : '<span class="dimmed">' + num(job.missions.filter((m) => m.resolved).length) + " of " +
+              num(job.missions.length) + " legs done</span>"));
+      }
+      if (fallen.length) cells.push(cell("lost", fallen.join("<br>")));
+      if (hurt.length) cells.push(cell("came home hurt", hurt.join("<br>")));
+      if (res.gap) cells.push(cell("what was missing", no(esc(res.gap.needs ? res.gap.needs.join(", ") : ""))));
+      if (!cells.length) cells.push(cell("outcome", '<span class="dimmed">nothing changed hands</span>'));
+
+      MJ.decide.open({
+        title: esc(entry.label || run.kind),
+        subtitle: '<span class="dimmed">debrief</span>',
+        context: contextLines(run),
+        transcript: transcript,
+        heading: '<div class="res-verdict">' + verdict + '</div>' +
+          '<span class="dimmed">' + num(res.obstaclesFaced || 0) + " obstacle" +
+          ((res.obstaclesFaced || 0) === 1 ? "" : "s") + " faced</span>" +
+          '<div class="res-grid">' + cells.join("") + "</div>",
+        options: [],
+        actions: [{ id: "close", label: "back to the hub", tone: "warn-btn" }],
+        onAction: () => { MJ.decide.close(); done(res); },
+      });
     }
 
     // Mid-extended-work. The only question is whether to spend

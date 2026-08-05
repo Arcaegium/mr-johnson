@@ -211,7 +211,18 @@
     return { ok: true, runner: runner };
   }
 
+  // Hiring straight off the market is legal — you can see someone and
+  // sign them on the spot. But it has to actually MOVE them: a
+  // contract without a roster place left them sitting in the market
+  // wearing "permanent", which is a runner in two states at once.
+  // Routed through watchFromMarket so the watch cap, the roster push
+  // and the market refill all still happen exactly once.
   function hire(session, runner, tier) {
+    const inMarket = session.market.indexOf(runner);
+    if (inMarket !== -1) {
+      const moved = watchFromMarket(session, inMarket);
+      if (!moved.ok) return moved;
+    }
     if (!runner.market.hired && hiredCount(session) >= session.save.johnson.boardCapacity) {
       const result = { ok: false, error: "crew is full — release someone or expand capacity" };
       logLine(session, "hire refused for " + runner.identity.handle + " — " + result.error);
