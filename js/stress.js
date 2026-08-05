@@ -1964,14 +1964,18 @@
     check(!act(cam, "maskIcon").lands, "C22: a camera with eyes in the room is not watching the wire");
     check(!act(lock, "sneak").lands, "C22: and a lock that watches nothing cannot be hidden from");
 
-    // Assensing is the exception, and deliberately: the lattice is
-    // always on screen and assensing decides how much of it you
-    // understand. So it reads ANYTHING astrally present — a living
-    // aura, a spirit, a made structure — watching or not.
-    check(act(grd, "assense").lands, "C22: a guard has a living aura, and an aura can be read");
-    check(act(spr, "assense").lands, "C22: so does a spirit");
-    check(act(wrd, "assense").lands, "C22: and a ward is a structure a reader can find the seam in");
-    check(!act(cam, "assense"), "C22: but a camera has no astral side at all — nothing to read");
+    // ASSENSING IS NOT AN OBSTACLE VERB AT ALL. It is receptive — it
+    // takes information in, it does not do anything TO a thing — so it
+    // can never be a way past one. It briefly was, which produced a
+    // runner reading a guard's aura for seven intervals in his face
+    // and thereby getting around him. Reading auras lives in the
+    // astral pillar's grammar, where what it buys is Lattice depth.
+    check(!MJ.VERBS.assense, "C22: assensing must not be an obstacle-resolution verb");
+    for (const t of TYPES) {
+      const ob = MJ.generateObstacleInstance(MJ.makeRNG("c22-as-" + t), t, 5, "physical");
+      check(!MJ.actsFor(ob).some((a) => a.def.skill === "assensing"),
+        "C22: nothing may offer assensing as a way past (" + t + ")");
+    }
 
     // ── Nothing is ever removed from the menu ────────────────────
     const crew = makeRoster(MJ.makeRNG("c22-crew"), 3, ["fighter", "decker", "mage"]);
@@ -2120,20 +2124,9 @@
 
       // Assensing is perception, not spellcasting. It buys more of the
       // truth with every interval and it does NOT bill the mage.
-      check(MJ.VERBS.assense.extended, "C22: a proper read is an extended test — more time, more truth");
-      check(!MJ.VERBS.assense.drains, "C22: assensing must never cost Drain — looking is not casting");
       check(MJ.VERBS.blast.drains && MJ.VERBS.unwind.drains && MJ.VERBS.banish.drains,
         "C22: sorcery and conjuring DO bill the caster");
-      const aRun = MJ.beginMission(MJ.makeRNG("c22-ar"),
-        { site: wardSite, kind: "astralRun", objective: {} }, [mage], 1);
-      const aWard = aRun.obstacles.find((o) => o.type === "ward" && !o.isExitWard);
-      aRun.index = aRun.obstacles.indexOf(aWard);
-      let g3 = 0;
-      do { MJ.missionChoose(aRun, { approach: "assense", runner: mage }); g3++; }
-      while (aRun.extended && g3 < 40);
-      check(!aRun.drainTaken || !aRun.drainTaken.get(mage),
-        "C22: a mage who read an aura must not have been charged Drain for it");
-      check(!aRun.neutralized.has(aWard), "C22: reading a ward does not dismantle it either");
+
     }
   }
 

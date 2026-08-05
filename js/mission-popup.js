@@ -132,6 +132,35 @@
     return "";
   }
 
+  // ── The exchange, blow by blow ──────────────────────────────────
+  // Every gate, on the page. A fight the player cannot watch is one
+  // they have to take on trust, and "did that resolve or did it flip
+  // a coin" deserves an answer you can read off the screen. So each
+  // line says which gate decided it: the roll, then Power vs Armour,
+  // then what got through and onto which track.
+  function combatLog(log) {
+    if (!log || !log.length) return "";
+    const rows = log.map((e) => {
+      const at = '<span class="dimmed">r' + e.round + "p" + e.pass + "</span> ";
+      if (e.event === "hold") return at + nm(e.actor) + '<span class="dimmed"> holds (' + esc(e.stance || "") + ")</span>";
+      if (e.event === "dry") return at + nm(e.actor) + " " + no("out of ammo") + '<span class="dimmed"> (' + esc(e.weapon) + ")</span>";
+      if (e.event !== "attack") return "";
+      const head = at + nm(e.actor) + '<span class="dimmed"> → </span>' + nm(e.target) +
+        '<span class="dimmed"> · ' + esc(e.weapon) + " " + esc(e.mode) + "</span> " +
+        num(e.atkHits) + '<span class="dimmed"> vs </span>' + num(e.defHits);
+      if (e.result === "miss") return head + " — " + no("miss");
+      const pen = '<span class="dimmed"> · Power </span>' + num(e.power) +
+        '<span class="dimmed"> vs Armour </span>' + num(e.armour);
+      if (e.result === "no penetration") return head + pen + " — " + no("BOUNCED");
+      const dmg = '<span class="dimmed"> · DV </span>' + num(e.dv) +
+        '<span class="dimmed"> − soak </span>' + num(e.soaked) +
+        '<span class="dimmed"> = </span>' + (e.damage > 0 ? no(e.damage) : '<span class="dimmed">0</span>') +
+        (e.stun ? '<span class="dimmed"> stun</span>' : '<span class="dimmed"> phys</span>');
+      return head + pen + dmg + (e.downed ? " " + no("DOWN") : "");
+    }).filter(Boolean);
+    return '<div class="fightlog">' + rows.join("<br>") + "</div>";
+  }
+
   function describeTask(t) {
     if (!t.runner) return '<span class="dimmed">' + esc(t.obstacle) + " " + num("T" + t.tier) + " — " + esc(t.result) + "</span>";
     if (t.rejected) return nm(t.runner) + " tried " + esc(t.skill) + " on " + nm(t.obstacle) + " — " + no(t.rejected);
@@ -142,7 +171,7 @@
         (t.success ? ok("crew held the ground") : t.stalemate ? no("broke off — could not finish them") : no("THE CREW WENT DOWN")) + readNote(t.read);
       const fallen = (t.casualties || []).map((c) => "<br>&nbsp;&nbsp;" + nm(c.runner) +
         (c.died ? " " + no("was KILLED") : " went down — carried out with " + num(c.wounds) + " box" + (c.wounds === 1 ? "" : "es"))).join("");
-      return head + fallen +
+      return head + combatLog(t.log) + fallen +
         (t.responders && t.responders.length
           ? "<br>" + "&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
     }
@@ -220,6 +249,26 @@
       lines.push(nm(id.name || ("site #" + id.universeIndex)) +
         ' <span class="dimmed">· ' + esc(id.owningFaction) + " · " + esc(id.district) +
         (id.theme ? " · " + esc(id.theme) : "") + "</span>");
+    }
+    // WHAT THEY EXPECTED, and what they have now actually SEEN.
+    // An axis ticks over from estimate to confirmed the moment the
+    // crew has proof — either they met something rated at the top of
+    // what the place can field, or they faced enough of it that the
+    // density says so on its own. Standing in the building and
+    // watching your guess get confirmed is the payoff for going.
+    if (run.site && run.state) {
+      const axes = ["physical", "astral", "matrix"].map((a) => {
+        const p = MJ.axisProven(run, a);
+        const est = run.site.estimatedSecurity ? run.site.estimatedSecurity[a] : null;
+        const letter = a[0].toUpperCase();
+        if (p && p.proven) {
+          return letter + ":" + ok(run.state.axes[a].current + "✓") +
+            '<span class="dimmed">(' + (p.why === "calibre" ? "saw their best" : "saw enough") + ")</span>";
+        }
+        const seen = p && p.faced ? '<span class="dimmed">·' + p.faced + " seen</span>" : "";
+        return letter + ':<span class="dimmed">~' + (est === null ? "?" : est) + "</span>" + seen;
+      }).join(" ");
+      lines.push('<span class="dimmed">security </span>' + axes);
     }
     // WHERE they are. A street run walks the building room by room,
     // so the obstacle in front of the crew has a place, and the
@@ -479,8 +528,14 @@
       const prompt = MJ.missionPrompt(run);
       if (!prompt) return finish();
       if (prompt.extended) return stepExtended(prompt);
-      const options = prompt.options.map(optionFor);
-      const stalled = prompt.options.every((o) => !o.available);
+      // What the crew LEARNED stays on screen, greyed, because they
+      // bought it with an attempt. What was never on the table for
+      // this crew — the wrong kind of act for this thing, or a skill
+      // nobody has — is not information, it is nine lines of noise
+      // between the player and the transcript.
+      const shown = prompt.options.filter((o) => o.available || o.discovered);
+      const options = shown.map(optionFor);
+      const stalled = !shown.some((o) => o.available);
       MJ.decide.open({
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">obstacle </span>' + num(prompt.index + 1) +
@@ -498,7 +553,7 @@
           { id: "withdraw", label: "withdraw the crew", tone: "warn-btn" },
         ].filter(Boolean),
         onChoose: (opt, i) => {
-          const c = prompt.options[i];
+          const c = shown[i];
           MJ.missionChoose(run, { skill: c.skill, runner: c.runner, approach: c.approach });
           step();
         },

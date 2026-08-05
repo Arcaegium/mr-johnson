@@ -581,6 +581,48 @@
     return casualty;
   }
 
+  // ── When has a crew SEEN enough to confirm a security value? ────
+  // Walking past one camera does not tell you whether you are looking
+  // at level 1 or level 5 — so facing a single obstacle should never
+  // have confirmed an axis, and used to.
+  //
+  // Both proofs are derived from how the generator actually spends a
+  // security value, not invented:
+  //
+  //   CALIBRE  every obstacle's tier is rng.int(1, N), so N is the
+  //            ceiling on what a site can field. Meet something rated
+  //            N and you have met the top of what they have.
+  //   VOLUME   a value buys coverage of N/10 of that projection's
+  //            slots, so density is the other tell. Face enough of
+  //            them and the budget speaks for itself.
+  //
+  // Either proof alone confirms. Neither, and the read stays an
+  // estimate, which is correct: you were there, you did not see enough.
+  function confirmVolumeFor(n) { return Math.max(2, Math.ceil(n / 2)); }
+
+  function facedOn(run, axis) {
+    let count = 0, maxTier = 0;
+    for (const o of run.obstacles.slice(0, run.index)) {
+      if (o.projection !== axis) continue;
+      count += 1;
+      if (o.tier > maxTier) maxTier = o.tier;
+    }
+    return { count: count, maxTier: maxTier };
+  }
+
+  function axisProven(run, axis) {
+    const st = run.state && run.state.axes && run.state.axes[axis];
+    if (!st) return null;
+    const n = st.current;
+    const f = facedOn(run, axis);
+    const need = confirmVolumeFor(n);
+    const why = f.maxTier >= n ? "calibre" : f.count >= need ? "volume" : null;
+    return {
+      axis: axis, faced: f.count, maxTier: f.maxTier,
+      needVolume: need, proven: !!why, why: why,
+    };
+  }
+
   function reconObstacles(site, lens) {
     const all = MJ.allObstacles(site);
     // A Matrix scout reports on whatever is ON THE GRID, which is a
@@ -1103,6 +1145,9 @@
         const runner = upright[ri];
         // Read per runner: `shoot` is whatever THEY are carrying, and
         // a rifle is marksmanship where a shotgun is firearms.
+        // Some verbs need the runner to be HOLDING the right thing —
+        // no gun, no shooting, whatever their firearms rank says.
+        if (verb.carries && !verb.carries(runner)) continue;
         const skill = MJ.verbSkill(verb, runner);
         if (!skill || (eff[ri][skill] || 0) <= 0) continue;
         // Ranked by the pool they will ACTUALLY roll — the same
@@ -1713,6 +1758,11 @@
         enemies: fight.enemies, enemiesDown: fight.enemiesDown,
         casualties: fight.casualties, injured: fight.injured, loud: true,
         stalemate: fight.stalemate,
+        // The blow-by-blow. A fight the player cannot watch is a fight
+        // they have to take on trust, and "did that actually resolve
+        // or did it flip a coin" is a fair question to be able to
+        // answer from the screen.
+        log: fight.log,
         success: fight.won,
       };
 
@@ -2063,8 +2113,13 @@
     // every axis it interacted with. Faced obstacles confirm their
     // projection; working a deck (hacking) confirms matrix; a recon
     // sweep confirms its own lens once it faced anything at all.
-    const confirmedAxes = new Set(obstacles.map((o) => o.projection));
-    if (tasks.some((t) => t.skill === "hacking")) confirmedAxes.add("matrix");
+    const confirmedAxes = new Set();
+    for (const axis of MJ.SECURITY_AXES) {
+      const p = axisProven(run, axis);
+      if (p && p.proven) confirmedAxes.add(axis);
+    }
+    // A recon sweep is the exception: LOOKING is the whole job, so it
+    // confirms its own lens on the strength of having gone and looked.
     if (kind === "recon" && (success || obstacles.length > 0)) confirmedAxes.add(mission.lens);
     for (const axis of confirmedAxes) {
       if (axis !== "physical" && axis !== "astral" && axis !== "matrix") continue;
@@ -2415,6 +2470,7 @@
   // player is offered and what decides "no way through" must be one
   // count, because they are one function.
   MJ.remainingApproaches = remainingApproaches;
+  MJ.axisProven = axisProven;
   MJ.missionExtendedStep = missionExtendedStep;
   MJ.extendedThreshold = extendedThreshold;
   MJ.missionAbort = missionAbort;

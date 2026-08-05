@@ -619,3 +619,12 @@ body.railed .framebar { left: 300px; }
   color: var(--accent-2);
 }
 .sitelink:hover::after { color: var(--accent); }
+
+/* The exchange, round by round — indented under its own fight line so
+   a long firefight reads as one block rather than flooding the
+   transcript. */
+.fightlog {
+  margin: 4px 0 2px 14px; padding-left: 8px;
+  border-left: 1px solid var(--line);
+  font-size: 0.86em; line-height: 1.5;
+}

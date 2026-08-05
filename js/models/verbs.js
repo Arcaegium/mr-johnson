@@ -36,13 +36,12 @@
 
    EVADING SOMETHING IS PILLAR-BOUND. `requiresSense` marks the
    verbs that work by staying outside a watcher's attention —
-   sneaking, masking an icon, reading an aura to step around it. You
+   sneaking, masking an icon. You
    can only hide from a watcher IN THE MEDIUM IT WATCHES, so each of
    those requires the thing to sense the verb's own pillar. Sneaking
    past a maglock is meaningless (it is looking at nothing), masking
    your icon from a camera that only has eyes in the room is
-   meaningless, and a guard has no astral regard to step outside of.
-   Getting a thing to ACCEPT you is a different act — `con` and
+   meaningless. Getting a thing to ACCEPT you is a different act — `con` and
    `sleaze` talk a sapient or a system into letting you through, and
    neither needs the thing to be watching.
 
@@ -130,7 +129,18 @@
       // is read off the weapon rather than assumed: a rifle is
       // marksmanship and a shotgun is firearms, and the pool shown
       // has to be the pool rolled.
-      skill: null, skillFor: (runner) => MJ.weaponProfile(MJ.combatLoadoutFor(runner).weaponId).skill,
+      //
+      // But you cannot shoot with a knife. `carries` gates the verb on
+      // the runner's own loadout, not on the thing being shot at — a
+      // runner holding a blade was being offered "shoot it" and
+      // quoted a MELEE pool for it, which is two different weapons in
+      // one sentence.
+      skill: null,
+      skillFor: (runner) => MJ.weaponProfile(MJ.combatLoadoutFor(runner).weaponId).skill,
+      carries: (runner) => {
+        const w = MJ.weaponProfile(MJ.combatLoadoutFor(runner).weaponId);
+        return (w.modes || []).some((m) => m !== "melee");
+      },
       weapon: null,
       damaging: true, loud: true, threat: "THREATENING",
       describe: "whatever they are carrying, pointed at it",
@@ -185,26 +195,18 @@
     },
 
     // ── Astral pillar ────────────────────────────────────────────
-    // Everything astrally present has an aura, watching or not — the
-    // Lattice is always on screen and assensing decides how much of
-    // it you UNDERSTAND. So this reaches anything on the plane and
-    // needs no regard to step outside of.
+    // ── Assensing is NOT here, and that is the point ─────────────
+    // It is RECEPTIVE: it takes information in. It does not do
+    // anything TO a thing, so it can never be a way past one. An
+    // earlier pass had it as "walk past without tripping it", which
+    // produced the absurdity of a runner reading a guard's aura for
+    // seven intervals in his face and thereby getting around him.
     //
-    // EXTENDED, per the source: a glance is one thing, but reading a
-    // construct or a signature properly is an Extended Test that buys
-    // more of the truth with every interval. That is also why it is
-    // the verb that pays for itself — what it buys is the depth the
-    // Lattice opens at.
-    //
-    // It causes NO DRAIN. Assensing is perception, not spellcasting;
-    // billing a mage for looking at something is not a rule that
-    // exists. See the drain branch in mission.js.
-    assense: {
-      pillar: "astral", skill: "assensing",
-      label: (t) => (t.construct ? "read it for a seam" : "read its aura and step around it"),
-      loud: false, threat: "AWKWARD", escalates: true, extended: true,
-      describe: "read it until you understand it — every interval buys more",
-    },
+    // Reading auras lives in the astral pillar's own grammar
+    // (astral.js), where what it buys is Lattice read depth. Later it
+    // will reveal obstacles and reveal facts about them. It will
+    // never SOLVE one. See UNDERSTANDING.md §3.4: assensing governs
+    // the quality of information, never passage.
     banish: {
       pillar: "astral", label: "banish it", skill: "conjuring",
       requires: { summoned: true },
