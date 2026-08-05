@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Johnson — models/verbs.js
-   VERBS × PROPERTIES, per docs/PILLAR-PLAN.md §3.6.
+   VERBS × PROPERTIES. The model is UNDERSTANDING.md §11.5.
 
    THE RULE:
      Every verb is attemptable against every thing WITHIN ITS
@@ -34,6 +34,18 @@
    That is the ruling, and it is the same principle attempt caps
    died for.
 
+   EVADING SOMETHING IS PILLAR-BOUND. `requiresSense` marks the
+   verbs that work by staying outside a watcher's attention —
+   sneaking, masking an icon, reading an aura to step around it. You
+   can only hide from a watcher IN THE MEDIUM IT WATCHES, so each of
+   those requires the thing to sense the verb's own pillar. Sneaking
+   past a maglock is meaningless (it is looking at nothing), masking
+   your icon from a camera that only has eyes in the room is
+   meaningless, and a guard has no astral regard to step outside of.
+   Getting a thing to ACCEPT you is a different act — `con` and
+   `sleaze` talk a sapient or a system into letting you through, and
+   neither needs the thing to be watching.
+
    DAMAGING VERBS route through the three-gate chain combat already
    uses: Hit → Penetrate (Power vs Armour) → Damage, accumulating
    against structure. So a pistol sparks off a hardened door forever
@@ -42,40 +54,45 @@
    penetrate at all — no special case required.
 
    Kicking is a MELEE ATTACK with the `unarmed` profile that already
-   exists. Demolitions stays a trained skill needing equipment,
-   because having feet and having explosives are different
-   categories of thing.
+   exists. Demolitions stays a trained skill — the breaching charge
+   in the armory is a BOOST on that roll, not a licence to make it.
+   Having feet and having explosives are different categories of
+   thing, and the skill is what says which one you have.
    ============================================================ */
 (function () {
   window.MJ = window.MJ || {};
 
   const T = () => MJ.THREAT;
 
+  // A verb reads its own label off the thing where the phrasing
+  // genuinely changes with what is being handled — looping a feed
+  // and splicing a lock are one verb (`tamper`) doing one job, and
+  // saying so in the same words twice would read as a bug. The
+  // BRANCHES ARE PROPERTIES, never obstacle types, so a new kind of
+  // thing inherits sensible wording without being authored for.
+  const matrixOnly = (t) => (t.presence || []).length === 1 && (t.presence || [])[0] === "matrix";
+
   // `requires` is checked against the THING. Every key must hold.
-  //   living / sapient / summoned   nature flags
-  //   presence                      handled separately, per pillar
+  //   living / sapient / summoned / construct / fights / bypassable
+  //   presence     — gate 1, handled per pillar
+  //   requiresSense— gate 2 for evasion: senses THIS verb's pillar
   const VERBS = {
     // ── Physical pillar ──────────────────────────────────────────
-    kick: {
-      pillar: "physical", label: "kick it in", skill: "melee", weapon: "unarmed",
-      damaging: true, loud: true, threat: "THREATENING",
-      describe: "feet and perseverance — everyone has both",
-    },
-    shoot: {
-      pillar: "physical", label: "shoot it", skill: "firearms", weapon: null,
-      damaging: true, loud: true, threat: "THREATENING",
-      describe: "whatever they are carrying, pointed at it",
-    },
-    breach: {
-      pillar: "physical", label: "breach it", skill: "demolitions", weapon: "demolitions",
-      damaging: true, loud: true, threat: "THREATENING", needsGear: "demolitions",
-      describe: "the right tool, and the training to use it",
-    },
     sneak: {
       pillar: "physical", label: "slip past unseen", skill: "stealth",
-      requires: { perceives: true },
+      requiresSense: true,
       loud: false, threat: "QUESTIONABLE",
       describe: "there is nothing to sneak past if nothing is looking",
+    },
+    takedown: {
+      pillar: "physical", skill: "stealth",
+      label: (t) => (t.sapient ? "silent takedown" : "put it down quietly"),
+      // A body, and one nobody called up. You cannot cut the throat
+      // of something that was summoned here — undoing that is
+      // conjuring's job, not a knife's.
+      requires: { living: true, summoned: false },
+      loud: false, threat: "THREATENING", disables: true,
+      describe: "a body can be put on the floor; a lock cannot",
     },
     con: {
       pillar: "physical", label: "talk your way past", skill: "con",
@@ -92,32 +109,74 @@
     pick: {
       pillar: "physical", label: "work the lock", skill: "larceny",
       requires: { living: false },
-      loud: false, threat: "QUESTIONABLE", extended: true,
+      loud: false, threat: "QUESTIONABLE", extended: true, disables: true,
       describe: "patience against a mechanism",
     },
     tamper: {
-      pillar: "physical", label: "tamper with it", skill: "electronics",
+      pillar: "physical", skill: "electronics",
+      label: (t) => (t.perceives ? "loop the feed" : "splice its wiring"),
       requires: { living: false },
-      loud: false, threat: "QUESTIONABLE", extended: true,
+      loud: false, threat: "QUESTIONABLE", extended: true, disables: true,
       describe: "its own wiring, turned against it",
     },
+    kick: {
+      pillar: "physical", label: "kick it in", skill: "melee", weapon: "unarmed",
+      damaging: true, loud: true, threat: "THREATENING",
+      describe: "feet and perseverance — everyone has both",
+    },
+    shoot: {
+      pillar: "physical", label: "shoot it",
+      // Whatever they are actually carrying, which is why the skill
+      // is read off the weapon rather than assumed: a rifle is
+      // marksmanship and a shotgun is firearms, and the pool shown
+      // has to be the pool rolled.
+      skill: null, skillFor: (runner) => MJ.weaponProfile(MJ.combatLoadoutFor(runner).weaponId).skill,
+      weapon: null,
+      damaging: true, loud: true, threat: "THREATENING",
+      describe: "whatever they are carrying, pointed at it",
+    },
+    breach: {
+      pillar: "physical", label: "breach it", skill: "demolitions", weapon: "demolitions",
+      // A shaped charge is placed against a thing that is standing
+      // still. Throwing one at a man is a different act with a
+      // different name, and "breach it" is not it.
+      requires: { living: false },
+      damaging: true, loud: true, threat: "THREATENING",
+      describe: "the right tool, and the training to use it",
+    },
+    // Not an act against the thing at all — which is why it belongs
+    // to no pillar and always reaches. What decides it is whether
+    // the thing is something there is a way around: a roaming
+    // spirit or a sealed area, yes; the one door into the vault, no.
     routeAround: {
-      pillar: "physical", label: "route around", skill: null,
+      anywhere: true, label: "go around it", skill: null,
+      requires: { bypassable: true },
       loud: false, threat: "NORMAL",
       describe: "the long way — costs the time, nothing else",
     },
 
     // ── Matrix pillar ────────────────────────────────────────────
     hackDevice: {
-      pillar: "matrix", label: "unlock it remotely", skill: "hacking",
-      loud: false, threat: "QUESTIONABLE", extended: true,
+      pillar: "matrix", skill: "hacking",
+      label: (t) => (t.perceives ? "kill it remotely"
+        : matrixOnly(t) ? "unpick its code" : "unlock it remotely"),
+      // A device answers. Something that bites back is not answering
+      // — Black ICE is an active countermeasure, and the way past it
+      // is to hide from it, fool it, or fight it.
+      requires: { fights: false },
+      loud: false, threat: "QUESTIONABLE", extended: true, disables: true,
       describe: "it is a device, and devices answer",
+    },
+    maskIcon: {
+      pillar: "matrix", label: "mask your icon", skill: "hacking",
+      requiresSense: true,
+      loud: false, threat: "QUESTIONABLE",
+      describe: "nothing to hide from if nothing is watching the wire",
     },
     sleaze: {
       pillar: "matrix", label: "pass as legitimate traffic", skill: "computer",
-      requires: { perceives: true },
       loud: false, threat: "AWKWARD", escalates: true,
-      describe: "nothing to fool if nothing is watching the wire",
+      describe: "credentials it has no reason to doubt",
     },
     attackIce: {
       pillar: "matrix", label: "hammer it down", skill: "hacking",
@@ -126,15 +185,32 @@
     },
 
     // ── Astral pillar ────────────────────────────────────────────
+    // Everything astrally present has an aura, watching or not — the
+    // Lattice is always on screen and assensing decides how much of
+    // it you UNDERSTAND. So this reaches anything on the plane and
+    // needs no regard to step outside of.
+    //
+    // EXTENDED, per the source: a glance is one thing, but reading a
+    // construct or a signature properly is an Extended Test that buys
+    // more of the truth with every interval. That is also why it is
+    // the verb that pays for itself — what it buys is the depth the
+    // Lattice opens at.
+    //
+    // It causes NO DRAIN. Assensing is perception, not spellcasting;
+    // billing a mage for looking at something is not a rule that
+    // exists. See the drain branch in mission.js.
     assense: {
-      pillar: "astral", label: "assense it", skill: "assensing",
-      loud: false, threat: "NORMAL",
-      describe: "read the aura — what it is, and where it is weak",
+      pillar: "astral", skill: "assensing",
+      label: (t) => (t.construct ? "read it for a seam" : "read its aura and step around it"),
+      loud: false, threat: "AWKWARD", escalates: true, extended: true,
+      describe: "read it until you understand it — every interval buys more",
     },
     banish: {
       pillar: "astral", label: "banish it", skill: "conjuring",
       requires: { summoned: true },
-      loud: false, threat: "THREATENING",
+      // This one genuinely removes it: unravel what binds it here and
+      // it goes home. The deep version is the Lattice's `unravel`.
+      loud: false, threat: "THREATENING", disables: true, drains: true,
       describe: "unravel what binds it here — only works on something called",
     },
     unwind: {
@@ -143,12 +219,18 @@
       // and is not a construct — there is nothing there to take
       // apart, which is why this does not land on a guard.
       requires: { construct: true },
-      loud: false, threat: "AWKWARD", escalates: true,
-      describe: "a structure of mana, taken apart",
+      // NOT `disables`. You are not breaking a ward, you are opening a
+      // window in it and going through before it cranks shut — a
+      // mana barrier repairs itself, which is the whole character of
+      // the mode (lattice.js `recloseRate`, and `latticeAbandon`: a
+      // half-unwound ward re-closes). This is what makes the way home
+      // a real problem: the wall you came through is still there.
+      loud: false, threat: "AWKWARD", escalates: true, extended: true, drains: true,
+      describe: "open a window in it and go through before it closes",
     },
     blast: {
       pillar: "astral", label: "blast it down", skill: "sorcery",
-      damaging: true, loud: true, threat: "THREATENING",
+      damaging: true, loud: true, threat: "THREATENING", drains: true,
       describe: "mana, thrown hard",
     },
   };
@@ -157,9 +239,29 @@
     return VERBS[id] || null;
   }
 
+  // What this verb is called against THIS thing.
+  function labelOf(verb, thing) {
+    if (!verb) return "";
+    return typeof verb.label === "function" ? verb.label(thing || {}) : verb.label;
+  }
+
+  // Which skill a given runner would actually roll. Constant for
+  // almost everything; read off the weapon for the verbs that use
+  // whatever the runner is carrying.
+  function skillOf(verb, runner) {
+    if (!verb) return null;
+    if (verb.skillFor && runner) {
+      try { return verb.skillFor(runner); } catch (e) { return verb.skill; }
+    }
+    return verb.skill;
+  }
+
+  const sensesPillar = (thing, pillar) => (thing.senses || []).indexOf(pillar) !== -1;
+
   // Gate 1: can this verb reach the thing at all?
   function reaches(verb, thing) {
     if (!verb || !thing) return false;
+    if (verb.anywhere) return true;
     const presence = thing.presence || [];
     return presence.indexOf(verb.pillar) !== -1;
   }
@@ -168,6 +270,7 @@
   // still offered and still attemptable — it just accomplishes
   // nothing, which the player finds out by doing it.
   function lands(verb, thing) {
+    if (verb.requiresSense && !sensesPillar(thing, verb.pillar)) return false;
     const req = verb.requires;
     if (!req) return true;
     for (const key of Object.keys(req)) {
@@ -184,36 +287,67 @@
         : verb.pillar === "matrix" ? "on the grid"
         : "on the astral");
     }
+    if (verb.requiresSense && !sensesPillar(thing, verb.pillar)) {
+      return verb.pillar === "matrix" ? "it is not watching the wire"
+        : verb.pillar === "astral" ? "it has no astral regard to step outside of"
+        : "it is not watching anything";
+    }
     const req = verb.requires || {};
     if (req.sapient && !thing.sapient) return "it has no opinion to change";
     if (req.summoned && !thing.summoned) return "nothing called it here, so nothing sends it back";
+    if (req.summoned === false && thing.summoned) return "it was called here; a knife does not send it back";
     if (req.construct && !thing.construct) return "it is not a made thing; there is no structure to take apart";
-    if (req.perceives && !thing.perceives) return "it is not watching anything";
+    if (req.bypassable && !thing.bypassable) return "there is no way around it — this IS the way";
+    if (req.living && !thing.living) return "there is no body here to put down";
     if (req.living === false && thing.living) return "it is alive; that is not a mechanism";
+    if (req.fights === false && thing.fights) return "it bites back — it is not a device waiting to answer";
     return "it does nothing to this";
+  }
+
+  // One verb crossed with one thing.
+  function crossOne(id, thing) {
+    const v = VERBS[id];
+    const canReach = reaches(v, thing);
+    const willLand = canReach && lands(v, thing);
+    return {
+      id: id, def: v,
+      label: labelOf(v, thing),
+      reaches: canReach,
+      lands: willLand,
+      // Effective only when both gates pass. Anything else is a
+      // real action with no useful result.
+      effective: canReach && willLand,
+      why: (canReach && willLand) ? null : whyNot(v, thing),
+    };
   }
 
   // Every verb of a pillar, crossed with one thing. The caller
   // decides what to do with the ones that do not land — the ruling
   // is that they stay on the menu.
   function verbsFor(pillar, thing) {
-    const out = [];
-    for (const id of Object.keys(VERBS)) {
-      const v = VERBS[id];
-      if (v.pillar !== pillar) continue;
-      const canReach = reaches(v, thing);
-      const willLand = canReach && lands(v, thing);
-      out.push({
-        id: id, def: v,
-        reaches: canReach,
-        lands: willLand,
-        // Effective only when both gates pass. Anything else is a
-        // real action with no useful result.
-        effective: canReach && willLand,
-        why: (canReach && willLand) ? null : whyNot(v, thing),
-      });
-    }
-    return out;
+    return Object.keys(VERBS)
+      .filter((id) => VERBS[id].pillar === pillar)
+      .map((id) => crossOne(id, thing));
+  }
+
+  // Everything that REACHES this thing, from every pillar at once —
+  // which is the real question a crew standing in front of it has.
+  // A maglock is a physical object and a device on the host, so the
+  // decker and the lockpick are looking at the same door.
+  function actsFor(thing) {
+    return Object.keys(VERBS)
+      .map((id) => crossOne(id, thing))
+      .filter((a) => a.reaches);
+  }
+
+  // Which world an act happens in — the verb's own pillar, because
+  // the pillar IS the medium the runner's attention is in. Reading
+  // it off the SKILL instead quietly filed spoofed credentials
+  // (`computer`) as a physical act, so a guard in the corridor got a
+  // vote on something that happened inside a host.
+  function planeOf(verb, fallback) {
+    if (!verb) return fallback || "physical";
+    return verb.pillar || fallback || "physical";
   }
 
   // The threat class this verb carries, resolved from the string on
@@ -225,9 +359,13 @@
 
   MJ.VERBS = VERBS;
   MJ.verbDef = verbDef;
+  MJ.verbLabel = labelOf;
+  MJ.verbSkill = skillOf;
   MJ.verbReaches = reaches;
   MJ.verbLands = lands;
   MJ.verbWhyNot = whyNot;
   MJ.verbsFor = verbsFor;
+  MJ.actsFor = actsFor;
+  MJ.verbPlane = planeOf;
   MJ.verbThreat = threatOf;
 })();

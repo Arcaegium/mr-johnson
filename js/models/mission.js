@@ -490,7 +490,12 @@
       .filter((o) => o.type === "ward")
       .map((ward) => Object.assign({}, ward, {
         label: ward.label + " (the way back)",
-        affordances: ward.affordances.map((a) => Object.assign({}, a)),
+        // Its own copy of everything a run WRITES to. The way back is
+        // a second crossing of the same wall: the immunities are the
+        // same facts about the same weave, but damage done on the way
+        // in is not damage done on the way out, and per-obstacle
+        // memory is keyed by object so these must be two objects.
+        immune: Object.assign({}, ward.immune),
         rooms: ["astral-objective"],
         isExitWard: true,
       }));
@@ -558,8 +563,12 @@
 
   function reconObstacles(site, lens) {
     const all = MJ.allObstacles(site);
+    // A Matrix scout reports on whatever is ON THE GRID, which is a
+    // question about presence rather than about which skills somebody
+    // once wrote into a list. A maglock and a camera are devices on
+    // the host wherever they happen to be bolted.
     const pool = lens === "matrix"
-      ? all.filter((o) => o.affordances.some((a) => a.skill === "hacking" || a.skill === "electronics"))
+      ? all.filter((o) => (o.presence || []).indexOf("matrix") !== -1)
       : all.filter((o) => o.projection === lens);
     return pool.slice(0, RECON_SAMPLE);
   }
@@ -676,8 +685,13 @@
       concealment: 0,
       extended: null, // in-progress extended work, if any (P2.1)
       anyLoud: false, anyGlitch: false, failed: false, aborted: false,
-      attempts: new Map(), // obstacle -> { approach: tries }, which drive escalation
+      attempts: new Map(), // obstacle -> { verbId: tries }, which drive escalation
       discovered: new Map(), // obstacle -> { skill: why it will never work here }
+      // obstacle -> structural damage taken THIS RUN. The site's own
+      // walls are generated from its seed and reset nightly, so a
+      // door that remembered being shot at would turn a farmable
+      // address into rubble and would have to survive a save.
+      damaged: new Map(),
       engagedAlert: false, // did this run force a real response
     };
     // Walking into a building that is ALREADY responding — an
@@ -764,8 +778,8 @@
     return null;
   }
 
-  function wasWitnessed(run, obstacle, affordance, succeeded, runner) {
-    if (affordance && affordance.loud) return true; // gunfire carries regardless
+  function wasWitnessed(run, obstacle, act, succeeded, runner) {
+    if (act && act.loud) return true; // gunfire carries regardless
 
     // WHICH WORLD did this happen in? Only things that perceive on
     // that plane can have seen it. A guard has eyes in meatspace
@@ -773,7 +787,12 @@
     // sight is invisible to him — and the camera he kills does not
     // phone anyone about it. A materialised spirit is dual-natured
     // and catches both.
-    const plane = MJ.planeOfAffordance(affordance);
+    //
+    // The plane is the VERB'S PILLAR, not a lookup on the skill.
+    // Reading it off the skill filed spoofed credentials (`computer`)
+    // as a physical act, so a guard in the corridor got a vote on
+    // something that happened inside a host.
+    const plane = (act && act.plane) || runPlane(run);
 
     // A clean quiet act is seen only by something OTHER than what you
     // just handled. Take down the one guard in the room and there is
@@ -810,26 +829,29 @@
   const THREAT_LADDER = [MJ.THREAT.NORMAL, MJ.THREAT.AWKWARD, MJ.THREAT.QUESTIONABLE, MJ.THREAT.THREATENING];
   const REPEATS_PER_STEP = 2; // tries at one approach before it reads a band worse
 
-  function threatClassFor(affordance, tries) {
-    if (!affordance || !affordance.threat) return MJ.THREAT.NORMAL;
-    const base = THREAT_LADDER.indexOf(affordance.threat);
-    if (base < 0) return affordance.threat;
+  function threatClassFor(verb, tries) {
+    if (!verb) return MJ.THREAT.NORMAL;
+    const declared = MJ.verbThreat(verb);
+    const base = THREAT_LADDER.indexOf(declared);
+    if (base < 0) return declared;
     // `escalates` marks approaches whose own safeguard handled the
     // first try, so they step up immediately rather than on the
     // usual cadence.
     const repeats = Math.max(0, (tries || 1) - 1);
-    const steps = affordance.escalates
+    const steps = verb.escalates
       ? repeats
       : Math.floor(repeats / REPEATS_PER_STEP);
     return THREAT_LADDER[Math.min(THREAT_LADDER.length - 1, base + steps)];
   }
 
   // ── Tries ───────────────────────────────────────────────────────
-  // Counted per AFFORDANCE, not per skill: a guard offers two
-  // different stealth plays — slip past him, or put him down quietly
-  // — and they are not the same swing. The count no longer spends a
-  // budget; it drives escalation, so trying the same thing over and
-  // over is what makes you look like someone with a purpose.
+  // Counted per VERB, not per skill: a guard can be slipped past or
+  // put down quietly, and though both are stealth they are not the
+  // same swing. The count no longer spends a budget; it drives
+  // escalation, so trying the same thing over and over is what makes
+  // you look like someone with a purpose. The key is the verb's own
+  // id — stable across a route that shifts under the crew, and
+  // readable in a save.
   // ── Keyed by the OBSTACLE, never by its position ───────────────
   // Responders splice into the route ahead of the crew, which shifts
   // the index of everything after them. Anything filed under a route
@@ -966,79 +988,145 @@
     };
   }
 
-  // What the crew is looking at, and every way they could take it.
-  // Blocked affordances are included on purpose — a Watsonian
-  // immunity is only knowable by trying it (§06: information isn't
-  // confirmed until experienced), so the UI decides what to reveal.
-  function missionPrompt(run) {
-    if (missionDone(run)) return null;
-    if (run.extended) return extendedPrompt(run);
-    const obstacle = run.obstacles[run.index];
-    const options = [];
+  // ── What a runner would actually be swinging ───────────────────
+  // A damaging verb is not an abstract "attack" — it is a specific
+  // thing in specific hands, and gate 2 is decided by which. `shoot`
+  // is whatever they are carrying (so combatLoadoutFor stays the one
+  // definition of that), `kick` is the unarmed profile everyone has,
+  // `breach` is the charge, and sorcery builds its profile out of the
+  // Force being pushed.
+  function manaProfile(force) {
+    return {
+      label: "Force " + force + " blast", skill: "sorcery",
+      power: force + 3, dv: force, ap: -2, modes: ["melee"],
+    };
+  }
+
+  function forceProfileFor(runner, verb, opts) {
+    opts = opts || {};
+    let profile;
+    let quality = 0;
+    if (verb.skill === "sorcery") {
+      profile = manaProfile(Math.max(1, opts.force || (runner.attributes.magic || 0)));
+    } else if (verb.weapon) {
+      profile = MJ.weaponProfile(verb.weapon);
+    } else {
+      const loadout = MJ.combatLoadoutFor(runner);
+      profile = MJ.weaponProfile(loadout.weaponId);
+      quality = loadout.weaponQuality || 0;
+    }
+    const strength = (runner.attributes && runner.attributes.strength) || 0;
+    return {
+      profile: profile, quality: quality, strength: strength,
+      power: (profile.power || 0) + quality + (profile.useStrength ? strength : 0),
+    };
+  }
+
+  function penetrates(force, obstacle) {
+    return force.power > Math.max(0, (obstacle.armour || 0) + (force.profile.ap || 0));
+  }
+
+  // ── Every way this crew could take this thing ──────────────────
+  // VERBS × PROPERTIES. Not a list somebody wrote for a maglock —
+  // every verb the game has, crossed against what this thing IS, with
+  // the two gates already applied. ONE definition: missionPrompt
+  // shows it, remainingApproaches counts it and the auto-chooser
+  // ranks it, so what the player is offered, what the house plays and
+  // what decides "no way through" cannot drift apart.
+  //
+  // Two kinds of dead end, and they are shown differently on purpose:
+  //   `lands: false`  the thing is the wrong KIND of thing. A camera
+  //                   has no opinion, and a crew can see that without
+  //                   trying — so the reason rides the option from
+  //                   the first look. It stays on the menu and stays
+  //                   clickable; it just does nothing.
+  //   `discovered`    a Watsonian immunity. Nothing visible says the
+  //                   box is air-gapped, so this appears ONLY after
+  //                   an attempt bought the knowledge, and thereafter
+  //                   the option is marked rather than deleted.
+  function optionsFor(run, obstacle) {
     // Effective skills are recomputed per prompt, not cached on the
     // run: a critical glitch mid-mission changes them. Once per
-    // runner rather than once per runner PER affordance, though —
-    // this used to allocate a fresh skill map fifteen times a prompt.
-    // Anyone dropped in a firefight is out of the run — they cannot
-    // front an approach from the floor.
+    // runner rather than once per runner PER verb, though — this used
+    // to allocate a fresh skill map fifteen times a prompt. Anyone
+    // dropped in a firefight is out of the run — they cannot front an
+    // approach from the floor.
     const upright = run.runners.filter((r) => !run.downed || !run.downed.has(r));
     const eff = upright.map((r) => MJ.getEffectiveSkills(r));
-    for (let approach = 0; approach < obstacle.affordances.length; approach++) {
-      const a = obstacle.affordances[approach];
-      // Skill-less affordances are real approaches, not filler:
-      // "route around" costs a beat and needs nobody trained. These
-      // used to be dropped here, which meant a crew with no magic
-      // was told there was NOTHING to try against a spirit it could
-      // simply have walked around.
-      if (!a.skill) {
-        const triedNoSkill = triesOn(run, obstacle, approach) + 1;
-        options.push({
-          skill: null, approach: approach, verb: a.verb, loud: !!a.loud,
-          blocked: !!a.blocked, reason: a.reason || null,
-          discovered: null, runner: null, pool: 0,
-          noRoll: true, tries: triedNoSkill - 1,
-          readsAs: threatClassFor(a, triedNoSkill),
-          available: true,
-        });
+    const options = [];
+    for (const act of MJ.actsFor(obstacle)) {
+      const verb = act.def;
+      // How many swings this verb has already had, and therefore what
+      // the NEXT one would read as. Handing the player the projected
+      // read before they commit is the whole point: they should be
+      // able to see themselves walking into questionable and choose
+      // to do something else instead.
+      const tries = triesOn(run, obstacle, act.id);
+      const option = {
+        verbId: act.id, approach: act.id, verb: act.label,
+        skill: verb.skill, runner: null, pool: 0, noRoll: false,
+        loud: !!verb.loud, damaging: !!verb.damaging, extended: !!verb.extended,
+        lands: act.lands, why: act.why, discovered: null,
+        tries: tries, readsAs: threatClassFor(verb, tries + 1),
+        available: false,
+      };
+      // A skill-less way is a real approach, not filler: going around
+      // costs a beat and needs nobody trained.
+      if (!verb.skill && !verb.skillFor) {
+        option.noRoll = true;
+        option.available = act.lands;
+        options.push(option);
         continue;
       }
       let best = null;
       for (let ri = 0; ri < upright.length; ri++) {
         const runner = upright[ri];
-        const trained = eff[ri][a.skill] || 0;
-        if (trained <= 0) continue;
+        // Read per runner: `shoot` is whatever THEY are carrying, and
+        // a rifle is marksmanship where a shotgun is firearms.
+        const skill = MJ.verbSkill(verb, runner);
+        if (!skill || (eff[ri][skill] || 0) <= 0) continue;
         // Ranked by the pool they will ACTUALLY roll — the same
         // definition resolveTask uses, so the toolkit-holder wins
         // ties against a bare-handed equal, and the runner with the
         // better linked attribute wins against an equally-trained
         // one. Computing this separately is what let the popup show
         // a number a whole attribute short of the real roll.
-        const pool = MJ.dicePoolFor(runner, a.skill, MJ.gearBonusFor(runner, a.skill));
-        if (!best || pool > best.pool) best = { runner: runner, pool: pool };
+        const pool = MJ.dicePoolFor(runner, skill, MJ.gearBonusFor(runner, skill));
+        const cand = { runner: runner, skill: skill, pool: pool, through: true };
+        // Against something that does not fight back, dice are the
+        // wrong ranking: the crack shot with a holdout cannot hurt an
+        // armoured door and the labourer with a shotgun can. Who gets
+        // THROUGH comes first, then who rolls best.
+        if (verb.damaging && !obstacle.fights) {
+          cand.through = penetrates(forceProfileFor(runner, verb), obstacle);
+        }
+        if (!best) best = cand;
+        else if (cand.through !== best.through) { if (cand.through) best = cand; }
+        else if (cand.pool > best.pool) best = cand;
       }
-      const known = knownUseless(run, obstacle, a.skill);
-      // How many swings this approach has already had, and therefore
-      // what the NEXT one would read as. Handing the player the
-      // projected read before they commit is the whole point: they
-      // should be able to see themselves walking into questionable
-      // and choose to do something else instead.
-      const tries = triesOn(run, obstacle, approach);
-      options.push({
-        skill: a.skill, approach: approach, verb: a.verb, loud: !!a.loud,
-        blocked: !!a.blocked, reason: a.reason || null,
-        // What the CREW knows — a Watsonian immunity is only knowable
-        // by trying it, so the UI shows `discovered`, never `blocked`.
-        discovered: known,
-        runner: best ? best.runner : null,
-        pool: best ? best.pool : 0,
-        tries: tries,
-        readsAs: threatClassFor(a, tries + 1),
-        // Nothing is used up. An approach is unavailable only when
-        // nobody can attempt it, or the crew has learned it cannot
-        // work here.
-        available: !!best && !known,
-      });
+      if (best) {
+        option.runner = best.runner;
+        option.skill = best.skill;
+        option.pool = best.pool;
+      }
+      option.discovered = knownUseless(run, obstacle, option.skill);
+      // Nothing is used up. A way in is unavailable only when nobody
+      // can attempt it, when it is the wrong kind of act for this
+      // thing, or when the crew has learned it cannot work here.
+      option.available = !!best && act.lands && !option.discovered;
+      options.push(option);
     }
+    // Live ways first — the menu keeps everything, but it does not
+    // make the player read past nine dead entries to find the two
+    // that work.
+    return options.sort((a, b) => (a.available === b.available ? 0 : a.available ? -1 : 1));
+  }
+
+  // What the crew is looking at, and every way they could take it.
+  function missionPrompt(run) {
+    if (missionDone(run)) return null;
+    if (run.extended) return extendedPrompt(run);
+    const obstacle = run.obstacles[run.index];
     return {
       obstacle: obstacle,
       label: obstacle.label,
@@ -1046,7 +1134,7 @@
       projection: obstacle.projection,
       index: run.index,
       total: run.obstacles.length,
-      options: options,
+      options: optionsFor(run, obstacle),
     };
   }
 
@@ -1145,6 +1233,20 @@
     return { runner: runner.identity.handle, died: false, wounds: severity };
   }
 
+  // ── AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME ──────────────────
+  // This runs the WHOLE fight itself and hands back one task. That is
+  // the harness, not the design: turn-based is the COMMAND MODE, and
+  // §07's action is three axes the PLAYER picks — Stance (open /
+  // cover / flanking / full defence), Method (which weapon, spell or
+  // program) and Mode (SS/SA/BF/FA, aim, called shot | spell Force |
+  // Matrix Attack vs Sleaze). None of that is offered here; the house
+  // picks cover for the crew, open for the enemy, burst if the weapon
+  // has it, and targets whoever is closest to dropping.
+  //
+  // Wiring the player's seat is the outstanding work on P2.2/P2.3.
+  // The engine underneath — initiative passes, the three gates, dual
+  // tracks, postures as effect channels — does not change when it
+  // lands, because postures ARE the seam. See SYSTEM-STATE.md.
   function runCombat(run, obstacle, opts) {
     opts = opts || {};
     const crew = crewCombatants(run);
@@ -1302,7 +1404,7 @@
     const test = w.test;
     run.extended = null;
 
-    if (test.success && w.affordance && w.affordance.neutralizes) {
+    if (test.success && w.act && w.act.def.disables) {
       run.neutralized.add(obstacle);
     }
     if (test.criticalGlitch) {
@@ -1317,10 +1419,10 @@
 
     const task = {
       obstacle: obstacle.label, tier: obstacle.tier,
-      runner: w.runner.identity.handle, skill: test.skillId,
+      runner: w.runner.identity.handle, skill: test.skillId, verb: w.verb,
       extended: true, intervals: test.intervals,
       hits: test.hits, threshold: test.threshold,
-      pool: w.startPool, loud: !!(w.affordance && w.affordance.loud),
+      pool: w.startPool, loud: !!(w.act && w.act.loud),
       success: test.success, glitch: test.glitch, criticalGlitch: test.criticalGlitch,
       exhausted: test.exhausted,
     };
@@ -1342,8 +1444,8 @@
   // nothing, a fumble registers, and something else with eyes on the
   // same ground can see either.
   function witnessExtended(run, obstacle, w, test, tries) {
-    if (!wasWitnessed(run, obstacle, w.affordance, test.success, w.runner)) return null;
-    const cls = threatClassFor(w.affordance, tries);
+    if (!wasWitnessed(run, obstacle, w.act, test.success, w.runner)) return null;
+    const cls = threatClassFor(w.act && w.act.def, tries);
     if (cls === MJ.THREAT.NORMAL) return null;
     const applied = MJ.witnessAct(run.state, run.day, cls);
     const out = {
@@ -1357,6 +1459,159 @@
       out.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);
     }
     return out;
+  }
+
+  // Which verb the caller meant. The prompt hands back a verb id, so
+  // that is the primary key; a caller that never had a prompt in
+  // front of it (an older probe, a script) can still name a skill and
+  // get the best way in that skill fronts. Resolving through the
+  // SAME option list the player was shown is what keeps the thing
+  // chosen and the thing resolved identical.
+  function actFor(run, obstacle, choice) {
+    const options = optionsFor(run, obstacle);
+    const wanted = choice.approach || choice.verbId;
+    let opt = wanted ? options.find((o) => o.verbId === wanted) : null;
+    if (!opt && choice.skill) {
+      opt = options.find((o) => o.skill === choice.skill && o.available) ||
+        options.find((o) => o.skill === choice.skill);
+    }
+    if (!opt) return null;
+    const verb = MJ.verbDef(opt.verbId);
+    const runner = choice.runner || opt.runner;
+    // The skill is read off the verb and the runner, never taken on
+    // trust from the caller — `shoot` is whatever THEY are carrying.
+    const skill = runner ? MJ.verbSkill(verb, runner) : opt.skill;
+    return {
+      option: opt, def: verb, verbId: opt.verbId, verb: opt.verb,
+      runner: runner, skill: skill,
+      loud: !!verb.loud, lands: opt.lands, why: opt.why,
+      // The hidden truth, as opposed to what the crew has learned.
+      immune: (obstacle.immune || {})[skill] || null,
+      // The world this act happens in — the verb's own pillar.
+      plane: MJ.verbPlane(verb, runPlane(run)),
+    };
+  }
+
+  // An act that was never going to accomplish anything. Two ways to
+  // get here and they are different in kind: the thing is the wrong
+  // KIND of thing (you talked at a camera), or it carries a Watsonian
+  // immunity nothing visible announced (the box is air-gapped). Both
+  // cost the beat, both are real acts something can witness, and
+  // neither is ever removed from the menu — the second one is what
+  // the crew was buying with the attempt.
+  function resolveIneffective(run, obstacle, act) {
+    const tries = countTry(run, obstacle, act.verbId);
+    if (act.immune) markUseless(run, obstacle, act.skill, act.immune);
+    const why = act.immune || act.why || "it does nothing to this";
+    const task = {
+      obstacle: obstacle.label, tier: obstacle.tier,
+      runner: act.runner ? act.runner.identity.handle : null,
+      skill: act.skill, verb: act.verb, pool: 0,
+      loud: act.loud, success: false, ineffective: true,
+      rejected: why,
+      result: act.verb + " — " + why,
+    };
+    // Nothing was rolled, but something was still DONE, and doing
+    // something pointless in front of a camera is doing something in
+    // front of a camera.
+    if (wasWitnessed(run, obstacle, act, false, act.runner)) {
+      const cls = threatClassFor(act.def, tries);
+      if (cls !== MJ.THREAT.NORMAL) {
+        const applied = MJ.witnessAct(run.state, run.day, cls);
+        task.read = {
+          threatClass: cls, band: applied.band,
+          changed: applied.band !== applied.before, awkward: applied.awkward,
+        };
+        if (applied.tipped) {
+          run.engagedAlert = true;
+          task.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);
+        }
+      }
+    }
+    if (MJ.alertEngaged(run.state)) MJ.addAlertPointsAll(run.state, ALERT_POINTS_PER_BEAT);
+    run.tasks.push(task);
+    if (remainingApproaches(run) === 0) { run.failed = true; run.index += 1; }
+    return task;
+  }
+
+  // ── Force against something that cannot fight back ─────────────
+  // A door, a camera, a ward, a wall of barrier ICE. Not a skill
+  // check — the three-gate chain, so the question is never "did you
+  // try hard enough" but "does what you are holding get through what
+  // it is made of." A pistol sparks off a hardened door forever; a
+  // rifle, a Force-6 blast or a breaching charge opens it in two
+  // swings. That is what makes brute force always AVAILABLE without
+  // making it always work.
+  function forceThrough(run, obstacle, act, drain) {
+    const runner = act.runner;
+    const force = forceProfileFor(runner, act.def, { force: run.castForce });
+    const pool = MJ.dicePoolFor(runner, act.skill, run.intelBonus +
+      MJ.gearBonusFor(runner, act.skill) + suppressionBonus(run.site, obstacle.projection, run.day));
+    // How much this thing has taken THIS RUN — held here, keyed by
+    // the object, exactly like tries and discoveries. The site's own
+    // walls are never written to.
+    const hit = MJ.forceAgainstThing(run.rng, {
+      pool: pool, weapon: force.profile, quality: force.quality,
+      strength: force.strength, carried: run.damaged.get(obstacle) || 0,
+    }, obstacle);
+    run.damaged.set(obstacle, hit.damageTotal);
+
+    run.anyLoud = true;
+    const tries = countTry(run, obstacle, act.verbId);
+    tickTether(run);
+    // Through it — but through is not always gone. A mana barrier
+    // knits closed behind the hole you made, so the crew passes and
+    // the wall stays standing. Anything else that comes apart, stays
+    // apart for the rest of the run.
+    if (hit.destroyed && !obstacle.repairs) run.neutralized.add(obstacle);
+    // What bounced once bounces forever. That is a fact about the
+    // wall, not a counter about the crew, so it is filed the same way
+    // any other Watsonian discovery is — against the skill, learned by
+    // trying, and marked rather than deleted.
+    if (hit.hit && !hit.penetrated) {
+      markUseless(run, obstacle, act.skill,
+        "bounces off — " + force.profile.label + " at Power " + hit.power +
+        " against Armour " + hit.armour);
+    }
+
+    const task = {
+      obstacle: obstacle.label, tier: obstacle.tier,
+      runner: runner.identity.handle, skill: act.skill, verb: act.verb,
+      pool: pool, loud: true, force: true, weapon: force.profile.label,
+      // A mage who throws Force at a wall pays for it exactly like a
+      // mage who throws it at a person. The bill was taken before we
+      // got here; this is it showing up on the line that earned it.
+      drain: drain || null,
+      power: hit.power, armour: hit.armour,
+      penetrated: hit.penetrated, damage: hit.damage,
+      damageTotal: hit.damageTotal, structure: hit.structure,
+      success: hit.destroyed,
+      result: !hit.hit ? "missed it entirely"
+        : !hit.penetrated ? "bounced — Power " + hit.power + " against Armour " + hit.armour
+        : hit.destroyed ? (obstacle.repairs
+            ? "a hole, and through it — " + obstacle.label + " is already knitting closed"
+            : "through it — " + obstacle.label + " is off the board")
+        : "hurt it — " + hit.damageTotal + " of " + hit.structure,
+    };
+
+    // Loud is witnessed no matter what: a shot is a shot whether or
+    // not it did anything.
+    const cls = threatClassFor(act.def, tries);
+    const applied = MJ.witnessAct(run.state, run.day, cls);
+    task.read = {
+      threatClass: cls, band: applied.band,
+      changed: applied.band !== applied.before, awkward: applied.awkward,
+    };
+    if (applied.tipped) {
+      run.engagedAlert = true;
+      task.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);
+    }
+    if (MJ.alertEngaged(run.state)) MJ.addAlertPointsAll(run.state, ALERT_POINTS_PER_BEAT);
+    run.tasks.push(task);
+
+    if (hit.destroyed) run.index += 1;
+    else if (remainingApproaches(run) === 0) { run.failed = true; run.index += 1; }
+    return task;
   }
 
   function missionChoose(run, choice) {
@@ -1377,26 +1632,27 @@
       run.index += 1;
       return task;
     }
-    const runner = choice.runner;
-    const skill = choice.skill;
-    // Resolve the affordance the caller actually picked. Finding it
-    // by skill alone silently collapsed distinct approaches: choose
-    // "silent takedown" against a guard and you got "slip past
-    // unseen" instead — a different verb AND a different threat
-    // class (threatening vs. questionable). `approach` comes back
-    // from missionPrompt; the by-skill lookup stays for callers that
-    // never had a prompt in front of them.
-    const approach = typeof choice.approach === "number" ? choice.approach
-      : obstacle.affordances.findIndex((a) => a.skill === skill);
-    const affordance = obstacle.affordances[approach];
+    const act = actFor(run, obstacle, choice);
+    // The caller named something this thing has no verb for at all.
+    // Not a stall — just nothing to resolve.
+    if (!act) return null;
+    const runner = act.runner;
+    const skill = act.skill;
 
     // Magic asks a question no other approach does: how hard are you
     // pushing? Force adds dice to the casting AND raises the Drain
     // that comes back, so a mage who reaches for a big result is
     // deliberately risking dropping themselves. Default is a safe
     // cast at their own Magic; the popup can offer more.
+    //
+    // WHICH ACTS OWE DRAIN IS THE VERB'S OWN BUSINESS, not the
+    // plane's. Spellcasting, summoning and banishing bill the caster;
+    // ASSENSING DOES NOT — it is perception, not sorcery, and
+    // charging a mage for looking at something is not a rule that
+    // exists in the source. Keying this off "is it astral" billed
+    // every read of an aura as if it were a spell.
     let drain = null;
-    if (affordance && MJ.SKILL_PLANE[skill] === "astral" && (runner.attributes.magic || 0) > 0) {
+    if (runner && act.def.drains && (runner.attributes.magic || 0) > 0) {
       const force = Math.max(1, Math.min(MJ.maxForceFor(runner),
         choice.force || runner.attributes.magic));
       drain = MJ.resistDrain(run.rng, runner, force);
@@ -1404,11 +1660,19 @@
       applyDrain(run, runner, drain);
     }
 
+    // Gate 2 said no, or this thing is quietly immune to that skill.
+    // Still attemptable, still on the menu — it simply does nothing,
+    // and now the crew knows.
+    if (!act.lands || act.immune) return resolveIneffective(run, obstacle, act);
+    // Nobody on their feet can front it at all. Not an act, not a
+    // beat — there is nothing to resolve.
+    if (!runner && !act.option.noRoll) return null;
+
     // A violent approach against something that can fight back opens
     // COMBAT rather than resolving as one roll. You never run out of
     // the ability to shoot; you are limited by what shooting costs,
     // and the cost is the exchange itself plus everything it summons.
-    if (affordance && affordance.loud && obstacle.fights) {
+    if (act.def.damaging && obstacle.fights) {
       // Undetected when the shooting starts = the ambush. Once they
       // already read you as threatening there is no surprise to have.
       const band = MJ.threatBand(run.state, run.day);
@@ -1420,11 +1684,11 @@
       MJ.exitCombat(run.tempo);
 
       run.anyLoud = true;
-      countTry(run, obstacle, approach);
+      countTry(run, obstacle, act.verbId);
 
       const task = {
         obstacle: obstacle.label, tier: obstacle.tier,
-        runner: runner.identity.handle, skill: skill,
+        runner: runner.identity.handle, skill: skill, verb: act.verb,
         combat: true, surprise: fight.surprise, rounds: fight.rounds,
         enemies: fight.enemies, enemiesDown: fight.enemiesDown,
         casualties: fight.casualties, injured: fight.injured, loud: true,
@@ -1459,17 +1723,23 @@
       return task;
     }
 
+    // Force against something that cannot fight back is not a check
+    // either — it is the three-gate chain against armour and
+    // structure, and it is the reason kicking a hardened door is
+    // always offered and never works.
+    if (act.def.damaging) return forceThrough(run, obstacle, act, drain);
+
     // An extended approach opens a piece of WORK rather than taking a
     // swing. The first interval rolls immediately so the player has
     // something to judge, then the run parks in that state and every
     // subsequent prompt asks the only question that matters: another
     // interval, or cut losses?
-    if (affordance && affordance.extended) {
+    if (act.def.extended) {
       const startPool = MJ.dicePoolFor(runner, skill, run.intelBonus +
         MJ.gearBonusFor(runner, skill) + suppressionBonus(run.site, obstacle.projection, run.day));
       run.extended = {
-        runner: runner, verb: affordance.verb, affordance: affordance,
-        approach: approach, startPool: startPool,
+        runner: runner, verb: act.verb, act: act,
+        approach: act.verbId, startPool: startPool,
         test: MJ.beginExtendedTest(runner, skill, extendedThreshold(obstacle.tier), {}),
       };
       run.extended.test.pool = startPool; // gear/intel/suppression all count
@@ -1480,12 +1750,15 @@
     // beat. It still counts as an act, so a normal-class route-around
     // reads as nothing while a louder one would still be seen.
     if (!skill) {
-      const noRollTries = countTry(run, obstacle, approach);
-      const task = { obstacle: obstacle.label, tier: obstacle.tier, result: affordance ? affordance.verb : "went around" };
+      const noRollTries = countTry(run, obstacle, act.verbId);
+      const task = {
+        obstacle: obstacle.label, tier: obstacle.tier,
+        verb: act.verb, success: true, result: act.verb,
+      };
       // Nothing was rolled, so nothing was fumbled — a no-roll
       // approach can only be seen by being loud.
-      if (wasWitnessed(run, obstacle, affordance, true, null)) {
-        const cls = threatClassFor(affordance, noRollTries);
+      if (wasWitnessed(run, obstacle, act, true, null)) {
+        const cls = threatClassFor(act.def, noRollTries);
         if (cls !== MJ.THREAT.NORMAL) {
           const applied = MJ.witnessAct(run.state, run.day, cls);
           task.read = { threatClass: cls, band: applied.band };
@@ -1510,35 +1783,30 @@
       MJ.consumeItem(boostItem);
     }
     const outcome = MJ.resolveTask(run.rng, runner, obstacle, skill, {
+      verb: act.verb, loud: act.loud,
       bonusDice: run.intelBonus + MJ.gearBonusFor(runner, skill) + boostDice +
         suppressionBonus(run.site, obstacle.projection, run.day),
     });
-    if (affordance && affordance.loud) run.anyLoud = true;
+    if (act.loud) run.anyLoud = true;
     if (outcome.glitch) run.anyGlitch = true;
     let guarded = null;
     if (outcome.criticalGlitch) guarded = applyCriticalGlitch(run, runner);
     // Anything that removes a set of eyes has to do so BEFORE the
     // witness check, or the thing you just took down gets a vote.
-    if (outcome.success && affordance && affordance.neutralizes) {
+    // `disables` is a property of the VERB: putting a guard on the
+    // floor stops him having opinions, slipping past him does not.
+    if (outcome.success && act.def.disables) {
       run.neutralized.add(obstacle);
     }
     // Every exchange out there is time on the tether.
     tickTether(run);
 
     // What did that reveal, and did anything see it?
-    const tries = countTry(run, obstacle, approach);
-    // A blocked affordance is discovered by trying it — you learn the
-    // box is air-gapped by reaching for a signal that isn't there.
-    // Filed against the SKILL: what you found out is that this
-    // approach does not work on this thing, not that this one verb
-    // does not.
-    if (outcome.ok === false && affordance && affordance.blocked) {
-      markUseless(run, obstacle, skill, affordance.reason || "doesn't work here");
-    }
+    const tries = countTry(run, obstacle, act.verbId);
     let read = null;
     let tipped = false;
-    if (wasWitnessed(run, obstacle, affordance, outcome.success, runner)) {
-      const cls = threatClassFor(affordance, tries);
+    if (wasWitnessed(run, obstacle, act, outcome.success, runner)) {
+      const cls = threatClassFor(act.def, tries);
       if (cls !== MJ.THREAT.NORMAL) {
         const applied = MJ.witnessAct(run.state, run.day, cls);
         read = {
@@ -1563,11 +1831,11 @@
 
     const task = {
       obstacle: obstacle.label, tier: obstacle.tier,
-      runner: runner.identity.handle, skill: skill, pool: outcome.poolSize,
-      loud: affordance ? !!affordance.loud : false, hits: outcome.hits, threshold: outcome.threshold,
+      runner: runner.identity.handle, skill: skill, verb: act.verb,
+      pool: outcome.poolSize,
+      loud: act.loud, hits: outcome.hits, threshold: outcome.threshold,
       success: outcome.success, glitch: outcome.glitch, criticalGlitch: outcome.criticalGlitch,
       boosted: boostLabel, guarded: guarded,
-      rejected: outcome.ok === false ? outcome.error : null,
       read: read, tipped: tipped,
       drain: drain,
     };
@@ -1592,26 +1860,14 @@
     return task;
   }
 
-  // How many ways of getting past THIS obstacle the crew still has:
-  // trained, budget left, and not yet discovered to be useless here.
+  // How many ways of getting past THIS obstacle the crew still has.
+  // Read off the SAME option list the player is shown, so a crew can
+  // never be declared out of options with a live one still sitting on
+  // the screen — nor be kept alive by a dead one.
   function remainingApproaches(run) {
     const obstacle = run.obstacles[run.index];
     if (!obstacle) return 0;
-    const eff = run.runners
-      .filter((r) => !run.downed || !run.downed.has(r))
-      .map((r) => MJ.getEffectiveSkills(r));
-    let n = 0;
-    for (let approach = 0; approach < obstacle.affordances.length; approach++) {
-      const a = obstacle.affordances[approach];
-      // A skill-less approach needs nobody trained and nothing
-      // known — it counts. Skipping it here while missionPrompt
-      // offered it meant a crew could be declared out of options
-      // with "route around" still sitting on the screen.
-      if (!a.skill) { n += 1; continue; }
-      if (knownUseless(run, obstacle, a.skill)) continue;
-      if (eff.some((e) => (e[a.skill] || 0) > 0)) n += 1;
-    }
-    return n;
+    return optionsFor(run, obstacle).filter((o) => o.available).length;
   }
 
   // Walk away. The mission fails, but nothing else gets rolled — no
@@ -1630,17 +1886,21 @@
     const eff = upright.map((r) => MJ.getEffectiveSkills(r));
     const missing = [];   // nobody trained at all
     const outclassed = []; // trained, but the rating is beyond them
-    for (const a of obstacle.affordances) {
-      if (!a.skill) continue;
-      if (knownUseless(run, obstacle, a.skill)) continue;
+    // Only ways that would WORK here are worth naming as the next
+    // hire. Hiring a face because the camera has no opinion to change
+    // would be a lesson worse than no lesson.
+    for (const act of MJ.actsFor(obstacle)) {
+      const skill = act.def.skill;
+      if (!skill || !act.effective) continue;
+      if (knownUseless(run, obstacle, skill)) continue;
       let bestRank = 0;
-      for (const skills of eff) bestRank = Math.max(bestRank, skills[a.skill] || 0);
-      // One obstacle can offer the same skill twice (a guard can be
-       // slipped past OR put down quietly, both stealth), and naming
-       // it twice reads as a bug.
-      if (bestRank <= 0) { if (missing.indexOf(a.skill) === -1) missing.push(a.skill); }
+      for (const skills of eff) bestRank = Math.max(bestRank, skills[skill] || 0);
+      // One thing can offer the same skill twice (a guard can be
+      // slipped past OR put down quietly, both stealth), and naming
+      // it twice reads as a bug.
+      if (bestRank <= 0) { if (missing.indexOf(skill) === -1) missing.push(skill); }
       else if (bestRank < Math.ceil(obstacle.tier / 2)) {
-        const note = a.skill + " " + bestRank;
+        const note = skill + " " + bestRank;
         if (outclassed.indexOf(note) === -1) outclassed.push(note);
       }
     }
@@ -1681,6 +1941,25 @@
     return run;
   }
 
+  // ══════════════════════════════════════════════════════════════
+  //  AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME.
+  //
+  //  This is a HARNESS. It exists so the systems can be built and
+  //  probed without a human clicking through every obstacle — 94,000
+  //  assertions and 360 simulated days do not click — and it doubles
+  //  as the player's skip button once they are in the chair.
+  //
+  //  THE PLAYER CONTROLS WHAT HAPPENS DURING MISSIONS. Stance,
+  //  method, mode, which approach, how much Force, press or withdraw
+  //  — action by action, runner by runner. missionPrompt and
+  //  missionChoose are that seat. Everything below is a robot sitting
+  //  in it while the seat is being built.
+  //
+  //  So: NEVER read this function to learn how the game plays. Its
+  //  choices are a stand-in for a player, not a statement about the
+  //  design, and describing the game by describing this has already
+  //  gone wrong more than once. See UNDERSTANDING.md §1, §14, §15.
+  // ══════════════════════════════════════════════════════════════
   // ── Quick resolve: the stepper, driven by the auto-chooser ──────
   // The auto-chooser only sees what the crew still actually has:
   // untried-or-unexhausted approaches nobody has discovered to be
@@ -1864,8 +2143,10 @@
       }
     }
     const tier = template ? template.tier : (mission.itemTier || DEFAULT_CRAFT_TIER);
-    const pseudo = { tier: tier, affordances: [{ skill: bestSkill, verb: "craft", loud: false }] };
-    const outcome = MJ.resolveTask(rng, bestRunner, pseudo, bestSkill, { bonusDice: MJ.gearBonusFor(bestRunner, bestSkill) });
+    // Bench work is a plain check against a difficulty — there is no
+    // thing at an encounter point, so there are no verbs to cross.
+    const outcome = MJ.resolveTask(rng, bestRunner, { tier: tier }, bestSkill,
+      { verb: "craft", bonusDice: MJ.gearBonusFor(bestRunner, bestSkill) });
     const success = outcome.success;
     let karmaAward = 0;
     if (success) {
@@ -1928,8 +2209,8 @@
     const essenceSpent = Math.max(0, patient.essence.max - patient.essence.current);
     const tier = Math.max(1, Math.min(10,
       Math.ceil(patient.wounds / 2) + Math.floor(essenceSpent)));
-    const pseudo = { tier: tier, affordances: [{ skill: bestSkill, verb: "treat", loud: false }] };
-    const outcome = MJ.resolveTask(rng, bestRunner, pseudo, bestSkill, { bonusDice: MJ.gearBonusFor(bestRunner, bestSkill) });
+    const outcome = MJ.resolveTask(rng, bestRunner, { tier: tier }, bestSkill,
+      { verb: "treat", bonusDice: MJ.gearBonusFor(bestRunner, bestSkill) });
     let karmaAward = 0;
     let healed = 0;
     if (outcome.success) {
@@ -2097,6 +2378,10 @@
   MJ.beginMission = beginMission;
   MJ.missionPrompt = missionPrompt;
   MJ.missionChoose = missionChoose;
+  // Exported so a probe can hold the two to each other: what the
+  // player is offered and what decides "no way through" must be one
+  // count, because they are one function.
+  MJ.remainingApproaches = remainingApproaches;
   MJ.missionExtendedStep = missionExtendedStep;
   MJ.extendedThreshold = extendedThreshold;
   MJ.missionAbort = missionAbort;

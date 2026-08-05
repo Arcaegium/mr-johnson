@@ -1,12 +1,19 @@
 /* ============================================================
    Mr. Johnson — core/resolve.js
-   The dice. One check at a time: pick a runner, a target obstacle,
-   one of its affordances, resolve. Chaining checks into a whole
-   mission's worth of wounds/Karma/pay belongs to mission.js — this
-   file only answers "did this one check succeed," and it answers it
-   the same way for every rung of the fidelity ladder. Quick-resolve
-   and a played-out scene roll identical dice; they differ in how
-   many decisions the player makes between rolls, never in the math.
+   The dice. One check at a time: a runner, a skill, and a thing with
+   a tier to beat. Chaining checks into a whole mission's worth of
+   wounds/Karma/pay belongs to mission.js — this file only answers
+   "did this one check succeed," and it answers it the same way for
+   every rung of the fidelity ladder. Quick-resolve and a played-out
+   scene roll identical dice; they differ in how many decisions the
+   player makes between rolls, never in the math.
+
+   It deliberately does NOT ask what the act WAS. Whether a verb
+   reaches, whether it lands, and whether this thing happens to be
+   immune to it are all questions about the world, answered by
+   verbs.js and mission.js before any dice come out. A resolver that
+   also owned the menu is what let the menu become the authority on
+   what was possible.
 
    Real SR5 dice mechanics, not an invented probability curve:
      - Dice pool = effective skill rank + the skill's linked
@@ -23,13 +30,10 @@
        even on success); Critical Glitch = a glitch with zero hits.
        This is standard SR5, not new content, and costs nothing
        extra to implement since the dice are already being rolled.
-     - A skill an obstacle lists but the runner has zero ranks in
-       rolls zero dice -- automatic failure, no glitch chance
-       (nothing rolled). Matches SR5's own rule that most Active
-       Skills can't be defaulted from untrained.
-     - Selecting a `blocked` affordance (an obstacle's Watsonian
-       immunity, §09) is rejected outright, before any dice are
-       rolled -- it was never a real option.
+     - A skill the runner has zero ranks in rolls zero dice --
+       automatic failure, no glitch chance (nothing rolled). Matches
+       SR5's own rule that most Active Skills can't be defaulted
+       from untrained.
 
    Usage:
      const outcome = MJ.resolveTask(rng, runner, obstacle, "stealth");
@@ -78,16 +82,10 @@
   // opts.bonusDice: situational extra dice on top of a TRAINED pool
   // (e.g. mission.js's fresh-intel bonus). Never rescues untrained —
   // a zero-rank skill stays an automatic failure, bonus or not.
+  // opts.verb / opts.loud are carried through onto the outcome for
+  // the readout's benefit; they are description, never a gate.
   function resolveTask(rng, runner, obstacle, skillId, opts) {
     opts = opts || {};
-    const affordance = obstacle.affordances.find((a) => a.skill === skillId);
-    if (!affordance) {
-      return { ok: false, error: `"${skillId}" isn't an option for this obstacle` };
-    }
-    if (affordance.blocked) {
-      return { ok: false, error: `blocked — ${affordance.reason}` };
-    }
-
     const threshold = thresholdForTier(obstacle.tier);
     const poolSize = dicePoolFor(runner, skillId, opts.bonusDice);
 
@@ -95,7 +93,7 @@
       // Untrained: nothing to roll, an automatic failure, not a
       // glitch (a glitch requires dice that were actually rolled).
       return {
-        ok: true, skillId, verb: affordance.verb, loud: affordance.loud,
+        ok: true, skillId, verb: opts.verb || null, loud: !!opts.loud,
         poolSize: 0, dice: [], hits: 0, threshold, margin: -threshold,
         success: false, glitch: false, criticalGlitch: false,
       };
@@ -108,7 +106,7 @@
     const criticalGlitch = glitch && hits === 0;
 
     return {
-      ok: true, skillId, verb: affordance.verb, loud: affordance.loud,
+      ok: true, skillId, verb: opts.verb || null, loud: !!opts.loud,
       poolSize, dice, hits, threshold, margin: hits - threshold,
       success, glitch, criticalGlitch,
     };

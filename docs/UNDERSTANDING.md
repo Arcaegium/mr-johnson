@@ -39,6 +39,13 @@ The specification is the target. When something in the code is simpler than the
 design describes, the design is the thing to build toward, and the honest
 report is "that system is still to come."
 
+**AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME.** The corollary of this pillar,
+and the one that keeps getting lost: never describe the game by describing what
+`autoResolve` does. It is a harness for building and probing the systems without
+a human clicking through every obstacle. Its choices are a stand-in for a
+player, never a statement about the design. If a sentence about how this game
+plays could be checked by reading `autoResolve`, that sentence is wrong.
+
 ### II. The console is an instrument panel
 
 The hub console is one piece of the game, built first because dispatch, roster,
@@ -72,6 +79,19 @@ chosen by intuition is a guess.
 You are **the Johnson** — a fixer. Not a runner. You take contracts, browse a
 market of procedurally generated runners, hire and develop a roster, and
 dispatch them. **You never personally go.** Your operation grows; you do not.
+
+> ### ⚠ "You never personally go" ≠ "you don't play the mission"
+>
+> **THE PLAYER CONTROLS WHAT HAPPENS DURING MISSIONS.** Stance, method, mode,
+> which thread to pull, how hard to push, when to press and when to pull out —
+> action by action, runner by runner. That is the game.
+>
+> What you don't have is an avatar. No personal stat sheet, no character to
+> level, nobody who can get shot. You are the mind, the crew are the hands.
+> Losing that distinction turns a tactics game into a spreadsheet that reports
+> at you, and **it is the single easiest mistake to make reading this document.**
+>
+> **AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME.** See §14 and §15.
 
 - **No ending.** Shadowrunning is a lifestyle, not a career with a finish line.
   Meant to be played indefinitely. No final boss, no credits.
@@ -433,8 +453,9 @@ fit the label.
 ## 7. MEATSPACE & COMBAT
 
 ### 7.1 Entering turn-based
-Turn-based is where **all deliberate action** happens — combat, and any
-coordinated interaction. Two entries:
+Turn-based is the **command mode**, not a combat screen — it is where **all
+deliberate action** happens, combat and any coordinated interaction alike. The
+player is the one entering it, and the one acting inside it. Two entries:
 - **Forced:** hostilities go live — a witnessed or failed takedown, a tripped
   alarm, a spotted crew.
 - **Chosen:** the player drops in to coordinate. Choosing it **while still
@@ -445,6 +466,12 @@ coordinated interaction. Two entries:
 while the AI moves its whole side at once; alternation lets the crew act as a
 coordinated team, which the mind reads as simultaneous — the load-bearing fiction
 of the genre.
+
+**This whole section presumes a player in the seat.** A mode you toggle, an
+order you read before committing, an ambush you plan — none of it means anything
+to a resolver playing itself. **AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME**: it
+drives this engine with house policy so the systems can be exercised, and the
+day the player's seat is wired the engine underneath does not change.
 
 ### 7.2 Initiative — deterministic
 - **Initiative Attribute = Agility + Intelligence.** Flat, no roll. Perfect
@@ -999,10 +1026,27 @@ nobody had written a "kick it" line, not because kicking a door is impossible.
    still a physical object **and** a device on the host. A verb from pillar P
    needs the thing present on P's plane. This is what stops you sleazing a spirit
    or banishing a guard.
-2. **Nature** — `living`, `sapient`, `summoned`, `construct`, `armour`,
-   `structure`, `fights`. These decide whether a verb *lands*. You can talk at a
-   camera all day; it has no opinion. A ward is astrally present but is a
-   **construct**, not something summoned — so it is unwound, never banished.
+2. **Nature** — `living`, `sapient`, `summoned`, `construct`, `fights`,
+   `bypassable`, `repairs`, plus `armour`/`structure`. These decide whether a
+   verb *lands*. You can talk at a camera all day; it has no opinion. A ward is
+   astrally present but is a **construct**, not something summoned — so it is
+   unwound, never banished.
+
+**Evasion is pillar-bound.** Anything that works by staying outside a watcher's
+attention — sneaking, masking an icon — requires the thing to perceive on that
+verb's own plane. **You can only hide from a watcher in the medium it watches:**
+sneaking past a maglock is meaningless, and masking your icon from a camera with
+eyes in the room is meaningless. Getting a thing to *accept* you is a different
+act: `con` and `sleaze` talk a person or a system into letting you through, and
+neither needs it to be watching.
+
+**Assensing is the deliberate exception.** It reads anything astrally present,
+watching or not, because per §3.4 the lattice is always on screen and assensing
+decides only how much of it you understand. It is an **extended test** — a
+glance is one thing, reading a construct or a signature properly buys more of
+the truth with every interval — and it causes **no Drain**, because perception
+is not spellcasting. Spellcasting, summoning and banishing bill the caster;
+looking at something does not.
 
 **Force reuses the three-gate chain** (§6): any damaging verb against a
 physically-present thing goes Hit → Penetrate (Power vs Armour) → Damage,
@@ -1013,16 +1057,31 @@ melee attack with the existing `unarmed` profile — not a special mechanism.
 Demolitions stays trained-and-equipped, because feet and explosives are different
 categories of thing.
 
-**Nothing is ever removed from the menu.** A verb that reaches but cannot land is
-still offered and still attemptable; it resolves as failure and is then
-*annotated* as ineffective. Watsonian immunities work the same way — knowable by
-trying, and thereafter marked rather than deleted.
+**Getting through is not the same as taking it off the board.** A verb only
+removes a thing when removing it is what the verb *does* — a takedown, a
+banishing, something broken past its structure. Passing it does not. **A ward is
+the case that proves it:** a mana barrier repairs itself, so unwinding one is
+opening a window and taking it before it cranks shut, and even blasting a hole
+through leaves the wall standing. That is what keeps §8's best situation honest —
+the ward between the mage and their body is still there on the way out, and
+budgeting the way home stays part of going in.
 
-**Generator invariants** still enforced by construction: brute force is always
-available in *some* form matched to what the thing is; ≥1 additional distinct
+**Nothing is ever removed from the menu**, but the two kinds of dead end are
+shown differently, because the crew's position on them differs:
+
+| | what it is | when the crew learns it |
+|---|---|---|
+| **Nature** | the thing is the wrong *kind* of thing | immediately — you can see a camera has no opinion, so the reason rides the option from the first look |
+| **Immunity** | a Watsonian fact nothing announces | only by trying — the attempt is what buys the knowledge, and afterwards it is *marked*, never deleted |
+
+Both stay listed and named. What stops is their counting as a way through, which
+is what lets "no way through" still fire and still name the next hire.
+
+**Generator invariants**, now *derived* from the crossing rather than declared:
+brute force is always available in some form matched to what the thing is
+(every pillar carries a damaging verb, and everything is present on some
+pillar); ≥2 usable non-loud ways into any one thing; ≥1 additional distinct
 solution chain per site.
-
-*Remaining build steps: `SYSTEM-STATE.md` §7.*
 
 ### 11.6 Three different graphs
 - **Physical:** rooms, edges, entry points, patrols. Movement gated by
@@ -1090,6 +1149,22 @@ So: build the entire game as text/simulation first — a real, complete, playabl
 thing — and skin it once the core has earned it. Simulation mode is a lie
 detector: it says cheaply whether the loop is fun before a sprite is drawn.
 
+> **⚠ READ THIS BEFORE ACTING ON THE PARAGRAPH ABOVE.**
+>
+> "Simulation mode" means **rendered as text instead of pixels**. It does NOT
+> mean "resolved without a player." The word *playable* in that sentence is
+> doing real work: a real, complete, **playable** thing — one a human sits down
+> and makes decisions in, obstacle by obstacle and action by action.
+>
+> **AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME.** `autoResolve` exists so 90,000
+> assertions and 360 simulated days can run without a human clicking, and it
+> doubles as the player's skip button. It is how we *test* the systems while
+> building them. It is not what we are building.
+>
+> The lie detector tests whether the LOOP is fun. A loop nobody plays cannot
+> answer that question, so a build where the missions run themselves has not
+> yet earned the verdict this principle is asking for.
+
 **Why this game suits it:** the whole design is *data*, per "systems are
 expensive, rows are cheap." Things at encounter points carry PROPERTIES and verbs
 cross against them; skills gate what a crew can bring; job grammar generates
@@ -1106,7 +1181,7 @@ Three renderings of the **same** underlying systems.
 
 | rung | what it is | when |
 |---|---|---|
-| **Quick-resolve** | one aggregate roll, instant. The skip button, and the always-available fallback that keeps the game playable while anything else is half-built. | exists from Phase 1 |
+| **Quick-resolve** | one aggregate roll, instant. **Scaffolding first, skip button second** — it is how we exercise the systems while building them, and it stays as the player's fast path. **It is never the thing being built.** | exists from Phase 1 |
 | **Scene-text** | describe the scene from site data, offer the affordance rolls, resolve, mark, advance. Interactive, choice-driven, no rendering. Every system, no skin. | ← we build here first |
 | **Full spatial** | top-down positioning, radius movement, cover geometry, the visual pillars. Laid over the proven text core, added per pillar. | Phase 3+ |
 
@@ -1117,8 +1192,16 @@ scene-text defers.** Initiative, the action economy, the three-gate chain, healt
 tracks, Drain, the tether and ammunition all belong at this rung, built to the
 depth `UNDERSTANDING.md` specifies.
 
-**Quick-resolve is the skip button.** It stays available forever as the fast
-path, and it is measured against the played path rather than standing in for it.
+**AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME.** Quick-resolve is how the systems
+get built and probed without a human in the chair, and it stays afterwards as
+the player's skip button. It is **measured against** the played path, never a
+substitute for it — and the played path is the deliverable at every rung of this
+ladder, including this one.
+
+**The ladder never removes the player.** Scene-text defers geometry, not agency:
+at this rung the player still picks the approach, the stance, the method, the
+mode, the Force, and whether to press or pull out. What the full spatial rung
+adds is *where everyone is standing*, not *somebody to decide*.
 
 ---
 
@@ -1165,7 +1248,15 @@ edits and confirm the change took effect.
   construction.
 - **Add the probe with the fix.** Every bug found becomes an assertion.
 - **Play it, not just test it.** The suite proves the plumbing; a real
-  playthrough is what shows whether the output reads well.
+  playthrough is what shows whether the output reads well. **AUTO-RESOLVE IS
+  SCAFFOLDING, NOT THE GAME** — a green suite driven by `autoResolve` says the
+  systems are consistent, and says nothing whatever about whether the game is
+  any good. Only sitting in the chair answers that.
+- **Never describe the game by describing the harness.** If a claim about how
+  this game plays would be verified by reading `autoResolve`, `runCombat`'s
+  house policy, or `AUTO_PATIENCE`, the claim is about the scaffolding. Check it
+  against the player's decisions instead: stance, method, mode, press or
+  withdraw.
 - **PS5.1 note:** use the Edit tool or Python for bulk text changes;
   `Get-Content | -replace` round-trips corrupt UTF-8. Grep `â€` as a canary.
 - **`git commit -F <file>`** for anything with quotes in it.

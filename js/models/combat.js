@@ -306,6 +306,11 @@
     rifle:     { label: "Rifle",        skill: "marksmanship", power: 9, dv: 8, ap: -3, modes: ["SS", "SA"] },
     machinegun:{ label: "Machine gun",  skill: "heavyWeapons", power: 10, dv: 9, ap: -3, modes: ["BF", "FA"] },
     gel:       { label: "Gel rounds",   skill: "firearms",     power: 6, dv: 7, ap: 2,  stun: true, modes: ["SS", "SA"] },
+    // Not carried into a firefight — a shaped charge is placed
+    // against a thing that is not moving. High Power because getting
+    // through armour is the entire job, and it is the answer to the
+    // hardened door a pistol will spark off forever.
+    demolitions: { label: "Breaching charge", skill: "demolitions", power: 14, dv: 12, ap: -6, modes: ["melee"] },
     // Matrix. Black ICE burns a decker's own brain — biofeedback,
     // so it fills the STUN track and a hot-sim run can drop the
     // decker in their chair. Attacking it back is a hacking test,
@@ -528,6 +533,64 @@
       : Math.max(0, defender.physical - defender.physicalMax) };
   }
 
+  // ── Force against a thing that does not fight back ─────────────
+  // A door, a camera, a ward, a wall of barrier ICE. The SAME three
+  // gates, because they are the same question — the only difference
+  // is that nothing on the far side is dodging or bleeding, so gate
+  // 1 is just "did you connect" and gate 3 accumulates against
+  // `structure` instead of a health track.
+  //
+  // This is what makes "you can always pull the trigger" true without
+  // making it useful. Gate 2 is the whole point: a pistol at Power 6
+  // sparks off a hardened door at Armour 12 forever, however many
+  // times it is fired, while a rifle, a Force-6 blast or a breaching
+  // charge gets through. Perseverance only pays if you can penetrate
+  // at all — and that is a fact about the wall, not a counter about
+  // the crew.
+  //
+  // `act` is { pool, weapon, quality, strength, carried }: the pool is
+  // already whatever the caller decided it was, so the number the
+  // player was shown is the number rolled, and `carried` is how much
+  // this thing has already taken THIS RUN.
+  //
+  // Damage is NOT written onto the thing. A site's walls are
+  // generated from its seed and everything resets nightly; a door
+  // that remembered being shot at would quietly turn a farmable site
+  // into rubble and would have to be serialised to survive a save.
+  // The caller holds the running total the same way it holds tries
+  // and discoveries — per run, keyed by the object.
+  function forceAgainstThing(rng, act, thing) {
+    const weapon = act.weapon;
+    const quality = act.quality || 0;
+    const atkDice = MJ.rollDicePool(rng, Math.max(0, act.pool || 0));
+    const atkHits = MJ.countHits(atkDice);
+    const armour = Math.max(0, (thing.armour || 0) + (weapon.ap || 0));
+    const power = (weapon.power || 0) + quality +
+      (weapon.useStrength ? (act.strength || 0) : 0);
+    const carried = act.carried || 0;
+    const out = {
+      atkHits: atkHits, netHits: atkHits, power: power, armour: armour,
+      hit: atkHits > 0, penetrated: false, damage: 0,
+      structure: thing.structure || 0,
+      damageTotal: carried, destroyed: false,
+    };
+    // Nothing at all connected. Still a shot fired; the noise is the
+    // caller's business.
+    if (!out.hit) return out;
+    if (power <= armour) return out;
+
+    out.penetrated = true;
+    out.dv = (weapon.dv || 0) + quality + atkHits +
+      (weapon.useStrength ? Math.floor((act.strength || 0) / 2) : 0);
+    // No Body to shrug it off — what a structure soaks with is what
+    // it is made of.
+    out.soaked = MJ.countHits(MJ.rollDicePool(rng, armour));
+    out.damage = Math.max(0, out.dv - out.soaked);
+    out.damageTotal = carried + out.damage;
+    out.destroyed = out.damageTotal >= out.structure;
+    return out;
+  }
+
   // ── One action ─────────────────────────────────────────────────
   function combatAct(combat, choice) {
     const slot = combatActor(combat);
@@ -640,6 +703,7 @@
   MJ.beginCombat = beginCombat;
   MJ.combatActor = combatActor;
   MJ.combatAct = combatAct;
+  MJ.forceAgainstThing = forceAgainstThing;
   MJ.combatOver = combatOver;
   MJ.physicalTrack = physicalTrack;
   MJ.stunTrack = stunTrack;

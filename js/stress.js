@@ -196,8 +196,12 @@
     const eff = MJ.getEffectiveSkills(rb);
     const trained = Object.keys(eff).find((k) => eff[k] > 0);
     const untrained = Object.keys(eff).find((k) => eff[k] === 0);
-    const obT = { tier: 2, affordances: [{ skill: trained, verb: "x", loud: false }] };
-    const obU = { tier: 2, affordances: [{ skill: untrained, verb: "x", loud: false }] };
+    // resolveTask asks one question — did this check succeed — so a
+    // difficulty is all it needs. Whether the act reaches, lands, or
+    // is immune here is the world's business, settled before any dice
+    // come out.
+    const obT = { tier: 2 };
+    const obU = { tier: 2 };
     // Pool is Skill + Attribute + situational dice. The attribute is
     // part of the base, so a bonus adds on top of BOTH.
     const attrT = rb.attributes[MJ.attributeFor(trained)] || 0;
@@ -530,6 +534,15 @@
         let bad = false;
         for (let k = 0; k < a.tasks.length; k++) {
           if (a.tasks[k].pool === undefined || b.tasks[k].pool === undefined) continue;
+          // Compare LIKE FOR LIKE. Two extra dice change what the
+          // dice say, so the suppressed run can clear a thing the
+          // unsuppressed one had to try twice — from there the two
+          // runs are standing in front of different obstacles and
+          // comparing them by position is comparing nothing. Matching
+          // on the thing and the way in is what keeps this measuring
+          // the bonus rather than the divergence.
+          if (a.tasks[k].obstacle !== b.tasks[k].obstacle) continue;
+          if (a.tasks[k].skill !== b.tasks[k].skill) continue;
           const d = b.tasks[k].pool - a.tasks[k].pool;
           if (d === 2) sawPlus2 = true;
           else if (d !== 0) bad = true;
@@ -1337,11 +1350,11 @@
 
     // Pool math through resolveTask; untrained never rescued.
     const eff = MJ.getEffectiveSkills(decker);
-    const ob = { tier: 2, affordances: [{ skill: "hacking", verb: "x", loud: false }] };
+    const ob = { tier: 2 };
     const deckerInt = decker.attributes[MJ.attributeFor("hacking")] || 0;
     check(MJ.resolveTask(rng, decker, ob, "hacking", { bonusDice: MJ.gearBonusFor(decker, "hacking") }).poolSize === eff.hacking + deckerInt + 2, "C11: pool must include gear dice");
     const untrained = Object.keys(eff).find((k) => eff[k] === 0);
-    const obU = { tier: 2, affordances: [{ skill: untrained, verb: "x", loud: false }] };
+    const obU = { tier: 2 };
     check(MJ.resolveTask(rng, decker, obU, untrained, { bonusDice: 2 }).poolSize === 0, "C11: gear must never rescue untrained");
 
     // Reissue moves cleanly off the old carrier.
@@ -1894,6 +1907,234 @@
     }
 
     check(MJ.astralAct(rng0, run, "nonesuch").ok === false, "C19: the astral has its own verbs and only those");
+  }
+
+  // ── Class 22: verbs × properties — the world decides ────────────
+  // The menu is not the authority on what is possible. Every verb the
+  // game has is crossed against what a thing IS, and two gates decide
+  // the rest: PRESENCE (can it reach) then NATURE (does it land).
+  //
+  // What this class protects, in order of how much it would hurt to
+  // lose: that hopeless acts stay ON the menu rather than vanishing
+  // from it; that an immunity is bought with an attempt rather than
+  // read off a card; that force is always offered and only sometimes
+  // works; and that the astral's own rules survive the generalisation
+  // — a ward is raced, never removed, and looking at something is not
+  // spellcasting.
+  function class22_verbs() {
+    const TYPES = Object.keys(MJ.OBSTACLE_TEMPLATES);
+
+    // ── The two gates, on every kind of thing there is ───────────
+    for (const type of TYPES) {
+      for (let tier = 1; tier <= 10; tier++) {
+        const ob = MJ.generateObstacleInstance(MJ.makeRNG("c22-" + type + tier), type, tier, "physical");
+        const acts = MJ.actsFor(ob);
+        check(acts.every((a) => a.reaches),
+          "C22: actsFor must return only what can reach the thing (" + type + ")");
+        check(acts.every((a) => a.effective || !!a.why),
+          "C22: a verb that does not land must say why (" + type + ")");
+        // The generator invariants, now DERIVED rather than declared.
+        check(MJ.hasBruteForceOption(ob),
+          "C22: brute force must always be available in some form (" + type + " T" + tier + ")");
+        check(MJ.usableNonLoudWays(ob) >= 2,
+          "C22: no thing may be single-skill-locked (" + type + " T" + tier + " had " +
+          MJ.usableNonLoudWays(ob) + ")");
+      }
+    }
+
+    // Presence stops a verb reaching; nature stops it landing. Both
+    // have to be real or the crossing is just a longer menu.
+    const one = (type) => MJ.generateObstacleInstance(MJ.makeRNG("c22-one-" + type), type, 3, "physical");
+    const act = (ob, id) => MJ.actsFor(ob).find((a) => a.id === id);
+    const cam = one("camera"), grd = one("guard"), lock = one("maglock"), spr = one("spirit"), wrd = one("ward");
+
+    check(!act(spr, "sleaze"), "C22: PRESENCE — a spirit is not on the grid, so no Matrix verb reaches it");
+    check(!act(wrd, "shoot"), "C22: PRESENCE — a bullet passes through the space a ward occupies");
+    check(!act(lock, "banish"), "C22: PRESENCE — a lock has no astral side to work on");
+
+    check(act(cam, "con") && !act(cam, "con").lands, "C22: NATURE — a camera has no opinion to change");
+    check(act(grd, "banish") && !act(grd, "banish").lands, "C22: NATURE — nothing called the guard here");
+    check(act(grd, "unwind") && !act(grd, "unwind").lands, "C22: NATURE — a living aura is not a made structure");
+    check(act(lock, "sneak") && !act(lock, "sneak").lands, "C22: NATURE — nothing to sneak past if nothing is looking");
+    check(act(spr, "takedown") && !act(spr, "takedown").lands, "C22: NATURE — a knife does not send back what was summoned");
+    check(act(lock, "routeAround") && !act(lock, "routeAround").lands, "C22: NATURE — the one door in IS the way");
+
+    // Evasion is pillar-bound: you can only hide from a watcher in
+    // the medium it watches.
+    check(!act(cam, "maskIcon").lands, "C22: a camera with eyes in the room is not watching the wire");
+    check(!act(lock, "sneak").lands, "C22: and a lock that watches nothing cannot be hidden from");
+
+    // Assensing is the exception, and deliberately: the lattice is
+    // always on screen and assensing decides how much of it you
+    // understand. So it reads ANYTHING astrally present — a living
+    // aura, a spirit, a made structure — watching or not.
+    check(act(grd, "assense").lands, "C22: a guard has a living aura, and an aura can be read");
+    check(act(spr, "assense").lands, "C22: so does a spirit");
+    check(act(wrd, "assense").lands, "C22: and a ward is a structure a reader can find the seam in");
+    check(!act(cam, "assense"), "C22: but a camera has no astral side at all — nothing to read");
+
+    // ── Nothing is ever removed from the menu ────────────────────
+    const crew = makeRoster(MJ.makeRNG("c22-crew"), 3, ["fighter", "decker", "mage"]);
+    for (const r of crew) { MJ.watchRunner(r, MJ.makeRNG("c22-w" + r.identity.handle)); MJ.hireRunner(r, "permanent"); }
+    const stage = (tag, type, tier) => {
+      const site = MJ.mintSite("c22-site", 4);
+      MJ.initSecurityState(MJ.makeRNG("c22-s" + tag), site);
+      const run = MJ.beginMission(MJ.makeRNG("c22-r" + tag),
+        { site: site, kind: "jobObjective", objective: {} }, crew, 1);
+      const ob = MJ.generateObstacleInstance(MJ.makeRNG("c22-o" + tag), type, tier, "physical");
+      ob.rooms = [1];
+      run.obstacles = [ob];
+      run.index = 0;
+      return { run: run, ob: ob };
+    };
+
+    const menu = stage("menu", "camera", 3);
+    const shown = MJ.missionPrompt(menu.run).options;
+    check(shown.some((o) => o.verbId === "con" && !o.available && !!o.why),
+      "C22: a verb that cannot land stays ON the menu, named and reasoned");
+    check(shown.filter((o) => o.available).length > 0, "C22: and the live ways are still there");
+    check(shown.every((o, i, all) => i === 0 || !(o.available && !all[i - 1].available)),
+      "C22: live ways must sort ahead of dead ones");
+
+    // ── An immunity is BOUGHT, not read off a card ───────────────
+    let bought = false;
+    for (let i = 0; i < 40 && !bought; i++) {
+      const s = stage("imm" + i, "maglock", 5);
+      const hidden = Object.keys(s.ob.immune)[0];
+      if (!hidden) continue;
+      const before = MJ.missionPrompt(s.run).options.find((o) => o.skill === hidden);
+      if (!before || !before.available) continue; // nobody trained; try another
+      bought = true;
+      check(!before.discovered,
+        "C22: nothing visible announces an immunity — it must start as a live option");
+      MJ.missionChoose(s.run, { approach: before.verbId, runner: before.runner });
+      const after = MJ.missionPrompt(s.run).options.find((o) => o.verbId === before.verbId);
+      check(!!after, "C22: a discovered dead end must STAY on the menu, not be deleted");
+      check(after && after.discovered === s.ob.immune[hidden],
+        "C22: and it must carry the reason the attempt bought");
+      check(after && !after.available, "C22: a known-useless way must stop counting as a way");
+    }
+    check(bought, "C22: the immunity probe never met its conditions");
+
+    // ── Force: always offered, and only sometimes any use ────────
+    // Gate 2 is the whole point. A pistol cannot open a hardened door
+    // however many times it is fired; a breaching charge can.
+    const door = MJ.generateObstacleInstance(MJ.makeRNG("c22-door"), "maglock", 8, "physical");
+    const pistol = MJ.weaponProfile("pistol");
+    const charge = MJ.weaponProfile("demolitions");
+    const armour = Math.max(0, door.armour + (pistol.ap || 0));
+    check(pistol.power <= armour,
+      "C22: the probe needs a door a pistol genuinely cannot open (P" + pistol.power + " vs A" + armour + ")");
+    let bounced = 0;
+    for (let i = 0; i < 50; i++) {
+      const r = MJ.forceAgainstThing(MJ.makeRNG("c22-b" + i), { pool: 20, weapon: pistol, carried: 0 }, door);
+      if (!r.penetrated) bounced += 1;
+      check(r.damage === 0, "C22: what cannot penetrate must never do damage, however well it is aimed");
+    }
+    check(bounced === 50, "C22: perseverance must not eventually beat armour it cannot beat");
+    const blown = MJ.forceAgainstThing(MJ.makeRNG("c22-charge"), { pool: 20, weapon: charge, carried: 0 }, door);
+    check(blown.penetrated, "C22: the right tool must get through what the wrong one cannot");
+
+    // Damage belongs to the RUN, never to the site's walls.
+    check(door.damage === undefined,
+      "C22: the force chain must not write damage onto a thing generated from a seed");
+
+    // A bounce is a fact about the wall, learned by trying, and
+    // thereafter marked rather than deleted.
+    let learned = false;
+    for (let i = 0; i < 60 && !learned; i++) {
+      const s = stage("bnc" + i, "maglock", 9);
+      const opt = MJ.missionPrompt(s.run).options.find((o) => o.verbId === "kick" && o.available);
+      if (!opt) continue;
+      const t = MJ.missionChoose(s.run, { approach: "kick", runner: opt.runner });
+      if (!t || !t.force || t.penetrated) continue; // it got through; not this probe's case
+      learned = true;
+      check(/bounce/i.test(t.result), "C22: a bounce must say so");
+      const after = MJ.missionPrompt(s.run).options.find((o) => o.verbId === "kick");
+      check(!!after && !after.available && /bounces off/.test(after.discovered || ""),
+        "C22: a bounced weapon must be marked useless here, with Power and Armour named");
+    }
+    check(learned, "C22: the bounce probe never met its conditions");
+
+    // ── One definition: the prompt and "no way through" agree ────
+    const agree = stage("agree", "guard", 4);
+    const live = MJ.missionPrompt(agree.run).options.filter((o) => o.available).length;
+    check(live === MJ.remainingApproaches(agree.run),
+      "C22: what the player is offered and what decides 'no way through' must be one count");
+
+    // ── The astral's own rules survive the generalisation ────────
+    // A mana barrier repairs itself. Getting through one is opening a
+    // window and taking it, so the wall the crew came through is
+    // still between them and their body on the way out. This is the
+    // pillar's nastiest situation and it is not allowed to evaporate
+    // because a verb table got tidier.
+    check(!MJ.VERBS.unwind.disables, "C22: unwinding a ward must not remove it — it cranks back closed");
+    check(MJ.VERBS.unwind.extended, "C22: unwinding is a race against re-closing, not one push");
+    check(MJ.VERBS.banish.disables, "C22: banishing DOES send a spirit home — that one really is removal");
+    check(wrd.repairs, "C22: a ward must be marked as something that knits closed");
+
+    const wardSite = (() => {
+      for (let i = 0; i < 200; i++) {
+        const s = MJ.mintSite("c22-ward", i, { value: 8, orientation: "astral" });
+        MJ.initSecurityState(MJ.makeRNG("c22-wi" + i), s);
+        if (MJ.astralRoute(s).outbound.length) return s;
+      }
+      return null;
+    })();
+    check(!!wardSite, "C22: the ward probe needs a warded astral site to mean anything");
+    if (wardSite) {
+      const mage = MJ.mintRunner("c22-mage", 3);
+      mage.market.hired = { tier: "permanent", missionsRemaining: 99, blockSize: 99 };
+      mage.skills = { sorcery: 12, assensing: 12, conjuring: 12 };
+      mage.attributes.magic = 6; mage.attributes.willpower = 6;
+      const wRun = MJ.beginMission(MJ.makeRNG("c22-wr"),
+        { site: wardSite, kind: "astralRun", objective: {} }, [mage], 1);
+      const inbound = wRun.obstacles.find((o) => o.type === "ward" && !o.isExitWard);
+      const exit = wRun.obstacles.find((o) => o.isExitWard);
+      check(!!inbound && !!exit, "C22: a warded route must gate the way back as well as the way in");
+      check(inbound !== exit, "C22: the two crossings must be separate entries — one is on the way out");
+
+      wRun.index = wRun.obstacles.indexOf(inbound);
+      let guard = 0;
+      do { MJ.missionChoose(wRun, { approach: "unwind", runner: mage }); guard++; }
+      while (wRun.extended && guard < 40);
+      check(!wRun.neutralized.has(inbound),
+        "C22: a ward that was unwound must still be standing — you passed it, you did not break it");
+      check(!wRun.neutralized.has(exit),
+        "C22: and the way back must still be a wall");
+
+      // Force is no exception: a hole in a mana barrier seals.
+      const bRun = MJ.beginMission(MJ.makeRNG("c22-br"),
+        { site: wardSite, kind: "astralRun", objective: {} }, [mage], 1);
+      const bWard = bRun.obstacles.find((o) => o.type === "ward" && !o.isExitWard);
+      bRun.index = bRun.obstacles.indexOf(bWard);
+      let g2 = 0, holed = null;
+      while (g2++ < 25 && bRun.obstacles[bRun.index] === bWard) {
+        holed = MJ.missionChoose(bRun, { approach: "blast", runner: mage });
+        if (!holed || holed.ineffective) break;
+      }
+      if (holed && holed.success) {
+        check(!bRun.neutralized.has(bWard),
+          "C22: blasting a hole in a ward must not take it off the board — it repairs");
+      }
+
+      // Assensing is perception, not spellcasting. It buys more of the
+      // truth with every interval and it does NOT bill the mage.
+      check(MJ.VERBS.assense.extended, "C22: a proper read is an extended test — more time, more truth");
+      check(!MJ.VERBS.assense.drains, "C22: assensing must never cost Drain — looking is not casting");
+      check(MJ.VERBS.blast.drains && MJ.VERBS.unwind.drains && MJ.VERBS.banish.drains,
+        "C22: sorcery and conjuring DO bill the caster");
+      const aRun = MJ.beginMission(MJ.makeRNG("c22-ar"),
+        { site: wardSite, kind: "astralRun", objective: {} }, [mage], 1);
+      const aWard = aRun.obstacles.find((o) => o.type === "ward" && !o.isExitWard);
+      aRun.index = aRun.obstacles.indexOf(aWard);
+      let g3 = 0;
+      do { MJ.missionChoose(aRun, { approach: "assense", runner: mage }); g3++; }
+      while (aRun.extended && g3 < 40);
+      check(!aRun.drainTaken || !aRun.drainTaken.get(mage),
+        "C22: a mage who read an aura must not have been charged Drain for it");
+      check(!aRun.neutralized.has(aWard), "C22: reading a ward does not dismantle it either");
+    }
   }
 
   // ── Class 18: bound helpers — spirits and agents ────────────────
@@ -2608,6 +2849,13 @@
     failures = [];
     assertions = 0;
     log("MECHANICAL STRESS SUITE — plumbing, not balance. Zero tolerance.");
+    // AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME. Everything here drives
+    // missions through autoResolve, which is what it is for. A green
+    // verdict means the systems agree with each other. It says nothing
+    // about whether any of this is worth playing — nothing in this
+    // suite is played. THE PLAYER CONTROLS WHAT HAPPENS DURING
+    // MISSIONS; none of that agency is exercised below.
+    log("(harness-driven: proves consistency, never fun — nothing here is played)");
     log("");
     const classes = [
       ["1. Determinism (seed fixes the world, never the story)", class1_determinism],
@@ -2631,6 +2879,7 @@
       ["19. The astral pillar's verbs", class19_astral],
       ["20. The Matrix pillar's verbs", class20_matrix],
       ["21. The street pillar, and three clocks", class21_street],
+      ["22. Verbs x properties — the world decides, not the menu", class22_verbs],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

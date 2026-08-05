@@ -7,8 +7,29 @@ what is a placeholder, what is built-but-unreachable, and what happens next.
 Update this whenever a system lands. If it disagrees with the code, the code
 wins and this file is stale — verify before trusting a line here.
 
-Last verified at commit `3aae468`. Suite: 21 classes, 92,873 assertions, 0
-failures, identical across three consecutive runs.
+> ## ⚠ AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME
+>
+> Almost everything below is currently exercised through `autoResolve`, because
+> that is how you drive 94,000 assertions and 360 simulated days without a human
+> clicking. **That is a testing harness.** It is not the design, it is not the
+> deliverable, and its behaviour is not evidence about how this game plays.
+>
+> **THE PLAYER CONTROLS WHAT HAPPENS DURING MISSIONS** — stance, method, mode,
+> which approach, how much Force, press or withdraw, action by action. Reading
+> `autoResolve` and concluding otherwise has now happened twice across sessions.
+> If you catch yourself writing "the player has no input here," you are
+> describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
+
+Last verified after the verbs × properties refactor. Suite: 22 classes,
+94,182 assertions, 0 failures, identical across three consecutive runs.
+
+**Baseline moved deliberately**, 92,873 → 94,182. Class 22 is new (415
+assertions, the refactor's own probes). The rest is content drift and not a
+change in coverage: `generateObstacleInstance` now rolls its immunities against
+the verb crossing rather than a hand-written list, so it consumes the RNG
+differently, so every site in every seed differs. Class 7 (the soak) and the
+content-guarded loops in classes 3 and 10 count in proportion to what got
+generated, and they moved with it.
 
 ---
 
@@ -42,11 +63,20 @@ js/models/runner.js   901  SKILLS(20) SKILL_ATTRIBUTE attributeFor attributeCeil
                            computePrice describeDiscipline karmaCost trueValue
                            growRunner marginalSkillCost halfStepCost
                            SKILL_GATES isSkillEligible HANDLES handleBaseFromIndex
-js/models/site.js    1030  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
+js/models/site.js    1286  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
                            generateHost NODE_TYPES planeOfAffordance SKILL_PLANE
                            deriveSecurity generateSite mintSite mintSiteByName
                            encodeSiteName decodeSiteName siteIdentityFromIndex
-                           CONDITIONS CONDITION_IDS CONDITION_WORDS
+                           nonLoudWaysFor CONDITIONS CONDITION_IDS CONDITION_WORDS
+                           -- templates carry PROPERTIES ONLY, no menus:
+                              presence / senses / living / sapient /
+                              summoned / construct / fights / bypassable /
+                              repairs / armour / structure. What can be
+                              DONE to one is MJ.actsFor(thing). Immunities
+                              ride the instance as `immune` (skill -> why),
+                              rolled against the crossing so the >=2
+                              non-loud ways floor is measured against the
+                              menu the player will actually see.
                            -- condition is the name's FIRST word and a real
                               quality. Its main lever is COMPOSITION: `weights`
                               multiply each obstacle type's chance of being what
@@ -76,18 +106,28 @@ js/models/economy.js  280  canAfford spend earn collectJobPay
                            dailyUpkeep payUpkeep hireCost hireRunnerWithCost
                            upgradeContractWithCost itemCost buyItem sellItem
                            sellMaterials expandBoardCapacity
-js/models/combat.js   600  WEAPONS FIRE_MODES weaponProfile
+js/models/combat.js   713  WEAPONS FIRE_MODES weaponProfile
                            COMBAT_EFFECTS COMBAT_CHANNELS COMBAT_POSTURES
                            effectDef applyEffect clearEffect hasEffect
                            effectModifier tickEffects describeEffects
                            postureOf actionsFor
                            makeCombatant initiativeScore buildRound
                            beginCombat combatActor combatAct combatOver
+                           forceAgainstThing
+                           -- forceAgainstThing is the SAME three gates
+                              aimed at something that does not fight back:
+                              a door, a camera, a ward, barrier ICE. Gate 1
+                              collapses to "did you connect", gate 3
+                              accumulates against `structure`. It does NOT
+                              write to the thing -- the caller holds the
+                              running total per run.
                            physicalTrack stunTrack
                            carriedDamage carryDamageHome restDay
                            -- physicalTrack/stunTrack read `.attributes`, so a
                               roster runner measures without being in a fight
-js/models/mission.js 1840  THE BIG ONE. crewCapability AXIS_SKILLS
+js/models/mission.js 2363  THE BIG ONE. crewCapability AXIS_SKILLS
+                           optionsFor actFor forceThrough resolveIneffective
+                           remainingApproaches
                            create*Mission (recon/matrix/astral/crafting/medical/
                              resource/search)
                            streetRoute (= routeObstacles) hostRoute hostPaths
@@ -98,12 +138,35 @@ js/models/mission.js 1840  THE BIG ONE. crewCapability AXIS_SKILLS
                            missionExtendedStep missionAbort missionDone finishMission
                            autoResolve openDispatch closeDispatch runActionPeriod
                            siteIntelView suppressionBonus applySuppression
+                           -- autoResolve IS SCAFFOLDING, NOT THE GAME. It is
+                              the harness that drives the stepper without a
+                              human, so the systems can be probed while they
+                              are built, and it doubles as the player's skip
+                              button. Its ranking (quiet first, then biggest
+                              pool, AUTO_PATIENCE swings at a loud wall) is a
+                              STAND-IN FOR A PLAYER and says nothing about the
+                              design. THE PLAYER CONTROLS WHAT HAPPENS DURING
+                              MISSIONS: missionPrompt/missionChoose is the seat
+                              they sit in.
 js/models/sitelist.js 156  addKnownSite watchSite siteListView compressSite reviveSite
-js/models/verbs.js    230  VERBS x PROPERTIES. VERBS verbDef verbsFor
+js/models/verbs.js    371  VERBS x PROPERTIES -- THE AUTHORITY ON WHAT IS
+                           POSSIBLE. VERBS(18) verbDef verbsFor actsFor
+                           verbLabel verbSkill verbPlane
                            verbReaches verbLands verbWhyNot verbThreat
                            -- two gates: PRESENCE (can it reach) then NATURE
-                              (does it land). Built but NOT yet driving
-                              missionPrompt -- see section 7, the open refactor.
+                              (does it land). DRIVES missionPrompt.
+                           -- `requiresSense`: evasion is pillar-bound, you
+                              can only hide from a watcher in the medium it
+                              watches. Assensing is deliberately NOT one of
+                              these -- an aura is readable whether or not it
+                              is looking back.
+                           -- `drains` marks the acts that bill the caster.
+                              Spellcasting, summoning and banishing do;
+                              ASSENSING DOES NOT, it is perception.
+                           -- `skillFor` reads the skill off the runner for
+                              `shoot`, so a rifle is marksmanship and a
+                              shotgun is firearms.
+                           -- plane = the verb's PILLAR, not a skill lookup.
 js/models/lattice.js  330  THE ASTRAL PUZZLE. beginLattice latticePull
                            latticeAbandon latticeDone latticeRead latticeDrain
                            latticeMoveStrength latticeReadDepth
@@ -137,9 +200,13 @@ js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
                            MJ.missionPopup (drives the mission stepper through it)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)
-js/stress.js          ~2.4k 21 probe classes. ~92.9k assertions, 0 failures.
+js/stress.js          ~2.9k 22 probe classes. ~94.2k assertions, 0 failures.
                            Deterministic by construction: no live entropy, so a
                            failure always reproduces.
+                           -- it drives everything through autoResolve, which is
+                              SCAFFOLDING, NOT THE GAME. A green suite proves
+                              the systems are CONSISTENT. It cannot say whether
+                              any of it is fun, because nothing in it is played.
 ```
 
 **Two pages:** `index.html` (the playable shell) and `inspector.html` (benches +
@@ -152,6 +219,13 @@ the stress suite). Both load the same modules.
 Anything the resolver, the UI and the chooser all need reads from a single
 function, so all three agree by construction.
 
+- **`MJ.actsFor(thing)` → `optionsFor(run, obstacle)`** — the one crossing of
+  every verb against what a thing IS, and the one list built on top of it.
+  `missionPrompt` shows it, `remainingApproaches` counts it, `actFor` resolves
+  the player's pick through it, and the auto-chooser ranks it. So what the
+  player is offered, what the house plays, what gets resolved and what decides
+  "no way through" cannot drift apart — they are one function. A probe holds
+  the prompt's live count against `remainingApproaches`.
 - **`MJ.dicePoolFor(runner, skill, bonus)`** — Skill + Attribute + situational.
   The one definition of a pool. Read by `resolveTask` (which rolls it),
   `missionPrompt` (which shows it), and the approach-ranking chooser (which
@@ -163,15 +237,18 @@ function, so all three agree by construction.
 - **`MJ.effectiveTier(item)`** — tier + crafted quality. Every mechanical reader
   of tier must go through this.
 - **Per-run memory is keyed by the OBSTACLE OBJECT, never by route index.**
-  `run.attempts` (obstacle → {approach: tries}, driving escalation),
-  `run.discovered` (obstacle → {skill: why it can't work here}) and
+  `run.attempts` (obstacle → {verbId: tries}, driving escalation),
+  `run.discovered` (obstacle → {skill: why it can't work here}),
+  `run.damaged` (obstacle → structure taken this run) and
   `run.neutralized` (a Set of obstacles) all hold identities. Responders splice
   into the route ahead of the crew and shift every later index, so anything filed
   under an index starts describing a different obstacle the moment a guard turns
   up — the newcomer inheriting tries and discoveries it never earned. Tries are
-  per-AFFORDANCE (a guard's two stealth plays are different swings); discoveries
-  are per-SKILL (learning he is sensor-equipped rules out sneaking however you
-  found out).
+  per-VERB (a guard's two stealth plays are different swings); discoveries are
+  per-SKILL (learning he is sensor-equipped rules out sneaking however you found
+  out). **Structural damage is per-run too, and deliberately** — a site's walls
+  come from its seed and reset nightly, so a door that remembered being shot at
+  would turn a farmable address into rubble and would have to survive a save.
 - **`session.log` holds RECORDS, not sentences.** The hub keeps a log at every
   fidelity — a scrolling pane today, a readout on a drawn console later — so an
   entry is `{seq, day, kind, text, refs}`. `kind` is one of
@@ -344,13 +421,18 @@ Anything here is a dial, not a decision.
 - **`inspector.html`** — benches, one button each: RNG, Runner, Market, Growth,
   Site, Board, Resolve, Market Cycle, Economy, Alert, **Combat**, Dispatch,
   Site Watch-List, **Stress Test**.
-- **`js/stress.js`** — ~92.9k assertions across 21 classes. Verdict line reads
+- **`js/stress.js`** — ~94.2k assertions across 22 classes. Verdict line reads
   `VERDICT: N failures across M assertions.`
 - **How to run headless:** load `inspector.html` in the preview tab, then
   `javascript_tool`: click every `btn-*` id, then scrape `document.body.innerText`
   for `/VERDICT/` and `/^✗/`.
 - **Verify by executing JS against the page and asserting on returned values** —
   that is the reliable signal here.
+- **AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME.** Every probe in the suite drives
+  missions through it, which is exactly what it is for. What that buys is
+  "the systems agree with each other." What it can never buy is "this is worth
+  playing" — for that somebody has to sit in the chair and make the decisions,
+  and no assertion count substitutes for it.
 
 ---
 
@@ -379,11 +461,11 @@ and it stays playable.
 |----|------|--------|
 | P2.0 | Attributes into the dice pool | **DONE** |
 | P2.1 | Extended tests | **DONE** |
-| P2.2 | Turn-based mode | **DONE** — engine and wired |
-| P2.3 | Combat, health, Drain, death | **DONE** |
+| P2.2 | Turn-based mode | **ENGINE DONE, PLAYER'S SEAT NOT WIRED** — `runCombat` drives the whole fight with house policy. Turn-based is the COMMAND MODE, so a fight the player cannot act in is a fight that is only half-built |
+| P2.3 | Combat, health, Drain, death | **ENGINE DONE, PLAYER'S SEAT NOT WIRED** — Stance / Method / Mode is the interface, and postures already sit on the effects layer as channels, so this is wiring over a built engine |
 | P2.4 | Planes and witnessing | **DONE** |
 | P2.5 | Pillar scene-text | **DONE** — all three built, each with its own verbs and its own pressure clock |
-| P2.6 | Obstacles as situations | **IN PROGRESS** — verbs × properties; foundation landed, `missionPrompt` switch remains |
+| P2.6 | Obstacles as situations | **DONE** — verbs × properties drives play; hand-authored affordance lists deleted |
 | P2.7 | The shared frame | **DONE** — free ⇄ turn-based, combat forces it; world-seam inert by constraint |
 | P2.8 | The Lattice, spells, bound helpers | **DONE** |
 | P2.9 | Simultaneity | remaining — the last Phase 2 item, following the console build-out |
@@ -394,23 +476,61 @@ and it stays playable.
 
 ---
 
-### The open refactor: verbs × properties
+### Verbs × properties — landed
 
-The model is in `UNDERSTANDING.md` §11.5. Two steps remain, and they land
-together because the second depends on the first:
+The model is in `UNDERSTANDING.md` §11.5. `OBSTACLE_TEMPLATES` no longer carry
+affordance lists at all; they carry what a thing IS, and `MJ.actsFor(thing)`
+crosses every verb the game has against that. What this changed:
 
-1. **`missionPrompt` builds options from verbs × properties** instead of
-   iterating hand-authored affordances. Damaging verbs route through the
-   three-gate chain against `armour`/`structure`. This is the breaking change,
-   and the probe classes written against affordance lists migrate in the same
-   commit.
-2. **Discovery annotates instead of removing.** Hopeless verbs stay on the menu,
-   resolve as failure, and are thereafter marked ineffective. Watsonian
-   immunities currently *delete* an option (`available: !!best && !known`) and
-   must become annotations.
+- **The menu is no longer the authority.** A maglock can be kicked, shot,
+  breached, picked, spliced, hacked or talked past *because of what it is*, not
+  because somebody wrote those lines. 18 verbs across three pillars plus one
+  that belongs to none (`routeAround`, gated on `bypassable`).
+- **Damaging verbs route through the three-gate chain.** Against something that
+  fights back that is combat, as before. Against something that does not, it is
+  `MJ.forceAgainstThing` — Hit → Penetrate → Damage, accumulating against
+  `structure`. A pistol at Power 6 sparks off a hardened door at Armour 12
+  forever; a rifle, a Force-6 blast or a breaching charge opens it. **The bounce
+  is recorded as a discovery**, so perseverance is priced honestly instead of
+  being silently pointless.
+- **Nothing is removed from the menu.** Two kinds of dead entry, shown
+  differently on purpose: a **nature** mismatch names its reason from the first
+  look (a crew can see a camera has no opinion), while a **Watsonian immunity**
+  appears only after an attempt bought the knowledge. Both stay listed and
+  named; neither is deleted. `available` is what stops counting.
+- **The runner ranking got a second axis.** For a damaging verb against an inert
+  thing, who gets *through* comes before who rolls best — otherwise the crack
+  shot with a holdout is picked over the labourer with a shotgun.
+- **Plane is the verb's pillar**, not a lookup on the skill. `SKILL_PLANE` and
+  `planeOfAffordance` are deleted. This fixed a real bug: spoofed credentials
+  (`computer`) were filed as a physical act, so a guard in the corridor got a
+  vote on something that happened inside a host.
 
-`js/models/verbs.js` and the properties on `OBSTACLE_TEMPLATES` are built and
-green; nothing is driving play from them yet.
+**Three astral rules were corrected against the source during this work**
+(user call — the generalisation had quietly broken them):
+
+- **A ward is raced, never removed.** A mana barrier repairs itself, so getting
+  through one is opening a window and taking it. `unwind` does not disable, and
+  the `repairs` property means even blasting a hole through leaves the wall
+  standing. This is what keeps "a ward between you and your body blocks the way
+  home" true — the way back is still a wall.
+- **Assensing is an extended test.** A glance is one thing; reading a construct
+  or a signature properly buys more of the truth with every interval. It reaches
+  anything astrally present, watching or not, because the lattice is always on
+  screen and assensing decides how much of it you understand.
+- **Assensing causes no Drain.** It is perception, not spellcasting. The Drain
+  branch keyed off "is this act astral", which billed a mage for looking at
+  something. It now keys off the verb's own `drains` flag: spellcasting,
+  summoning and banishing bill the caster; reading an aura does not.
+
+Class 22 (415 assertions) holds all of it, including the ward rules explicitly,
+so a future tidy-up of the verb table cannot quietly delete them again.
+
+**One thing to raise with the user, not yet changed:** the source has a ward's
+owner sense it when the ward is breached. This build deliberately gives wards
+`senses: []` — "a barrier, not a sentry" — with the reasoning written into the
+template. That is a live design decision, not an oversight, and changing it is
+the user's call.
 
 ---
 

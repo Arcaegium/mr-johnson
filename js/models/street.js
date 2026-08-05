@@ -151,8 +151,13 @@
         learned: {
           label: obstacle.label, tier: obstacle.tier,
           fights: !!obstacle.fights,
-          // A good look tells you what your options actually are.
-          ways: hits >= 2 ? obstacle.affordances.map((a) => a.verb) : null,
+          // A good look tells you what your options actually are —
+          // the ways that would WORK on this thing, since seeing that
+          // a camera has nothing to say to you is exactly what a good
+          // look buys.
+          ways: hits >= 2
+            ? MJ.actsFor(obstacle).filter((a) => a.effective).map((a) => a.label)
+            : null,
           watching: watchers.map((o) => o.label),
         },
       };

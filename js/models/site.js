@@ -1,8 +1,10 @@
 /* ============================================================
    Mr. Johnson — models/site.js
-   The site record: generation from a seed, per current understanding §09
-   ("Site model: one object, three projections") and §07/§08's
-   "obstacles are affordance lists" rule.
+   The site record: generation from a seed — one object, three
+   projections. A thing at an encounter point is a bundle of
+   PROPERTIES here and nothing else; what can be done to it is
+   verbs.js crossing every verb the game has against those
+   properties. This file must never grow a menu.
 
    Core rules this file implements:
      - Security is a RESULT of what a site actually is, not an
@@ -33,13 +35,12 @@
        resists banishing) — in-fiction reasons a normally-valid
        approach doesn't work *here*. A floor always guarantees at
        least 2 genuine non-brute-force ways in survive the roll.
-     - Every obstacle's affordance list already separates quiet
-       options (pick it slowly, read and slip past, route around)
-       from the one loud option — this is what lets a runner get
-       inside a warded room and work magic without being discovered,
-       the same shape as a Stealth runner slipping past a guard
-       instead of shooting them. Quiet vs. loud is Attention-tier
-       flavor (§08), not a new mechanic invented here.
+     - Quiet and loud ways in both fall out of the crossing rather
+       than being written down here: every pillar carries a damaging
+       verb and several quiet ones, so a warded room can be worked
+       silently or blown open for the same reason a guard can be
+       slipped past or shot. Quiet vs. loud is Attention-tier flavor,
+       not a new mechanic invented here.
      - Fixed hardpoints (guards-as-posted, cameras, maglocks, wards,
        stationed spirits) are generated once and never change mid-
        mission — a scout who spent a day learning the inventory
@@ -111,50 +112,37 @@
     return security;
   }
 
-  // ── The verb registry: every obstacle's affordance options ──────
-  // Matches the current understanding's own worked examples (§09) directly.
-  // Every template carries 2+ distinct non-loud skill-bearing
-  // affordances (or a skill-less "always available" option like
-  // route-around) plus exactly one loud brute-force fallback, which
-  // is never eligible for immunity. The quiet options are also what
-  // keeps Attention low (§08) — this is the same "get past without
-  // being noticed" shape meatspace already has, not new content.
-  // ── Threat classes (§09 "Threat read") ─────────────────────────
+  // ── Threat classes ─────────────────────────────────────────────
   // What an act reveals about your intent IF something witnesses it
-  // — intrinsic to the act, not to whether it worked. `escalates`
-  // marks approaches whose class rises on repetition, because the
-  // obstacle's own safeguard handled the first try: a ward keeps
-  // dual-natured beings out, a guard tells a bad liar to get lost,
-  // an account locks itself. Persisting past a safeguard is what
-  // turns a curiosity into someone with a purpose.
+  // — intrinsic to the act, not to whether it worked. They live on
+  // the VERB (verbs.js), because the class is a fact about the doing
+  // rather than about the thing done to. `escalates` marks the ones
+  // whose class rises on repetition, because the obstacle's own
+  // safeguard handled the first try: a ward keeps dual-natured beings
+  // out, a guard tells a bad liar to get lost, an account locks
+  // itself. Persisting past a safeguard is what turns a curiosity
+  // into someone with a purpose.
   const THREAT = { NORMAL: "normal", AWKWARD: "awkward", QUESTIONABLE: "questionable", THREATENING: "threatening" };
 
-  // ── Which world an act happens in ──────────────────────────────
-  // An act is only witnessed by things that perceive on ITS plane.
-  // A decker jacked into a terminal out of a guard's line of sight
-  // kills the camera and the guard does not know — the work happened
-  // in the Matrix, and a dead camera does not phone anyone. He can
-  // then walk up and put the guard down, and still nothing has been
-  // witnessed, because nothing was there to witness it.
+  // Which world an act happens in is the VERB'S PILLAR — see
+  // MJ.verbPlane. It used to be a lookup on the skill, which quietly
+  // filed spoofed credentials (`computer`) as a physical act and gave
+  // a guard in the corridor a vote on something that happened inside
+  // a host. The pillar says it directly and there is only one answer.
+
+  // ── Things at encounter points, as PROPERTIES ──────────────────
+  // No affordance lists. What can be done to one of these is
+  // `MJ.actsFor(thing)` — every verb the game has, crossed against
+  // what the thing IS. A template's job is to say what it is, and
+  // nothing about menus:
   //
-  // The plane follows the SKILL by default, because the skill is
-  // what says where the runner's attention actually is. The
-  // exception that matters: doing the same job with your hands is a
-  // physical act even when the target is a machine — "loop the feed"
-  // is someone at the camera with a splice, "kill it remotely" is
-  // someone in the host. Same obstacle, same result, different
-  // witnesses. An affordance can override with `plane`.
-  const SKILL_PLANE = {
-    hacking: "matrix",
-    sorcery: "astral", conjuring: "astral", assensing: "astral", enchanting: "astral",
-  };
-
-  function planeOfAffordance(affordance) {
-    if (!affordance) return "physical";
-    if (affordance.plane) return affordance.plane;
-    return SKILL_PLANE[affordance.skill] || "physical";
-  }
-
+  //   presence   which planes it can be TOUCHED on  (gate 1)
+  //   senses     which planes it PERCEIVES on       (witnessing, and
+  //              gate 2 for anything that works by evasion)
+  //   living / sapient / summoned / construct / fights / bypassable
+  //              what kind of thing it is           (gate 2)
+  //   armour / structure / weapon
+  //              what it takes to break it          (the force chain)
   const OBSTACLE_TEMPLATES = {
     // Meatspace idiom
     maglock: {
@@ -167,13 +155,8 @@
       living: false, sapient: false, summoned: false,
       // A lock forms no opinions, on any plane.
       senses: [],
-      affordances: [
-        { skill: "electronics", verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
-        { skill: "larceny",     verb: "pick the lock", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
-        { skill: "hacking",     verb: "unlock it remotely", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
-        { skill: "con",         verb: "lift the key off a guard", loud: false, threat: THREAT.THREATENING },
-        { skill: "demolitions", verb: "breach it", loud: true, threat: THREAT.THREATENING },
-      ],
+      // The door IS the way. Going around it is not on offer.
+      bypassable: false,
     },
     guard: {
       label: "Guard",
@@ -184,28 +167,16 @@
       living: true, sapient: true, summoned: false,
       // Eyes, in meatspace only. A guard cannot see a decker working
       // in the Matrix or a mage moving on the astral — that is the
-      // whole point of those being separate worlds.
+      // whole point of those being separate worlds. It is also why
+      // he can be slipped past and cannot be assensed past: you can
+      // only stay outside a regard that exists.
       senses: ["physical"],
       // Shoots back. A camera does not, a maglock cannot — only
       // things that can fight turn a violent approach into an
       // actual exchange rather than target practice.
       fights: true,
       armour: 3, weapon: "smg",
-      affordances: [
-        { skill: "stealth",  verb: "slip past unseen", loud: false, threat: THREAT.QUESTIONABLE },
-        // One shot: you cannot re-smooth-talk someone who just called
-        // your bluff, and adjacent guards are one audience.
-        { skill: "con",      verb: "talk your way past", loud: false, threat: THREAT.AWKWARD },
-        // `neutralizes` = this obstacle stops being able to see. That
-        // is the whole point of a takedown: done cleanly against the
-        // only pair of eyes in the room, there is nobody left to have
-        // an opinion. Done in front of a camera, there is.
-        { skill: "stealth",  verb: "silent takedown", loud: false, threat: THREAT.THREATENING, neutralizes: true },
-        // Loud without being dangerous — a belligerent asshole, not
-        // someone who needs shooting.
-        { skill: "intimidation", verb: "taunt and draw them off", loud: false, threat: THREAT.AWKWARD },
-        { skill: "firearms", verb: "fight", loud: true, threat: THREAT.THREATENING, neutralizes: true },
-      ],
+      bypassable: false,
     },
     camera: {
       label: "Camera",
@@ -218,15 +189,7 @@
       // a camera has no idea it is being hacked, and it certainly
       // does not announce having been switched off.
       senses: ["physical"],
-      affordances: [
-        // A looped feed is a blind camera — it is still bolted to the
-        // wall, but it cannot witness anything after this.
-        { skill: "electronics", verb: "loop the feed", loud: false, threat: THREAT.QUESTIONABLE, extended: true, neutralizes: true },
-        { skill: "hacking",     verb: "kill it remotely", loud: false, threat: THREAT.QUESTIONABLE, extended: true, neutralizes: true },
-        // Staying out of the arc leaves it live and watching.
-        { skill: "stealth",     verb: "stay out of its arc", loud: false, threat: THREAT.QUESTIONABLE },
-        { skill: "firearms",    verb: "shoot it out", loud: true, threat: THREAT.THREATENING, neutralizes: true },
-      ],
+      bypassable: false,
     },
     // Astral idiom — the same two structural roles (barrier, sentry)
     // recast in magic's terms, not a reskin of the meatspace verbs.
@@ -248,14 +211,16 @@
       // something with eyes (a spirit, a guard, a camera) is there to
       // see you doing it.
       senses: [],
-      affordances: [
-        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL },
-        // The ward keeps you out on its own — that safeguard is why
-        // a first press is merely offputting, and why leaning on it
-        // again is not.
-        { skill: "assensing",  verb: "pick it slowly", loud: false, threat: THREAT.AWKWARD, escalates: true, extended: true },
-        { skill: "sorcery",    verb: "break it", loud: true, threat: THREAT.THREATENING },
-      ],
+      // It seals an area rather than a doorway, so there is ground
+      // it does not cover.
+      bypassable: true,
+      // IT KNITS CLOSED. A mana barrier that is breached repairs
+      // itself, so nothing removes a ward from the world — you open a
+      // way through and take it before it shuts. Force is no
+      // exception: blasting a hole in one gets the crew through and
+      // leaves the wall standing, which is exactly why the way home
+      // is still a problem after they are inside.
+      repairs: true,
     },
     // ── Matrix idiom ─────────────────────────────────────────────
     // Ice is the host's security, and it senses in the MATRIX only —
@@ -270,48 +235,42 @@
       presence: ["matrix"],
       structure: 8,
       living: false, sapient: false, summoned: false,
+      // Written, not born. Nothing astral can reach it to take it
+      // apart, but it is a made thing wherever the question comes up.
+      construct: true,
       senses: [],  // a wall logs nothing; it simply does not open
-      affordances: [
-        { skill: "hacking",     verb: "slip the barrier", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
-        { skill: "electronics", verb: "spoof its credentials", loud: false, threat: THREAT.AWKWARD, escalates: true },
-        { skill: null,          verb: "route around the node", loud: false, threat: THREAT.NORMAL },
-        { skill: "hacking",     verb: "hammer it down", loud: true, threat: THREAT.THREATENING, neutralizes: true },
-      ],
+      // Hosts have shortcuts by construction — there is another node.
+      bypassable: true,
     },
     patrolIce: {
       label: "Patrol ICE",
       presence: ["matrix"],
       structure: 6,
       living: false, sapient: false, summoned: false,
+      construct: true,
       senses: ["matrix"],
-      affordances: [
-        { skill: "hacking",     verb: "mask your icon", loud: false, threat: THREAT.QUESTIONABLE },
-        { skill: "computer",    verb: "pass as legitimate traffic", loud: false, threat: THREAT.AWKWARD, escalates: true },
-        { skill: "hacking",     verb: "corrupt its patrol route", loud: false, threat: THREAT.THREATENING, neutralizes: true },
-        { skill: "hacking",     verb: "burn it out", loud: true, threat: THREAT.THREATENING, neutralizes: true },
-      ],
+      bypassable: false,
     },
     blackIce: {
       label: "Black ICE",
       presence: ["matrix"],
       structure: 8,
       living: false, sapient: false, summoned: false,
+      construct: true,
       senses: ["matrix"],
       // It bites back. A decker in hot sim takes real damage, which
-      // is why a Matrix run is not a safe alternative to a break-in.
+      // is why a Matrix run is not a safe alternative to a break-in
+      // — and why it is not a device that simply answers.
       fights: true,
       armour: 4, weapon: "blackHammer",
-      affordances: [
-        { skill: "hacking",     verb: "slide past it", loud: false, threat: THREAT.QUESTIONABLE },
-        { skill: "computer",    verb: "feed it a decoy icon", loud: false, threat: THREAT.AWKWARD, escalates: true },
-        { skill: "hacking",     verb: "attack it directly", loud: true, threat: THREAT.THREATENING, neutralizes: true },
-      ],
+      bypassable: false,
     },
     spirit: {
       label: "Spirit",
       // Dual-natured: present on BOTH, which is why it can be shot
       // and assensed. Summoned, so it can be banished — the one thing
-      // in the game that can.
+      // in the game that can, and the reason a knife is not an answer
+      // to it.
       presence: ["astral", "physical"],
       structure: 10,
       living: true, sapient: true, summoned: true,
@@ -322,19 +281,8 @@
       dualNatured: true,
       fights: true,
       armour: 4, weapon: "unarmed",
-      affordances: [
-        { skill: "conjuring",  verb: "banish it", loud: false, threat: THREAT.THREATENING, neutralizes: true },
-        // Two ways past a sentry, astral or otherwise: out of its
-        // notice, or in plain view and unremarkable. Blowing the
-        // covert one is worse than blowing the overt one — being
-        // caught sneaking says more about you than being sensed
-        // walking through does. (Stealth vs. awareness gets its own
-        // treatment later; this is the structure, not the depth.)
-        { skill: "stealth",    verb: "sneak around it", loud: false, threat: THREAT.QUESTIONABLE },
-        { skill: "assensing",  verb: "walk past without tripping it", loud: false, threat: THREAT.AWKWARD, escalates: true },
-        { skill: null,         verb: "route around", loud: false, threat: THREAT.NORMAL },
-        { skill: "sorcery",    verb: "blast it down", loud: true, threat: THREAT.THREATENING, neutralizes: true },
-      ],
+      // It roams. Wait, and the ground is clear.
+      bypassable: true,
     },
   };
   // Fixed-hardpoint obstacle types, one pool per projection. Patrols
@@ -360,44 +308,37 @@
     electronics: "hardened against tampering",
     hacking:     "air-gapped — no wireless signal reaches it",
     larceny:     "tamper-evident — no clean pick",
+    computer:    "credentialled — nothing you can forge satisfies it",
     assensing:   "cloaked — masks itself from astral perception",
     conjuring:   "resists binding — too old, too strong, or already spoken for",
+    sorcery:     "anchored — the weave will not come apart from out here",
   };
 
-  // Builds one obstacle instance: type + tier + its affordance list,
-  // with tier-scaled Watsonian immunities rolled on top. Immunity
-  // never touches a loud or skill-less affordance, and a floor
-  // guarantees at least 2 genuine non-loud ways always survive —
-  // exactly 2 is a fair outcome, never fewer, at any tier and at
-  // any future obstacle type this scales to.
+  // ── The non-loud ways INTO a thing ──────────────────────────────
+  // Read off verbs × properties, so it is the same answer the prompt
+  // will give the player. One definition: the immunity roll below and
+  // the invariant check further down both call it, which is what
+  // stops generation from guaranteeing a floor the menu does not
+  // actually honour.
+  function nonLoudWaysFor(thing) {
+    const acts = MJ.actsFor(thing).filter((a) => a.effective && !a.def.loud);
+    return {
+      skills: [...new Set(acts.map((a) => a.def.skill).filter(Boolean))],
+      free: acts.some((a) => !a.def.skill),
+    };
+  }
+
+  // Builds one obstacle instance: what it IS, plus tier-scaled
+  // Watsonian immunities rolled on top. An immunity is a fact about
+  // the thing filed against a SKILL — "air-gapped" rules out hacking
+  // it however you came at it — and it never touches a loud or
+  // skill-less way in. A floor guarantees at least 2 genuine non-loud
+  // ways always survive: exactly 2 is a fair outcome, never fewer, at
+  // any tier and at any future obstacle type this scales to.
   const MIN_NONLOUD_WAYS = 2;
 
   function generateObstacleInstance(rng, typeId, tier, projection) {
     const template = OBSTACLE_TEMPLATES[typeId];
-    const affordances = template.affordances.map((a) => Object.assign({}, a));
-
-    const distinctSkills = [...new Set(
-      affordances.filter((a) => !a.loud && a.skill).map((a) => a.skill)
-    )];
-    const hasFreeOption = affordances.some((a) => !a.loud && !a.skill);
-
-    const blocked = new Set();
-    for (const skill of distinctSkills) {
-      if (rng.chance(0.1 * tier)) blocked.add(skill);
-    }
-    while (
-      distinctSkills.length - blocked.size + (hasFreeOption ? 1 : 0) < MIN_NONLOUD_WAYS &&
-      blocked.size > 0
-    ) {
-      blocked.delete(rng.pick([...blocked]));
-    }
-
-    for (const a of affordances) {
-      if (a.skill && blocked.has(a.skill)) {
-        a.blocked = true;
-        a.reason = IMMUNITY_REASONS[a.skill] || "doesn't work here";
-      }
-    }
 
     // `senses` rides the instance: WHICH WORLDS this thing can
     // witness an act in. A guard has eyes in meatspace only; a
@@ -408,7 +349,7 @@
     // a maglock does not, and that is the difference between a fight
     // and target practice. Armour and attributes scale with tier —
     // a T9 guard is corp security in a hardsuit, a T1 is a rent-a-cop.
-    return {
+    const thing = {
       type: typeId, label: template.label, tier, projection,
       senses: (template.senses || []).slice(),
       perceives: (template.senses || []).length > 0,
@@ -427,6 +368,14 @@
       construct: !!template.construct,
       sapient: !!template.sapient,
       summoned: !!template.summoned,
+      // Whether there is ground it does not cover. A sealed area and
+      // a roaming spirit can be walked around; the one door into the
+      // vault is the way.
+      bypassable: !!template.bypassable,
+      // Whether getting through it also REMOVES it. A mana barrier
+      // repairs itself, so a crew that opened a way through still has
+      // to open one on the way back out.
+      repairs: !!template.repairs,
       // ── Taking force ────────────────────────────────────────────
       // Armour is the gate (Power must beat it); structure is how
       // much it takes before it stops being in the way. Everything
@@ -434,10 +383,27 @@
       // a door has to survive being shot at.
       armour: (template.armour || 0) + Math.floor(tier / 2),
       structure: Math.max(1, (template.structure || 6) + tier),
-      damage: 0,
       weapon: template.weapon || "unarmed",
-      affordances,
+      // Skill → why it cannot work HERE. Filled in below; the crew
+      // learns these by trying, never by reading them off a card.
+      immune: {},
     };
+
+    const ways = nonLoudWaysFor(thing);
+    const blocked = new Set();
+    for (const skill of ways.skills) {
+      if (rng.chance(0.1 * tier)) blocked.add(skill);
+    }
+    while (
+      ways.skills.length - blocked.size + (ways.free ? 1 : 0) < MIN_NONLOUD_WAYS &&
+      blocked.size > 0
+    ) {
+      blocked.delete(rng.pick([...blocked]));
+    }
+    for (const skill of blocked) {
+      thing.immune[skill] = IMMUNITY_REASONS[skill] || "doesn't work here";
+    }
+    return thing;
   }
 
   // ── Room / obstacle graph (physical) ────────────────────────────
@@ -549,8 +515,8 @@
   //
   // §05's four layers are Intel, Loadout, Route and Encounter. This
   // builds ROUTE and ENCOUNTER, which is what scene-text owes: the
-  // node-traversal puzzle, with ice as ordinary affordance-bearing
-  // obstacles so the whole existing stepper drives it. Loadout as a
+  // node-traversal puzzle, with ice as ordinary things at encounter
+  // points so the whole existing stepper drives it. Loadout as a
   // RAM/card economy is the deck-building layer on top, later.
   const NODE_TYPES = {
     spu:       { label: "SPU",        alert: 1, canHoldObjective: false },
@@ -1229,21 +1195,23 @@
 
   // ── Invariant-checking helpers — used by the dev harness to
   // verify generation across many seeds, not by generation itself.
-  // Invariant 1: every obstacle template carries a loud affordance
-  // by construction; this confirms it held for a specific instance.
+  // Invariant 1: brute force is always available in SOME form matched
+  // to what the thing is. Nothing declares that any more — it falls
+  // out of the crossing, because every pillar carries a damaging verb
+  // and everything is present on at least one pillar. This confirms
+  // it held for a specific instance.
   function hasBruteForceOption(obstacle) {
-    return obstacle.affordances.some((a) => a.loud);
+    return MJ.actsFor(obstacle).some((a) => a.effective && a.def.loud);
   }
 
   // Invariant 3 (no obstacle single-skill-locked): counts genuinely
-  // USABLE non-loud ways in — distinct non-blocked skills, plus a
-  // skill-less option like "route around" if present. Must be >= 2.
+  // USABLE non-loud ways in — distinct skills that land and are not
+  // immune here, plus a skill-less way like "go around it" if the
+  // thing is something there is a way around. Must be >= 2.
   function usableNonLoudWays(obstacle) {
-    const usableSkills = new Set(
-      obstacle.affordances.filter((a) => !a.loud && a.skill && !a.blocked).map((a) => a.skill)
-    );
-    const hasFreeOption = obstacle.affordances.some((a) => !a.loud && !a.skill);
-    return usableSkills.size + (hasFreeOption ? 1 : 0);
+    const ways = nonLoudWaysFor(obstacle);
+    const immune = obstacle.immune || {};
+    return ways.skills.filter((s) => !immune[s]).length + (ways.free ? 1 : 0);
   }
 
   // Invariant 2 (>=1 additional distinct solution chain): finds
@@ -1294,10 +1262,9 @@
   MJ.ORIENTATIONS = ORIENTATIONS;
   MJ.OBSTACLE_TEMPLATES = OBSTACLE_TEMPLATES;
   MJ.generateObstacleInstance = generateObstacleInstance;
+  MJ.nonLoudWaysFor = nonLoudWaysFor;
   MJ.generateHost = generateHost;
   MJ.NODE_TYPES = NODE_TYPES;
-  MJ.planeOfAffordance = planeOfAffordance;
-  MJ.SKILL_PLANE = SKILL_PLANE; // mission.js spawns responders with this
   MJ.PHYSICAL_OBSTACLE_TYPES = PHYSICAL_OBSTACLE_TYPES;
   MJ.ASTRAL_ROOM_TYPES = ASTRAL_ROOM_TYPES;
   MJ.rollValue = rollValue;

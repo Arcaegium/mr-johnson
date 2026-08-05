@@ -157,6 +157,21 @@
         (t.responders && t.responders.length
           ? "<br>" + "&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
     }
+    // Force against something that cannot fight back. The line has to
+    // say WHICH GATE stopped it, because that is the whole decision:
+    // a miss is bad luck and worth another swing, a bounce is a fact
+    // about the wall and never will be.
+    if (t.force) {
+      const outcome = t.success ? ok("through it")
+        : !t.penetrated ? no("BOUNCED") + '<span class="dimmed"> — Power ' + t.power +
+            " against Armour " + t.armour + ", and it always will</span>"
+        : '<span class="w-warn">hurt it</span><span class="dimmed"> — ' +
+            t.damageTotal + " of " + t.structure + "</span>";
+      return nm(t.runner) + " put " + esc(t.weapon) + " into " + nm(t.obstacle) + " " +
+        num("T" + t.tier) + " — " + outcome + readNote(t.read) +
+        (t.responders && t.responders.length
+          ? "<br>" + "&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
+    }
     const bits = esc(t.skill) + " " + num(t.pool + "d") + (t.loud ? ", " + no("LOUD") : "") + (t.boosted ? ", +" + num(t.boosted) : "");
     return nm(t.runner) + " (" + bits + ") vs " + nm(t.obstacle) + " " + num("T" + t.tier) + " — " +
       num(t.hits) + " hits: " + (t.success ? ok("through") : no("MISSED")) +
@@ -315,8 +330,16 @@
       (named ? esc(o.verb) : '<span class="dimmed">' + esc(o.verb) + "</span>") +
       (o.loud ? " " + no("(LOUD)") : "");
     // Pool is theirs to know. Threshold is not.
+    //
+    // Two kinds of dead entry, and the order matters. What the crew
+    // LEARNED comes first — it was paid for with an attempt and is
+    // the more interesting fact. What the thing simply IS comes next:
+    // a camera has no opinion to change, and the crew can see that
+    // without trying, so the line says so from the first look. Both
+    // stay on the menu, named; neither is deleted.
     let meta;
     if (o.discovered) meta = no(o.discovered);
+    else if (!o.lands) meta = '<span class="dimmed">' + esc(o.why) + "</span>";
     else if (o.noRoll) meta = '<span class="dimmed">no roll — costs the time</span>';
     else if (!o.runner) meta = '<span class="dimmed">no ' + esc(o.skill) + " on this crew</span>";
     else meta = esc(o.skill) + " " + num(o.pool + "d") + readsAsNote(o);

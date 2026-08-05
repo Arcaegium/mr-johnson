@@ -158,13 +158,24 @@
   }
 
   // ── P0.4 — inspect a generated site and its invariants ──────────
+  // What can be done to this thing, read off verbs × properties —
+  // the same crossing the mission prompt reads, so the bench cannot
+  // show a menu the game does not offer. Immunities are shown here
+  // because this is the dev view; the crew never sees them until an
+  // attempt buys the knowledge.
   function fmtObstacle(obs) {
-    const afford = obs.affordances.map((a) => {
-      const tag = a.skill || "—";
-      if (a.blocked) return `~~${tag}~~(${a.reason})`;
-      return `${tag}${a.loud ? "*" : ""}`;
-    }).join("/");
-    return `[${obs.label} T${obs.tier}]  ${afford}`;
+    const immune = obs.immune || {};
+    const ways = MJ.actsFor(obs)
+      .filter((a) => a.effective)
+      .map((a) => {
+        // `shoot` has no fixed skill — it is read off whatever the
+        // runner happens to be carrying — so name the verb rather
+        // than printing a bare dash for it.
+        const tag = a.def.skill || a.id;
+        if (immune[tag]) return `~~${tag}~~(${immune[tag]})`;
+        return `${tag}${a.def.loud ? "*" : ""}`;
+      });
+    return `[${obs.label} T${obs.tier}]  ${[...new Set(ways)].join("/")}`;
   }
 
   function fmtPhysicalSlot(slotLabel, slot) {
@@ -301,9 +312,9 @@
     log(`rush premium by window: ` + Object.keys(buckets).sort((a, b) => a - b).map((d) => `${d}d:x${buckets[d].toFixed(2)}`).join("  "));
   }
 
-  // ── P1 — task/skill resolution: one runner, one obstacle, one
-  // affordance, resolve. Runs a handful of picks so both a trained
-  // and an untrained attempt, and a blocked one, all show up.
+  // ── P1 — task/skill resolution: one runner, one thing, one way
+  // in, resolve. Runs a handful of picks so a trained attempt, an
+  // untrained one and an immune one all show up.
   function fmtOutcome(outcome) {
     if (!outcome.ok) return `REJECTED — ${outcome.error}`;
     const diceStr = outcome.dice.length ? `[${outcome.dice.join(",")}]` : "(no dice — untrained)";
@@ -330,18 +341,21 @@
       return;
     }
 
-    // Try every affordance on a handful of obstacles, so a trained
-    // hit, an untrained automatic-fail, and a blocked rejection all
-    // have a real chance to show up in one pass.
+    // Try every way IN on a handful of things, so a trained hit and
+    // an untrained automatic-fail both have a real chance to show up
+    // in one pass. An immunity is named rather than rolled — that is
+    // a fact about the thing, decided before any dice come out.
     let shown = 0;
     for (const obstacle of obstacles) {
       if (shown >= 6) break;
-      for (const affordance of obstacle.affordances) {
-        if (!affordance.skill) continue; // skip the skill-less "route around" option
+      for (const act of MJ.actsFor(obstacle)) {
+        const skill = act.def.skill;
+        if (!skill || !act.effective) continue; // the skill-less and the dead ends
         if (shown >= 6) break;
-        const outcome = MJ.resolveTask(rng, runner, obstacle, affordance.skill);
-        log(`[${obstacle.label} T${obstacle.tier}] attempt "${affordance.skill}" (${affordance.verb}):`);
-        log(`  ${fmtOutcome(outcome)}`);
+        log(`[${obstacle.label} T${obstacle.tier}] attempt "${skill}" (${act.label}):`);
+        const immune = (obstacle.immune || {})[skill];
+        log(immune ? `  no dice — ${immune}`
+          : `  ${fmtOutcome(MJ.resolveTask(rng, runner, obstacle, skill, { verb: act.label }))}`);
         log("");
         shown++;
       }
