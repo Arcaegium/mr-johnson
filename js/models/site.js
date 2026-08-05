@@ -159,6 +159,12 @@
     // Meatspace idiom
     maglock: {
       label: "Maglock door",
+      // PRESENCE: where it can be TOUCHED, not what it perceives.
+      // A lock senses nothing but is a physical object AND a device on
+      // the host — which is why hacking it was always a real option.
+      presence: ["physical", "matrix"],
+      structure: 12, armour: 8,
+      living: false, sapient: false, summoned: false,
       // A lock forms no opinions, on any plane.
       senses: [],
       affordances: [
@@ -171,6 +177,11 @@
     },
     guard: {
       label: "Guard",
+      // Physical body, living aura on the astral. No matrix
+      // presence: a guard is not a device.
+      presence: ["physical", "astral"],
+      structure: 10,
+      living: true, sapient: true, summoned: false,
       // Eyes, in meatspace only. A guard cannot see a decker working
       // in the Matrix or a mage moving on the astral — that is the
       // whole point of those being separate worlds.
@@ -198,6 +209,11 @@
     },
     camera: {
       label: "Camera",
+      // A device bolted to a wall: physically breakable, and on
+      // the host that runs it.
+      presence: ["physical", "matrix"],
+      structure: 4, armour: 2,
+      living: false, sapient: false, summoned: false,
       // Watches the room. It does not watch the host it lives on —
       // a camera has no idea it is being hacked, and it certainly
       // does not announce having been switched off.
@@ -216,6 +232,16 @@
     // recast in magic's terms, not a reskin of the meatspace verbs.
     ward: {
       label: "Ward",
+      // Astral only. Nothing to shoot — a bullet passes through the
+      // space where it is. Not summoned, so it is unwound, never
+      // banished.
+      presence: ["astral"],
+      structure: 8,
+      // A ward is a MADE structure of mana — that is what can be
+      // taken apart. A living aura is not a construct, which is why
+      // you cannot unwind a guard.
+      construct: true,
+      living: false, sapient: false, summoned: false,
       // A ward is a barrier, not a sentry. It keeps you out; it does
       // not form an opinion or tell anyone. Leaning on it repeatedly
       // still escalates what the act LOOKS like — but only if
@@ -240,6 +266,10 @@
     // get through, a sentry that objects, one loud way past.
     barrierIce: {
       label: "Barrier ICE",
+      // Matrix only. Code has no body.
+      presence: ["matrix"],
+      structure: 8,
+      living: false, sapient: false, summoned: false,
       senses: [],  // a wall logs nothing; it simply does not open
       affordances: [
         { skill: "hacking",     verb: "slip the barrier", loud: false, threat: THREAT.QUESTIONABLE, extended: true },
@@ -250,6 +280,9 @@
     },
     patrolIce: {
       label: "Patrol ICE",
+      presence: ["matrix"],
+      structure: 6,
+      living: false, sapient: false, summoned: false,
       senses: ["matrix"],
       affordances: [
         { skill: "hacking",     verb: "mask your icon", loud: false, threat: THREAT.QUESTIONABLE },
@@ -260,6 +293,9 @@
     },
     blackIce: {
       label: "Black ICE",
+      presence: ["matrix"],
+      structure: 8,
+      living: false, sapient: false, summoned: false,
       senses: ["matrix"],
       // It bites back. A decker in hot sim takes real damage, which
       // is why a Matrix run is not a safe alternative to a break-in.
@@ -273,6 +309,12 @@
     },
     spirit: {
       label: "Spirit",
+      // Dual-natured: present on BOTH, which is why it can be shot
+      // and assensed. Summoned, so it can be banished — the one thing
+      // in the game that can.
+      presence: ["astral", "physical"],
+      structure: 10,
+      living: true, sapient: true, summoned: true,
       // DUAL-NATURED: a materialised spirit perceives the astral and
       // the physical at once, which is exactly what makes it the
       // hardest thing on a site to work around.
@@ -372,7 +414,27 @@
       perceives: (template.senses || []).length > 0,
       dualNatured: !!template.dualNatured,
       fights: !!template.fights,
-      armour: template.fights ? (template.armour || 0) + Math.floor(tier / 2) : 0,
+      // ── PRESENCE: which planes this thing can be TOUCHED on ─────
+      // Not the same question as `senses`, which is only what it
+      // PERCEIVES. A maglock senses nothing and is still a physical
+      // object and a device on the host. This is what makes a verb
+      // from one pillar meaningful against a thing at all, and what
+      // stops you sleazing a spirit or banishing a guard.
+      presence: (template.presence || [projection]).slice(),
+      // ── NATURE: what kind of thing it is ────────────────────────
+      // Decides which verbs LAND rather than merely being possible.
+      living: !!template.living,
+      construct: !!template.construct,
+      sapient: !!template.sapient,
+      summoned: !!template.summoned,
+      // ── Taking force ────────────────────────────────────────────
+      // Armour is the gate (Power must beat it); structure is how
+      // much it takes before it stops being in the way. Everything
+      // physical has both now, not only things that shoot back —
+      // a door has to survive being shot at.
+      armour: (template.armour || 0) + Math.floor(tier / 2),
+      structure: Math.max(1, (template.structure || 6) + tier),
+      damage: 0,
       weapon: template.weapon || "unarmed",
       affordances,
     };
