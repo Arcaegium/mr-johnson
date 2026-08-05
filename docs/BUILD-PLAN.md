@@ -3,6 +3,16 @@
 Companion to `UNDERSTANDING.md`. **Read that first.** It is what we are
 building; this is how.
 
+**The doc set, in precedence order:**
+
+| doc | what it is |
+|---|---|
+| `UNDERSTANDING.md` | what the game IS — read first, every session |
+| `BUILD-PLAN.md` | how we build — phases, working practices (this file) |
+| `SYSTEM-STATE.md` | what is actually in the code right now — the volatile one |
+| `PILLAR-PLAN.md` | the live working doc while a refactor is open |
+| `PHASE-2-PLAN.md`, `*.html` | **historical.** Records of earlier sessions, no longer maintained. The code's `§NN` comments cite the HTML numbering, which is why they are kept. Do not work from them. |
+
 ---
 
 ## 1. THE GOVERNING PRINCIPLE
@@ -21,9 +31,10 @@ thing — and skin it once the core has earned it. Simulation mode is a lie
 detector: it says cheaply whether the loop is fun before a sprite is drawn.
 
 **Why this game suits it:** the whole design is *data*, per "systems are
-expensive, rows are cheap." Obstacles are affordance lists; skills gate them; job
-grammar generates objectives. The design came out text-ready by accident — a text
-renderer reads the data the generators already produce and prints choices.
+expensive, rows are cheap." Things at encounter points carry PROPERTIES and verbs
+cross against them; skills gate what a crew can bring; job grammar generates
+objectives. The design came out text-ready by accident — a text renderer reads
+the data the generators already produce and prints choices.
 
 ---
 
@@ -135,8 +146,15 @@ prompts, one level up.
 | P2.2 | Turn-based mode | **DONE** — engine and wired |
 | P2.3 | Combat, health, Drain, death | **DONE** |
 | P2.4 | Planes and witnessing | **DONE** |
-| P2.5 | Pillar scene-text | **MOSTLY** — Matrix and astral genres built; **simultaneity remains**, following the console build-out |
-| P2.6 | Obstacles as situations | ongoing |
+| P2.5 | Pillar scene-text | **DONE** — all three built, each with its own verbs and its own pressure clock |
+| P2.6 | Obstacles as situations | **IN PROGRESS** — verbs × properties; foundation landed, `missionPrompt` switch remains |
+| P2.7 | The shared frame | **DONE** — free ⇄ turn-based, combat forces it; world-seam inert by constraint |
+| P2.8 | The Lattice, spells, bound helpers | **DONE** |
+| P2.9 | Simultaneity | remaining — the last Phase 2 item, following the console build-out |
+
+**Where the live detail is:** `PILLAR-PLAN.md` holds the working plan for P2.6,
+including the verbs × properties model and the two remaining steps. This table is
+the summary; that document is the authority while the refactor is open.
 
 ---
 

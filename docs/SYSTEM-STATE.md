@@ -7,7 +7,8 @@ right now**, what is a placeholder, and what is built-but-unreachable.
 Update this whenever a system lands. If it disagrees with the code, the code
 wins and this file is stale — verify before trusting a line here.
 
-Last verified at commit `4946fb9` + the site-condition pass.
+Last verified at commit `3aae468`. Suite: 21 classes, 92,873 assertions, 0
+failures, identical across three consecutive runs.
 
 ---
 
@@ -23,6 +24,12 @@ js/core/rng.js        115  makeRNG — xmur3 + mulberry32. float/int/range/chanc
                            UNIQUE label per slot to get independent sub-streams.
 js/core/clock.js       20  advanceDay
 js/core/save.js        88  SCHEMA_VERSION defaultSave saveGame loadGame deleteSave (IndexedDB)
+js/core/tempo.js      140  THE SHARED FRAME. newTempo isTurnBased setMode
+                           toggleMode enterCombat exitCombat advanceWorld
+                           describeTempo
+                           -- free <-> turnBased; combat FORCES turnBased.
+                              advanceWorld COUNTS ONLY and must stay inert
+                              until the visual layer lands.
 js/core/resolve.js    243  THE DICE. rollDicePool countHits thresholdForTier
                            dicePoolFor resolveTask
                            drainValueFor resistDrain maxForceFor
@@ -92,6 +99,31 @@ js/models/mission.js 1840  THE BIG ONE. crewCapability AXIS_SKILLS
                            autoResolve openDispatch closeDispatch runActionPeriod
                            siteIntelView suppressionBonus applySuppression
 js/models/sitelist.js 156  addKnownSite watchSite siteListView compressSite reviveSite
+js/models/verbs.js    230  VERBS x PROPERTIES. VERBS verbDef verbsFor
+                           verbReaches verbLands verbWhyNot verbThreat
+                           -- two gates: PRESENCE (can it reach) then NATURE
+                              (does it land). Built but NOT yet driving
+                              missionPrompt -- see PILLAR-PLAN steps 3-4.
+js/models/lattice.js  330  THE ASTRAL PUZZLE. beginLattice latticePull
+                           latticeAbandon latticeDone latticeRead latticeDrain
+                           latticeMoveStrength latticeReadDepth
+                           -- modes unwind / unravel / assemble. NEVER hand a
+                              renderer the raw lattice; latticeRead only.
+js/models/spells.js   300  SPELLS spellDef spellsFor castSpell finishCast
+                           applySpellToRun spellCombatAction dropSustained
+                           -- five SR5 categories. direct spells IGNORE armour.
+js/models/helpers.js  270  makeHelper bindSpirit finishBind loadAgent
+                           unloadAgent agentSlotsFor helperAct instructHelper
+                           dismissHelper describeHelper
+                           -- N tasks, each a SEPARATE action. No sprites.
+js/models/astral.js   250  ASTRAL_VERBS astralPrompt astralAct astralEngage
+                           astralResolve astralStudied
+                           -- clock: the tether. assensing raises Lattice depth.
+js/models/matrix.js   270  MATRIX_VERBS matrixPrompt matrixAct overwatchOf
+                           raiseOverwatch matrixAdjacent
+                           -- clock: Overwatch, converging at 40.
+js/models/street.js   180  STREET_VERBS streetPrompt streetAct streetWatchers
+                           -- clock: the alert bands. Position is the point.
 
 js/game.js            895  MJ.game — THE INTEGRATION LAYER. DOM-free.
                            newGame refreshBoard refreshMarket acceptJob
@@ -105,7 +137,7 @@ js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
                            MJ.missionPopup (drives the mission stepper through it)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)
-js/stress.js          ~1.7k 14 probe classes. ~83k assertions, 0 failures.
+js/stress.js          ~2.4k 21 probe classes. ~92.9k assertions, 0 failures.
                            Deterministic by construction: no live entropy, so a
                            failure always reproduces.
 ```
@@ -312,7 +344,7 @@ Anything here is a dial, not a decision.
 - **`inspector.html`** — benches, one button each: RNG, Runner, Market, Growth,
   Site, Board, Resolve, Market Cycle, Economy, Alert, **Combat**, Dispatch,
   Site Watch-List, **Stress Test**.
-- **`js/stress.js`** — ~82k assertions across 11+ classes. Verdict line reads
+- **`js/stress.js`** — ~92.9k assertions across 21 classes. Verdict line reads
   `VERDICT: N failures across M assertions.`
 - **How to run headless:** load `inspector.html` in the preview tab, then
   `javascript_tool`: click every `btn-*` id, then scrape `document.body.innerText`

@@ -1,18 +1,25 @@
-# Phase 2 — Text Missions
+# Phase 2 — Text Missions  *(HISTORICAL)*
 
-Every design decision locked in the 3 August 2026 session, in dependency
-order. Phase 1 is complete. **This is the current work.**
+> ## ⚠ This document is a RECORD, not the current plan.
+> It captures the 3 August 2026 session. Most of it has shipped and some of it
+> has been superseded — notably §11.5's affordance model, replaced by verbs ×
+> properties.
+>
+> **The canonical documents are the markdown files in this folder:**
+>
+> | doc | what it is |
+> |---|---|
+> | `UNDERSTANDING.md` | what the game is — **read first, every session** |
+> | `BUILD-PLAN.md` | how we build; phases and working practices |
+> | `SYSTEM-STATE.md` | what is actually in the code right now |
+> | `PILLAR-PLAN.md` | the live working doc for the current refactor |
+>
+> The linked claude.ai artifacts and the `.html` files beside this one are the
+> ORIGINAL forms of the design and are no longer maintained. The code's `§NN`
+> comments still cite their numbering, which is why they are kept rather than
+> deleted. **Do not work from them.**
 
-Companion documents (living, canonical):
-
-- **Current understanding** — https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8
-  (records decisions; it does not make them — if a call changes, the document changes)
-- **Build plan** — https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d
-- **This plan, formatted** — https://claude.ai/code/artifact/ae02034e-d2a1-4496-9828-fc84d275eba3
-
-> **Read the artifacts, don't work from memory of them.** Working from a
-> remembered version of the design is what caused the drift this plan exists
-> to correct.
+Kept for the reasoning it records, in dependency order.
 
 ---
 

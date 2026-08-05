@@ -73,7 +73,7 @@ The server sets `Cache-Control: no-store`, so edits show up on reload
 without a cache fight.
 
 `inspector.html` is the developer inspector — per-system benches plus a
-mechanical stress suite (~73k assertions covering determinism,
+mechanical stress suite (~93k assertions covering determinism,
 cross-system data flow, state machines, and a randomized multi-day soak).
 Run it after any change; it's the regression gate.
 

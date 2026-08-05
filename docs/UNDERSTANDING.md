@@ -120,6 +120,90 @@ in space. Astral consciousness is unbound from the body and runs faster than
 flesh — canonically 2 initiative dice to meatspace's 1. This is flavour for *why*
 the pace differs; each pillar earns its own engine.
 
+### 3.1 The reference loop — Sega Genesis Shadowrun (1994, BlueSky)
+Checked, not recalled. Top-down for **both** exploration and combat — one view,
+no separate battle screen — with **real-time** combat and short fights. Ammo
+management, Drain on the caster, melee viable with the right chrome. The Matrix
+replaces the runner with a **persona** navigating **geometric node structures**
+(CPU, data stores) avoiding **IC**: steal data, erase files, crash the system.
+Runners hired **per-run or on lifetime contracts**. Karma from missions, kills
+and plot, spent straight into stats.
+
+**Edition: SR5. Do not drift to SR6.** SR6 would replace damage-reduction armour
+with Attack/Defense Ratings granting Edge, drop initiative passes, and add an
+Edge economy — discarding approved, working systems. Keep the three-gate chain,
+initiative passes, dual condition tracks, Drain scaling with Force.
+
+### 3.2 The shared frame — free flow ⇄ turn-based
+All three pillars run inside **one mode structure** (`core/tempo.js`), which is
+why a single shell was right to begin with:
+
+| mode | when |
+|---|---|
+| **free** | default; the crew acts and the world advances alongside |
+| **turnBased** | the player toggles it, or **combat forces it** |
+
+Two rules that never bend: **mode changes granularity, never math** — the same
+dice resolve the same way in both, so a player who prefers turn-based plays a
+slower game, not an easier one. And **combat forces turn-based in every pillar**,
+handing back the player's own choice when the fight ends.
+
+`advanceWorld()` is the seam a real-time street will hang patrol routes and
+camera arcs on. It **counts and nothing else**, by constraint: a real-time clock
+must not affect a player whose interface still reads as turn-based.
+
+### 3.3 Three pillars, three clocks
+Each pillar has its own verbs and its own pressure. This is what stops them being
+one menu with different nouns:
+
+| pillar | verbs | clock | character |
+|---|---|---|---|
+| **street** | move / observe / approach / engage | alert bands | **social** — moves only when something perceives you, so care is free but slow |
+| **astral** | assense / drift / manifest / engage | the tether | **absolute** — runs whether or not anyone noticed; your body is waiting |
+| **matrix** | traverse / probe / run / exfiltrate / jackOut | Overwatch → 40 | **arithmetic** — climbs the moment you touch anything |
+
+Three reasons to hurry: *they might see you* / *the cord is finite* / *they are
+already counting.*
+
+### 3.4 The Lattice — the astral's own grammar
+Magic is not a roll, it is a **structure you manipulate**. Every construct is a
+lattice of mana threads; one metaphor, three uses:
+
+- **unwind** a ward — race its re-closing. A caster who cannot out-push the
+  repair rate cannot get through however many strands they pull.
+- **unravel** a binding — cut in the *right order*, like defusing a bomb.
+- **assemble** a circuit — cast or summon, building to a shape.
+
+**Magic** is how hard you can push at max and your max threads. **Force** is what
+*percentage* of that you are pushing now, with Drain scaling. **Sorcery** is how
+far one move carries; **Conjuring** the same for spirits. **Assensing** governs
+the *quality of information* about each thread — never whether threads are
+visible. You always see the lattice; assensing decides how much you understand.
+
+**The constraint:** the player is the Johnson and never personally goes, so this
+can never become a test of the *player's* dexterity or pattern-reading. The
+runner's stats set the puzzle; player choices modify from there. A renderer must
+be handed `latticeRead()`, never the raw lattice — otherwise a dabbler solves it
+like an adept and assensing becomes decorative.
+
+### 3.5 Bound helpers — watcher spirits and agents
+One model, two skins. A helper **owes N tasks, and each task is a separate
+action** — width, not power. It lets a crew do *more things* in a beat rather
+than the same things better.
+
+| | watcher spirit | agent |
+|---|---|---|
+| pillar | astral | matrix |
+| acquired | conjured through the Lattice | loaded onto a deck |
+| cost | Drain | a program slot |
+| capped by | Force | **deck rating** |
+
+**No technomancers, no sprites** — sprites are technomancer-only. The Matrix
+equivalent of a watcher is the **agent**: ordinary decker gear, rated 1–6,
+explicitly *dog-brained*. On an unexpected situation it makes a Rating × 2 test
+and on failure either does the wrong thing or **stops and asks for
+instructions**. That last part is the flavour.
+
 ---
 
 ## 4. THE ROSTER — THE CORE SYSTEM
@@ -881,19 +965,50 @@ with it.
 - **Exceptional success (margin ≥ 3) buys headroom back** — the thoroughly
   bamboozled guard who decides you are fine, actually.
 
-### 11.5 Obstacles are affordance lists
-Every obstacle carries 2+ distinct non-loud skill-bearing affordances (or a
-skill-less always-available option like route-around) plus exactly one loud
-brute-force fallback, which is never eligible for immunity.
+### 11.5 Obstacles are VERBS × PROPERTIES
+> An obstacle is **a point on the map where something interferes with the mission
+> — an opportunity to raise the alert.** Not a barrier. Guards, spirits, cameras,
+> turrets, doors, wards and ice are all *things at encounter points*.
 
-**Watsonian immunities:** each instance can roll skill-specific resistances
-scaled by tier, each with an in-fiction reason. A floor guarantees ≥2 genuinely
-usable non-brute-force ways survive the roll. **An immunity is knowable by trying
-it** — information is confirmed by experience.
+**Every verb is attemptable against every thing within its pillar. The qualities
+of the thing decide whether there is even a challenge to roll, let alone what the
+result is.**
 
-**Three generator invariants**, enforced by construction and re-verified across
-thousands of seeds: brute force always available; ≥1 additional distinct solution
-chain; ≥2 usable non-loud ways per obstacle.
+This replaced hand-authored affordance lists, which made the MENU the authority
+on what was possible — a maglock could only be breached with demolitions because
+nobody had written a "kick it" line, not because kicking a door is impossible.
+
+**Two gates, in order:**
+
+1. **Presence** — which planes a thing can be *touched* on. Not the same as
+   `senses`, which is only what it *perceives*: a maglock senses nothing and is
+   still a physical object **and** a device on the host. A verb from pillar P
+   needs the thing present on P's plane. This is what stops you sleazing a spirit
+   or banishing a guard.
+2. **Nature** — `living`, `sapient`, `summoned`, `construct`, `armour`,
+   `structure`, `fights`. These decide whether a verb *lands*. You can talk at a
+   camera all day; it has no opinion. A ward is astrally present but is a
+   **construct**, not something summoned — so it is unwound, never banished.
+
+**Force reuses the three-gate chain** (§6): any damaging verb against a
+physically-present thing goes Hit → Penetrate (Power vs Armour) → Damage,
+accumulating against `structure`. A pistol at Power 6 sparks off a hardened door
+at Armour 12 forever; a rifle, a Force-6 fireball or purpose-built demolitions
+gets through. **Perseverance only pays if you can penetrate at all.** Kicking is a
+melee attack with the existing `unarmed` profile — not a special mechanism.
+Demolitions stays trained-and-equipped, because feet and explosives are different
+categories of thing.
+
+**Nothing is ever removed from the menu.** A verb that reaches but cannot land is
+still offered and still attemptable; it resolves as failure and is then
+*annotated* as ineffective. Watsonian immunities work the same way — knowable by
+trying, and thereafter marked rather than deleted.
+
+**Generator invariants** still enforced by construction: brute force is always
+available in *some* form matched to what the thing is; ≥1 additional distinct
+solution chain per site.
+
+*Full model and build sequencing: `PILLAR-PLAN.md` §3.6.*
 
 ### 11.6 Three different graphs
 - **Physical:** rooms, edges, entry points, patrols. Movement gated by
