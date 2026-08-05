@@ -222,26 +222,34 @@ trade, expressed in machinery that already exists.
 
 ## 4. BUILD ORDER
 
-1. ~~**`js/core/tempo.js`** — the mode machine and the world-advance seam.~~
-   **DONE** (`c0fb7eb`). Clocking only; proven inert against the 1200-run
-   harness and by replaying a run at 0/7/50 ticks for identical output.
-2. ~~**Wire mode into the run** — combat forces turn-based.~~ **DONE** (`c0fb7eb`).
-3. **`js/models/lattice.js`** — the astral puzzle model. Three modes (unwind /
-   unravel / assemble), parameterised by Magic, Force, Sorcery, Conjuring,
-   Assensing per §3.3. Model first, plain text rendering; the visual layer makes
-   it beautiful later.
-4. **`js/models/helpers.js`** — bound helpers: watcher spirits and agents, one
-   model, N tasks, each task a separate action. Agents load onto decks and are
-   capped by deck rating; the "asks for instructions" failure is the flavour.
-5. **Astral grammar** — assense / drift / manifest, with the Lattice as how
-   wards, banishing and casting actually resolve.
-6. **Matrix grammar** — traverse / probe / run / exfiltrate / jack out, plus
-   Overwatch, plus agents acting on their own tasks.
-7. **Street grammar** — move / observe / approach / engage.
-8. **Probes** — one class per pillar asserting its verbs and clock are distinct.
-9. **Docs** — fold into `UNDERSTANDING.md` §3 and `SYSTEM-STATE.md`.
+1. ~~`js/core/tempo.js` — the mode machine and world-advance seam.~~
+   **DONE** `c0fb7eb`. Proven inert: identical output at 0/7/50 ticks.
+2. ~~Wire mode into the run — combat forces turn-based.~~ **DONE** `c0fb7eb`.
+3. ~~`js/models/lattice.js` — the astral puzzle.~~ **DONE** `674e548`.
+4. ~~Spells in meatspace.~~ **DONE** `b6c6e2a`.
+5. ~~`js/models/helpers.js` — spirits and agents.~~ **DONE** `87c7e50`.
+6. ~~Astral grammar — assense / drift / manifest / engage.~~ **DONE** `69197aa`.
+7. ~~Matrix grammar — traverse / probe / run / exfiltrate / jackOut + Overwatch.~~
+   **DONE** `0702d8a`.
+8. ~~Street grammar — move / observe / approach / engage.~~ **DONE** (this pass).
+9. **Docs** — fold into `UNDERSTANDING.md` §3 and `SYSTEM-STATE.md`. *Remaining.*
 
-Each step commits separately and leaves the suite green.
+## 4b. WHAT LANDED — THREE PILLARS, THREE CLOCKS
+
+The exercise is complete when each pillar pressures a crew in its own way and
+carries none of the others' machinery. Probed in class 21:
+
+| pillar | verbs | clock | character |
+|---|---|---|---|
+| **street** | move / observe / approach / engage | alert bands | **social** — moves only when something perceives you, so care is free but slow |
+| **astral** | assense / drift / manifest / engage | the tether | **absolute** — runs whether or not anyone noticed; your body is waiting |
+| **matrix** | traverse / probe / run / exfiltrate / jackOut | Overwatch → 40 | **arithmetic** — climbs the moment you touch anything; you are being counted |
+
+Three reasons to hurry: *they might see you* / *the cord is finite* / *they are
+already counting.*
+
+Probes hold that each pillar's prompt returns `null` on the other two, so the
+grammars cannot quietly re-merge.
 
 ---
 

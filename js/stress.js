@@ -1540,6 +1540,131 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 21: the street pillar's verbs, and three clocks ───────
+  // The Genesis loop is top-down for both moving and fighting, and
+  // what makes that a game rather than a menu is POSITION. The
+  // street's clock is SOCIAL — it only moves when something
+  // perceives you — which is what distinguishes it from the other
+  // two, and this class holds all three apart.
+  function class21_street() {
+    const rng0 = MJ.makeRNG("stress-street");
+    const crewFor = (i) => {
+      const crew = makeRoster(rng0.fork("c" + i), 3);
+      for (const r of crew) {
+        r.skills.stealth = Math.max(4, r.skills.stealth || 0);
+        r.skills.firearms = Math.max(3, r.skills.firearms || 0);
+        MJ.watchRunner(r, rng0); MJ.hireRunner(r, "permanent");
+      }
+      return crew;
+    };
+    let run = null;
+    for (let i = 0; i < 200 && !run; i++) {
+      const site = MJ.mintSite("stress-street-u", i);
+      const r = MJ.beginMission(rng0.fork("r" + i), { site: site, kind: "jobObjective", objective: {} }, crewFor(i), 1);
+      if (r.obstacles.length >= 3 && r.obstacles.some((o) => o.fights)) run = r;
+    }
+    check(!!run, "C21: the probe needs a route with something on it");
+    if (!run) return;
+
+    check(MJ.isStreetRun(run), "C21: a job objective must read as a street run");
+    const p = MJ.streetPrompt(run);
+    check(p && p.pillar === "street", "C21: the street prompt must name its own pillar");
+    for (const v of ["move", "observe", "approach", "engage"]) {
+      check(p.options.some((o) => o.verb === v), "C21: the street must offer " + v);
+    }
+
+    // ── Position is the pillar's defining fact ───────────────────
+    check(typeof p.leg === "number" && p.legs > 0, "C21: the crew must know where they are on the walk");
+    check(!!p.where, "C21: and what kind of ground they are standing on");
+    check(Array.isArray(p.watchers), "C21: and what can see them from it");
+
+    // ── Observe buys certainty, once ─────────────────────────────
+    const before = run.obstacles[run.index];
+    const obs = MJ.streetAct(rng0.fork("o"), run, "observe");
+    check(obs.ok && obs.learned, "C21: observing must return what was learned");
+    check(obs.learned.label === before.label, "C21: and it must be about the ground they are on");
+    check(MJ.streetAct(rng0, run, "observe").ok === false, "C21: looking twice tells you nothing new");
+    check(MJ.streetObserved(run, before), "C21: a studied obstacle must be recorded");
+
+    // ── Moving is a choice, and leaves things behind ─────────────
+    const idxBefore = run.index;
+    const moved = MJ.streetAct(rng0.fork("m"), run, "move");
+    check(moved.ok && run.index === idxBefore + 1, "C21: moving must advance the walk");
+    check(moved.leftBehind === before.label,
+      "C21: advancing past something LEAVES it there — still behind you, still watching");
+
+    // ── Engage forces turn-based, in this pillar like every other ─
+    const fightIdx = run.obstacles.findIndex((o, i) => i >= run.index && o.fights);
+    if (fightIdx >= 0) {
+      run.index = fightIdx;
+      check(!MJ.describeTempo(run.tempo).locked, "C21: the crew is not locked before they start anything");
+      const eng = MJ.streetAct(rng0.fork("e"), run, "engage");
+      check(eng.ok && eng.opensCombat, "C21: engaging must open combat");
+      check(MJ.describeTempo(run.tempo).mode === "turnBased" && MJ.describeTempo(run.tempo).lockedBy === "combat",
+        "C21: and combat must force turn-based here as everywhere");
+      MJ.exitCombat(run.tempo);
+    }
+    // You cannot pick a fight with a wall.
+    const wallIdx = run.obstacles.findIndex((o) => !o.fights);
+    if (wallIdx >= 0) {
+      run.index = wallIdx;
+      const p2 = MJ.streetPrompt(run);
+      check(!p2.options.find((o) => o.verb === "engage").available,
+        "C21: there is nothing to fight in a maglock");
+    }
+
+    // ── THREE PILLARS, THREE CLOCKS ──────────────────────────────
+    // The whole point of the exercise. Each pillar must pressure the
+    // crew in its own way, and must not carry another's clock.
+    const site = MJ.mintSite("stress-street-u", 9);
+    const mage = makeRoster(rng0.fork("mg"), 1)[0];
+    mage.attributes.magic = 5; mage.skills.sorcery = 5; mage.skills.assensing = 5; mage.skills.conjuring = 4;
+    const dk = makeRoster(rng0.fork("dk"), 1)[0];
+    dk.skills.hacking = 6; dk.skills.computer = 5;
+    for (const r of [mage, dk]) { MJ.watchRunner(r, rng0); MJ.hireRunner(r, "permanent"); }
+
+    const streetRun = MJ.beginMission(rng0.fork("s3"), { site: site, kind: "jobObjective", objective: {} }, [mage, dk], 1);
+    // Astral routes are often EMPTY — measured p50 0, max 4 — and an
+    // empty run is already over, so it can never demonstrate its own
+    // clock. Find one with something on it rather than asserting
+    // against a run that finished before it started.
+    let astralRun = MJ.beginMission(rng0.fork("a3"), MJ.createAstralMission(site), [mage], 1);
+    for (let i = 0; i < 300 && !astralRun.obstacles.length; i++) {
+      const s2 = MJ.mintSite("stress-street-u", 100 + i);
+      astralRun = MJ.beginMission(rng0.fork("a3-" + i), MJ.createAstralMission(s2), [mage], 1);
+    }
+    check(astralRun.obstacles.length > 0, "C21: need a populated astral route to compare clocks");
+    const matrixRun = MJ.beginMission(rng0.fork("m3"), MJ.createMatrixMission(site, { wantData: true }), [dk], 1);
+
+    // Street: the alert bands, and NO tether or Overwatch.
+    const sp = MJ.streetPrompt(streetRun);
+    check(sp && sp.awareness, "C21: the street's clock is the alert bands");
+    check(streetRun.tether === null || streetRun.tether === undefined,
+      "C21: a street crew is not on a tether");
+    check(streetRun.overwatch === undefined, "C21: a street crew is not being traced");
+
+    // Astral: the tether, and it runs whether or not anyone noticed.
+    check(astralRun.tether > 0, "C21: the astral's clock is the tether");
+    const tetherBefore = astralRun.tether;
+    MJ.astralAct(rng0.fork("aa"), astralRun, "assense");
+    check(astralRun.tether < tetherBefore,
+      "C21: the tether runs whether or not anything perceived the mage");
+
+    // Matrix: Overwatch, which climbs the moment you touch anything.
+    check(MJ.overwatchOf(matrixRun).score === 0, "C21: a decker starts unhunted");
+    MJ.matrixAct(rng0.fork("mm"), matrixRun, "probe");
+    check(MJ.overwatchOf(matrixRun).score > 0,
+      "C21: the Matrix's clock climbs on contact, unlike the street's");
+
+    // And each pillar's prompt exists only on its own run.
+    check(MJ.streetPrompt(astralRun) === null && MJ.streetPrompt(matrixRun) === null,
+      "C21: street verbs belong to the street");
+    check(MJ.astralPrompt(streetRun) === null && MJ.astralPrompt(matrixRun) === null,
+      "C21: astral verbs belong to the astral");
+    check(MJ.matrixPrompt(streetRun) === null && MJ.matrixPrompt(astralRun) === null,
+      "C21: Matrix verbs belong to the Matrix");
+  }
+
   // ── Class 20: the Matrix pillar's verbs ─────────────────────────
   // The Genesis reference: a PERSONA crawling geometric node
   // structures, dodging IC, to take data or crash the system. The
@@ -2505,6 +2630,7 @@
       ["18. Bound helpers — spirits and agents", class18_helpers],
       ["19. The astral pillar's verbs", class19_astral],
       ["20. The Matrix pillar's verbs", class20_matrix],
+      ["21. The street pillar, and three clocks", class21_street],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
