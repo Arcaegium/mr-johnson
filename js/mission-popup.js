@@ -270,14 +270,15 @@
         // has no more access to that than they do to the number
         // itself. The math decides WHEN the tick appears; it is not
         // something to narrate at the player.
-        if (p && p.proven) return letter + ":" + ok(run.state.axes[a].current + "✓");
+        if (p && p.proven) return letter + ":" + ok(MJ.diceForSecurity(run.state.axes[a].current) + "d✓");
         // Still guessing — but contact corrects the guess upward as it
         // happens. Meet a tier-5 on a place pencilled at ~3 and it
         // reads ~5, because you have MET a five. Only the site's own
         // security counts; a response squad's rating is a fact about
         // the noise you made.
         const shown = Math.max(est === null ? 0 : est, (p && p.maxTier) || 0);
-        return letter + ':<span class="dimmed">~' + (shown || "?") + "</span>";
+        return letter + ':<span class="dimmed">~' +
+          (shown ? MJ.diceForSecurity(shown) + "d" : "?") + "</span>";
       }).join(" ");
       lines.push('<span class="dimmed">security </span>' + axes);
     }
@@ -461,8 +462,8 @@
         const axes = ["physical", "astral", "matrix"].map((a) => {
           const L = a[0].toUpperCase();
           return view[a].confirmed
-            ? L + ":" + num(view[a].confirmed.value)
-            : L + ':<span class="dimmed">~' + view[a].estimated + "</span>";
+            ? L + ":" + num(MJ.diceForSecurity(view[a].confirmed.value) + "d")
+            : L + ':<span class="dimmed">~' + MJ.diceForSecurity(view[a].estimated) + "d</span>";
         }).join(" ");
         cells.push(cell("the site now reads", esc(res.threatBand || "normal") + "<br>" +
           '<span class="dimmed">security </span>' + axes +

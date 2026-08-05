@@ -59,6 +59,48 @@
     return Math.max(1, Math.ceil(tier / 2));
   }
 
+  // ── A security rating, stated in DICE ───────────────────────────
+  // A site's 1-10 value is a budget: it decides how much gets bought
+  // and how hard the worst thing there can be. It is not a number a
+  // player can hold a runner up against, and that mismatch is the
+  // whole reason "your crew brings 12d" against "security P:4" told
+  // nobody anything. Twelve of what, against four of what?
+  //
+  // So the rating the PLAYER sees is the pool it takes to beat the
+  // worst thing that site can field. Same units as a dossier, same
+  // units as a crew read, so the comparison is a glance instead of an
+  // essay: bring this many dice, or do not go.
+  //
+  // Exact, not sampled: hits are Binomial(n, 1/3), and this is the
+  // smallest n whose chance of clearing the threshold reaches
+  // CHALLENGE_CONFIDENCE. "Enough to win" means winning most of the
+  // time, not scraping a coin flip.
+  const CHALLENGE_CONFIDENCE = 0.8;
+  const HIT_CHANCE = 1 / 3;
+
+  function atLeastHits(n, k) {
+    // P(X >= k) for X ~ Bin(n, 1/3)
+    let below = 0;
+    for (let i = 0; i < k; i++) {
+      let c = 1;
+      for (let j = 0; j < i; j++) c = (c * (n - j)) / (j + 1);
+      below += c * Math.pow(HIT_CHANCE, i) * Math.pow(1 - HIT_CHANCE, n - i);
+    }
+    return 1 - below;
+  }
+
+  const DICE_FOR_VALUE = [];
+  function diceForSecurity(value) {
+    const v = Math.max(1, Math.min(10, Math.round(value || 0)));
+    if (DICE_FOR_VALUE[v] === undefined) {
+      const need = thresholdForTier(v);
+      let n = 1;
+      while (n < 60 && atLeastHits(n, need) < CHALLENGE_CONFIDENCE) n += 1;
+      DICE_FOR_VALUE[v] = n;
+    }
+    return DICE_FOR_VALUE[v];
+  }
+
   // ── The one definition of a dice pool ──────────────────────────
   // Skill + Attribute, plus whatever situational dice the caller
   // brings. Everything that needs to KNOW a pool — the resolver that
@@ -232,6 +274,7 @@
   MJ.rollDicePool = rollDicePool;
   MJ.countHits = countHits;
   MJ.thresholdForTier = thresholdForTier;
+  MJ.diceForSecurity = diceForSecurity;
   MJ.dicePoolFor = dicePoolFor;
   MJ.resolveTask = resolveTask;
   MJ.drainValueFor = drainValueFor;

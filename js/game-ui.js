@@ -64,10 +64,14 @@
   }
 
   // ── Formatting ──────────────────────────────────────────────────
+  // A security rating, said in the units a crew is measured in: the
+  // dice it takes to beat the worst thing that site can field. The
+  // raw 1-10 value is a generation budget and was never something a
+  // player could hold a dossier up against.
   function fmtAxis(v) {
     return v.confirmed
-      ? `<span class="good">${v.confirmed.value}✓${v.confirmed.fresh ? "" : '<span class="warn">stale</span>'}</span>`
-      : `<span class="muted">~${v.estimated}</span>`;
+      ? `<span class="good">${MJ.diceForSecurity(v.confirmed.value)}d✓${v.confirmed.fresh ? "" : '<span class="warn">stale</span>'}</span>`
+      : `<span class="muted">~${MJ.diceForSecurity(v.estimated)}d</span>`;
   }
 
   function fmtContract(r) {
@@ -581,7 +585,8 @@
   function shownSecurity(site, axis) {
     if (!site) return null;
     const v = MJ.siteIntelView(site, S.day)[axis];
-    return v.confirmed ? v.confirmed.value : v.estimated;
+    // In DICE, so it compares directly against what the crew brings.
+    return MJ.diceForSecurity(v.confirmed ? v.confirmed.value : v.estimated);
   }
 
   // Teal when the crew meets or beats what is waiting on that axis,

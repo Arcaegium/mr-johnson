@@ -1984,6 +1984,35 @@
     check(MJ.axisProven(run, "physical").proven,
       "C23: meeting everything of that kind on the route DOES confirm it");
 
+    // ── A RATING IS SAID IN DICE ─────────────────────────────────
+    // The raw 1-10 value is a generation budget; it decides how much
+    // a site buys and how hard its worst thing can be. It was never a
+    // number a player could hold a dossier against, which is why "the
+    // crew brings 12d" against "security P:4" compared nothing to
+    // nothing. What the player is shown is the POOL IT TAKES, so the
+    // comparison is like against like.
+    let lastNeed = 0;
+    for (let v = 1; v <= 10; v++) {
+      const dice = MJ.diceForSecurity(v);
+      check(dice >= lastNeed, "C23: a harder site can never ask for FEWER dice (v=" + v + ")");
+      lastNeed = dice;
+      // The stated pool must actually do the job, and one die fewer
+      // must not — otherwise the number is decoration.
+      const need = MJ.thresholdForTier(v);
+      const rate = (pool) => {
+        const rng = MJ.makeRNG("c23-dice-" + v + "-" + pool);
+        let win = 0;
+        for (let i = 0; i < 4000; i++) if (MJ.countHits(MJ.rollDicePool(rng, pool)) >= need) win++;
+        return win / 4000;
+      };
+      check(rate(dice) >= 0.75,
+        "C23: the stated pool must actually beat the site (v=" + v + ", " + dice + "d)");
+      check(rate(dice - 1) < rate(dice),
+        "C23: and it must be the LINE, not a number above it (v=" + v + ")");
+    }
+    check(MJ.diceForSecurity(10) > MJ.diceForSecurity(1),
+      "C23: the top of the scale must demand more than the bottom");
+
     // ── A RESPONSE SQUAD PROVES CAPABILITY ───────────────────────
     // Its tier is drawn from the alert level, which is bounded by the
     // site's own [Current, Max] — so a place that fields a tier-9
