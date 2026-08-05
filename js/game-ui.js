@@ -207,8 +207,14 @@
   function jobTitle(job) {
     const pillars = job.missions.map((m) => DOMAIN_LABEL[m.payloadDomain] || m.payloadDomain).join("/");
     const n = job.missions.length;
+    // Price, legs, what each leg is, and how long you have — the four
+    // things a contract is judged on, in that order. The clock comes
+    // last and in amber because it is the one that is running.
+    const left = job.expiryDay - S.day;
+    const clock = left <= 0 ? "expired" : left === 1 ? "today" : left + "d left";
     return `<b class="w-num">¥${job.pay}</b> <span class="muted">·</span> ${n} Leg${n === 1 ? "" : "s"} ` +
-      `<span class="muted">·</span> <span class="good">${esc(pillars)}</span>`;
+      `<span class="muted">·</span> <span class="good">${esc(pillars)}</span> ` +
+      `<span class="muted">·</span> <span class="w-warn">${clock}</span>`;
   }
 
   function jobDetail(job, withStatus) {
