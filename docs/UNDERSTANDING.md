@@ -1262,6 +1262,11 @@ edits and confirm the change took effect.
 - **`git commit -F <file>`** for anything with quotes in it.
 - **Commit messages carry the reasoning.** They are the densest surviving record
   of *why* and have proven load-bearing for recall.
+- **PUSH EVERY CHANGE AS IT LANDS. `dev = prod` here.** This is a solo repo
+  nobody else touches, and the user tests on the deployed page — so work that
+  sits uncommitted on a local disk is work that does not exist. Standing
+  authorization: commit and push without asking. A session that ends with a
+  dirty tree has failed to deliver, however green the suite is.
 
 ---
 
