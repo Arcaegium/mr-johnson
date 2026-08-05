@@ -566,7 +566,12 @@ body { padding-bottom: 76px; }
 .qcard-ops { display: flex; gap: 3px; }
 
 /* The window shifts over to make room; the footer keeps clear of it. */
-body.railed .game-wrap { margin-left: 316px; }
+/* Once the rail is up, the window takes the rest of the screen. The
+   1400px cap is for a centred page with nothing beside it — leave it
+   on with a fixed column pushing from the left and the difference
+   just becomes dead margin on the right, several hundred pixels of it
+   on a wide display, at the direct expense of legibility. */
+body.railed .game-wrap { margin-left: 316px; margin-right: 0; max-width: none; }
 body.railed .framebar { left: 300px; }
 
 @media (max-width: 900px) {
