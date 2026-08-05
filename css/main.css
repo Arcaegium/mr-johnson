@@ -294,3 +294,166 @@ button.warn-btn:hover { background: #d4735e; color: var(--bg); }
   .panels > div:nth-child(2) { order: 2; }  /* Roster + Market */
   .panels > div:nth-child(1) { order: 3; }  /* Contracts + Board + Sites */
 }
+
+/* ══════════════════════════════════════════════════════════════
+   THE HUB WINDOW — frame + tabs + widgets
+   UNDERSTANDING.md §10. Three levels of zoom: tab -> widget ->
+   item. The FRAME carries compact state you MONITOR; a WIDGET is a
+   subsystem you OPERATE, or something too voluminous for the frame.
+   Stays plain until Phase 3 — the drawn CRT terminal is a later
+   rendering of this same model, so structure matters here and
+   decoration does not.
+   ══════════════════════════════════════════════════════════════ */
+
+.hub {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 3px;
+}
+
+/* ── The frame: monitor left, today's plan right ─────────────── */
+.frame {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  background: #0e141b;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+}
+
+.frame-stats { display: flex; gap: 20px; align-items: center; }
+
+.frame-stat { display: flex; flex-direction: column; line-height: 1.25; }
+.frame-stat .k {
+  font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.14em;
+  color: var(--dim);
+}
+.frame-stat .v { font-size: 1.02rem; color: var(--accent-2); }
+.frame-stat.alarm .v { color: var(--accent); }
+
+/* Today's plan: collapsed by default, click to open a card. */
+.frame-plan { text-align: right; }
+.plan-toggle {
+  background: transparent; border: 1px solid var(--line); color: var(--ink);
+  font-family: var(--mono); font-size: 0.78rem; padding: 5px 10px;
+  border-radius: 2px; cursor: pointer;
+}
+.plan-toggle:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.plan-toggle .n { color: var(--accent); }
+.plan-card {
+  border-top: 1px solid var(--line);
+  padding: 10px 12px;
+  text-align: left;
+  background: #0c1218;
+}
+
+/* ── Tab bar ─────────────────────────────────────────────────── */
+.tabbar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: #0c1218;
+  overflow-x: auto;
+}
+
+.tab {
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line);
+  border-bottom: 2px solid transparent;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--ink); }
+.tab.active {
+  color: var(--accent-2);
+  border-bottom-color: var(--accent-2);
+  background: var(--panel);
+}
+.tab .badge { color: var(--dim); margin-left: 7px; font-size: 0.74rem; }
+.tab.active .badge { color: var(--accent); }
+
+.tabbody { padding: 12px; display: grid; gap: 10px; }
+
+/* ── Widgets: level 1 of the zoom ────────────────────────────── */
+.widget { border: 1px solid var(--line); border-radius: 2px; background: #0e141b; }
+.widget.wide { grid-column: 1 / -1; }
+.widget.dark { opacity: 0.55; }
+
+.widget-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.widget-head:hover { background: #121a23; }
+.widget-head .chev { color: var(--dim); width: 10px; display: inline-block; }
+.widget-head .wname {
+  text-transform: uppercase; letter-spacing: 0.11em;
+  font-size: 0.78rem; color: var(--accent-2);
+}
+.widget.dark .widget-head .wname { color: var(--dim); }
+.widget-head .wcount { color: var(--accent); font-size: 0.78rem; }
+.widget-head .wsum { color: var(--dim); font-size: 0.76rem; margin-left: auto; text-align: right; }
+
+.widget-body { border-top: 1px solid var(--line); padding: 8px 10px 10px; }
+
+/* ── Entries: level 2, and their detail is level 3 ───────────── */
+.entry { border: 1px solid transparent; border-radius: 2px; margin-bottom: 4px; }
+.entry.open { border-color: var(--line); background: #0b1017; }
+
+.entry-head {
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex; gap: 8px; align-items: baseline;
+  border-radius: 2px;
+}
+.entry-head:hover { background: #131c26; }
+.entry-head .chev { color: var(--dim); width: 10px; flex: none; }
+.entry-head .etitle { flex: 1; }
+.entry-head .etag { color: var(--dim); font-size: 0.76rem; flex: none; }
+
+.entry-body {
+  padding: 8px 10px 10px 26px;
+  border-top: 1px solid var(--line);
+  font-size: 0.86rem;
+}
+
+/* A labelled block inside an expanded entry. */
+.det { margin-bottom: 8px; }
+.det > .dk {
+  display: block;
+  font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.13em;
+  color: var(--dim); margin-bottom: 3px;
+}
+
+/* The full skill grid — zeros included, by design: what a runner
+   CANNOT do is as much of the hire decision as what they can. */
+.skillgrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 1px 10px;
+}
+.skillgrid span { font-size: 0.8rem; }
+.skillgrid .z { color: #3d4a55; }
+
+.actionbar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+
+/* Site -> action, the three intents. */
+.intent { border: 1px solid var(--line); border-radius: 2px; padding: 8px; margin-top: 6px; }
+.intent > .ik {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.13em;
+  color: var(--accent-2); display: block; margin-bottom: 5px;
+}
+.crewpick { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; }
+.crewpick label { font-size: 0.82rem; cursor: pointer; }
+.crewpick label.out { color: var(--dim); cursor: default; }
+
+.empty { color: var(--dim); font-size: 0.84rem; padding: 4px 8px; display: block; }

@@ -1,21 +1,59 @@
 /* ============================================================
    Mr. Johnson — game-ui.js
-   The v0 shell's renderer: draws a session, forwards clicks to
-   MJ.game commands, re-renders. Deliberately ugly, text-first —
-   this exists to answer "is the roster loop fun," not to be the
-   §10 hub console. All game logic lives in game.js; this file
-   only reads session state and calls commands.
+   THE HUB CONSOLE, per UNDERSTANDING.md §10.
+
+   ONE WINDOW, three levels of zoom: TAB -> WIDGET -> ITEM. The
+   page used to splay every panel down an endless scroll; it now
+   opens exactly as far as you ask it to.
+
+     FRAME    compact state you MONITOR — day, nuyen, rep, capacity
+              anchored left; today's plan anchored right, collapsed,
+              clicking opens a card. Never a place you operate.
+     WIDGET   a subsystem you OPERATE, or something too voluminous
+              to fit the frame. Collapsed to a name, a count and a
+              one-line read.
+     ITEM     one entry's own dossier, opened in place.
+
+   WIDGETS ARE ROWS, NOT RENDERERS. Every one is a record in
+   WIDGETS with the same five keys, so a new subsystem is a row —
+   "systems are expensive, rows are cheap" applied to the console
+   itself. That is also what lets the Phase 3 CRT terminal be a
+   second consumer of this same description rather than a rewrite.
+
+   ACTIONS ARE QUEUED FROM THE WIDGET THAT OWNS THEM. You manage
+   runners on the Runners tab and commit a crew to a site from the
+   Locations tab. The central dispatcher survives in the frame's
+   plan card for the activities that have no home tab (crafting,
+   searching) — see §10 "Deploy is a flow".
+
+   All game logic lives in game.js. This file only reads session
+   state and calls MJ.game commands.
    ============================================================ */
 (function () {
   let S = null; // the running session
-  let wipeChecks = false; // set when a new day (or game) starts — crew selections reset to a clean slate
+
+  // Expansion lives HERE, never read back out of the DOM. The old
+  // shell scraped checked boxes mid-render, which meant the model's
+  // idea of the crew and the screen's idea could differ for a frame.
+  const UI = {
+    tab: "runners",
+    open: new Set(["w-hired", "w-active", "w-sites"]), // sensible landing state
+    entry: new Set(),
+    crew: new Set(),   // roster indices selected for the next dispatch
+    plan: false,       // is the day's-plan card open
+  };
 
   const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const isOpen = (k) => UI.entry.has(k);
+  const chev = (open) => `<span class="chev">${open ? "▾" : "▸"}</span>`;
 
   // ── Formatting helpers ──────────────────────────────────────────
   function fmtAxis(v) {
     return v.confirmed
-      ? `<span class="good">${v.confirmed.value}✓${v.confirmed.fresh ? "" : "<span class=\"warn\">stale</span>"}</span>`
+      ? `<span class="good">${v.confirmed.value}✓${v.confirmed.fresh ? "" : '<span class="warn">stale</span>'}</span>`
       : `<span class="muted">~${v.estimated}</span>`;
   }
 
@@ -33,18 +71,12 @@
     return `<span class="muted">${m.phase || "unwatched"}</span>`;
   }
 
-  // ── The dispatch builder: Location -> Action (user spec) ────────
-  // Condition first, the way the address reads it — it is the single
-  // biggest predictor of what the crew walks into, so it leads.
   function siteTag(site) {
     const idx = site.identity.universeIndex !== undefined ? `#${site.identity.universeIndex} ` : "";
     const cond = site.identity.conditionLabel ? `${site.identity.conditionLabel} ` : "";
     return `${idx}${cond}${site.identity.district} (${site.identity.owningFaction})`;
   }
 
-  // The full leg line, board and contracts alike (user ruling: the
-  // leg itself reads in teal, the location's NAME in white; no
-  // information is lost moving from the board to an active job).
   function legLineFull(job, m, k, withStatus) {
     const v = MJ.siteIntelView(m.site, S.day);
     const gated = m.requiresMission && !m.requiresMission.resolved
@@ -56,210 +88,61 @@
       `&nbsp;&nbsp;<span class="muted">est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</span></div>`;
   }
 
-  function siteHasOpenJob(site) {
-    return S.jobs.some((j) => !j.paid && !j.expired && j.missions.some((m) => !m.resolved && m.site === site));
-  }
-
-  // Three-stage builder (user spec): choose the ACTIVITY (Craft /
-  // Medicae / Search / a known site), then the discipline or action,
-  // then — for crafting — the item within that discipline. Programs
-  // and spells with player-tuned creation variables are a future
-  // category of their own (flagged).
-  function activityOptions() {
-    const opts = [
-      { v: "craft", label: "Craft" },
-      { v: "medicae", label: "Medicae" },
-      { v: "search", label: "Search" },
-    ];
-    S.knownSites.forEach((site, i) => {
-      opts.push({ v: "site:" + i, label: siteTag(site), job: siteHasOpenJob(site) });
-    });
-    return opts;
-  }
-
-  function craftDisciplines() {
-    const skills = [];
-    for (const id of Object.keys(MJ.ITEM_TEMPLATES)) {
-      const t = MJ.ITEM_TEMPLATES[id];
-      if (t.category === "cyberware" || !t.craftSkill) continue;
-      if (skills.indexOf(t.craftSkill) === -1) skills.push(t.craftSkill);
-    }
-    return skills;
-  }
-
-  function actionOptions(activity) {
-    const acts = [];
-    if (activity === "craft") {
-      for (const skill of craftDisciplines()) acts.push({ v: skill, label: skill });
-    } else if (activity === "medicae") {
-      S.roster.forEach((r, i) => {
-        if (r.wounds > 0 && r.market.hired) acts.push({ v: "treat:" + i, label: `treat ${r.identity.handle} (${r.wounds} box${r.wounds > 1 ? "es" : ""})` });
-      });
-    } else if (activity === "search") {
-      acts.push({ v: "search:scrap", label: "scrap yard" });
-      acts.push({ v: "search:reagents", label: "reagent grove" });
-    } else {
-      const site = S.knownSites[+activity.split(":")[1]];
-      S.jobs.forEach((job, jI) => {
-        if (job.paid || job.expired) return;
-        job.missions.forEach((m, k) => {
-          if (m.resolved || m.site !== site) return;
-          const gated = !!(m.requiresMission && !m.requiresMission.resolved);
-          acts.push({
-            v: `run:${jI}:${k}`,
-            label: `Run — Job #${job.contractNumber} leg ${k + 1}: ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain})${gated ? " [GATED]" : ""}`,
-            disabled: gated,
-          });
-        });
-      });
-      for (const lens of MJ.RECON_LENSES) acts.push({ v: "recon:" + lens, label: "Recon — " + lens });
-      // The Matrix run is its own dispatch — a crawl through the
-      // site's HOST, not its corridors. Two routes: quiet takes the
-      // fewest nodes, greedy detours through datastores for a bigger
-      // haul and eats the extra ice for it.
-      // An astral run is one mage projecting — walls are irrelevant,
-      // so it is short, but wards gate it at BOTH ends and the tether
-      // is always running.
-      acts.push({ v: "astral", label: "Astral run — project in" });
-      if (site.host && site.host.nodes.length > 1) {
-        acts.push({ v: "matrix:quiet", label: `Matrix run — quiet (${site.host.nodes.length} nodes)` });
-        acts.push({ v: "matrix:data", label: "Matrix run — grab all the data you can" });
-      }
-      if (site.tags.some((t) => String(t.tag).indexOf("resource:") === 0)) acts.push({ v: "harvest", label: "Harvest resources" });
-    }
-    return acts;
-  }
-
-  function itemOptions(activity, action) {
-    if (activity !== "craft" || !action) return [];
-    return Object.keys(MJ.ITEM_TEMPLATES)
-      .filter((id) => {
-        const t = MJ.ITEM_TEMPLATES[id];
-        return t.category !== "cyberware" && t.craftSkill === action;
-      })
-      .map((id) => ({ v: id, label: `${MJ.ITEM_TEMPLATES[id].label} (T${MJ.ITEM_TEMPLATES[id].tier})` }));
-  }
-
-  function buildFromSelectors() {
-    const activity = $("site-select") ? $("site-select").value : null;
-    const act = $("action-select") ? $("action-select").value : null;
-    if (!activity || !act) return null;
-    if (activity === "craft") {
-      const itemSel = $("item-select");
-      const tpl = itemSel ? itemSel.value : null;
-      if (!tpl || !MJ.ITEM_TEMPLATES[tpl]) return null;
-      return { mission: MJ.createCraftingMission(tpl), label: "craft " + MJ.ITEM_TEMPLATES[tpl].label };
-    }
-    if (activity === "medicae") {
-      if (act.indexOf("treat:") !== 0) return null;
-      const p = S.roster[+act.split(":")[1]];
-      return { mission: MJ.createMedicalMission(p), label: "treat " + p.identity.handle };
-    }
-    if (activity === "search") {
-      const kind = act.split(":")[1];
-      return { mission: MJ.game.makeSearchMission(S, kind), label: "search: " + kind };
-    }
-    const site = S.knownSites[+activity.split(":")[1]];
-    if (!site) return null;
-    if (act.indexOf("run:") === 0) {
-      const parts = act.split(":");
-      const job = S.jobs[+parts[1]];
-      const m = job.missions[+parts[2]];
-      return { mission: m, label: `Job #${job.contractNumber} leg ${+parts[2] + 1} @ ${siteTag(site)}` };
-    }
-    if (act.indexOf("recon:") === 0) {
-      const lens = act.split(":")[1];
-      return { mission: MJ.createReconMission(site, lens), label: `recon ${lens} @ ${siteTag(site)}` };
-    }
-    if (act === "astral") {
-      return { mission: MJ.createAstralMission(site), label: `astral run @ ${siteTag(site)}` };
-    }
-    if (act.indexOf("matrix:") === 0) {
-      const greedy = act.split(":")[1] === "data";
-      return {
-        mission: MJ.createMatrixMission(site, { wantData: greedy }),
-        label: `matrix run${greedy ? " (data haul)" : ""} @ ${siteTag(site)}`,
-      };
-    }
-    if (act === "harvest") return { mission: MJ.createResourceMission(site), label: `harvest @ ${siteTag(site)}` };
-    return null;
-  }
-
-  // ── Panel renderers ─────────────────────────────────────────────
-  // The statline stays in the header for messages; the HUD is the
-  // same four numbers pinned to the right rail, so the day's money
-  // and capacity stay readable while you scroll a long log.
-  function renderStat() {
-    const hud = $("hud");
-    if (!S) {
-      $("statline").textContent = "No game running — enter a seed (or leave blank) and hit New Game.";
-      if (hud) hud.innerHTML = "";
-      return;
-    }
-    const j = S.save.johnson;
-    $("statline").textContent = `Universe "${S.universeSeed}"`;
-    if (!hud) return;
-    hud.innerHTML =
-      `<div class="hud-row"><span class="hud-k">Day</span><b class="w-num">${S.day}</b></div>` +
-      `<div class="hud-row"><span class="hud-k">Nuyen</span><b class="w-num">¥${j.money}</b></div>` +
-      `<div class="hud-row"><span class="hud-k">Rep</span><b class="w-num">${j.reputation}</b></div>` +
-      `<div class="hud-row"><span class="hud-k">Capacity</span><b class="w-num">${j.boardCapacity}</b></div>`;
-  }
-
-  function renderBoard() {
-    if (S.board.length === 0) { $("panel-board").innerHTML = '<span class="muted">No offers — refresh the board.</span>'; return; }
-    $("panel-board").innerHTML = S.board.map((entry, i) => {
-      const job = entry.job;
-      const legs = job.missions.map((m, k) => legLineFull(job, m, k)).join("");
-      return `<div class="card"><div class="head">${job.hiringFaction} — ¥${job.pay} <span class="muted">(rush x${job.rushMultiplier.toFixed(2)}, ${job.daysPerMission}d/leg, expires day ${job.expiryDay})</span>${job.chained ? ' <span class="warn">CHAINED</span>' : ""}</div>${legs}<button class="sm" data-act="accept" data-idx="${i}">Accept</button></div>`;
-    }).join("");
-  }
-
-  // The full VISIBLE dossier — design-legal by §04's own pricing
-  // rule: skills are always visible and true; only the Discipline
-  // label (the market's claim) can be wrong. Reading the spread
-  // Injury, as boxes on the physical track and what they cost. The
-  // dice penalty is the part that decides whether to send them, so
-  // it is shown rather than left for the player to divide out.
   function woundRead(r) {
     if (!r.wounds) return "";
     const max = MJ.physicalTrack(r);
     const dice = Math.floor(r.wounds / 3);
-    const cls = r.wounds >= max ? "warn" : dice > 0 ? "warn" : "muted";
+    const cls = r.wounds >= max || dice > 0 ? "warn" : "muted";
     return `<span class="${cls}">${r.wounds}/${max} boxes${dice > 0 ? ` (−${dice}d)` : ""}</span>`;
   }
 
-  // against the label is how hype and hidden gems get spotted.
-  function runnerCard(r) {
-    const a = r.attributes;
+  // ── The runner dossier ──────────────────────────────────────────
+  // Rendered from an EXPLICIT ALLOWLIST of player-visible fields.
+  // `trueArchetype` is hidden truth and the Discipline mispricing
+  // system depends on it staying that way, so nothing here iterates
+  // the runner object generically.
+  function runnerLine(r) {
     const c = r.classification;
-    // Effective at read time (§09): base + implants − wounds — the
-    // dossier shows what they can actually do today.
-    const eff = MJ.getEffectiveSkills(r);
-    const skills = Object.entries(eff)
-      .filter(([, v]) => v > 0)
-      .sort((x, y) => y[1] - x[1])
-      .map(([k, v]) => `${k}:${v}`)
-      .join("  ");
-    // Class first, in teal ("Enchanting Mage"); the market's
-    // Generalist/Specialist claim follows in gray (user ruling).
-    // "Rigger rigger" / "Face face" guard: when the focus label IS
-    // the family, say it once.
     const famNoun = c.family.charAt(0).toUpperCase() + c.family.slice(1);
     const trade = c.focusLabel.toLowerCase() === c.family.toLowerCase()
-      ? famNoun
-      : `${c.focusLabel} ${famNoun}`;
-    const kit = [
-      ...(r.gear || []).map((g) => g.label + " T" + g.tier),
-      ...(r.implants || []).map((im) => "⟨" + im.label + "⟩"),
-    ];
-    return `<b>${r.identity.handle}</b> — <span class="good">${trade}</span> <span class="muted">· ${MJ.describeDiscipline(r)} · ${r.identity.metatypeLabel}, ${c.origin}${c.deckerAffinity ? " · affinity: " + c.deckerAffinity : ""}</span><br>` +
-      `<span class="muted">B${a.body} A${a.agility} W${a.willpower} I${a.intelligence} C${a.charisma}${a.magic ? " M" + a.magic : ""} · ess ${a.magic || c.origin === "cyber" ? r.essence.current + "/" + r.essence.max : r.essence.current}</span><br>` +
-      `<span class="muted">${skills || "no visible skills"}</span>` +
-      (kit.length ? `<br><span class="muted">kit: ${kit.join(", ")}</span>` : "");
+      ? famNoun : `${c.focusLabel} ${famNoun}`;
+    return `<b>${esc(r.identity.handle)}</b> <span class="good">${esc(trade)}</span>`;
   }
 
-  function rosterRow(r, i) {
+  // Level 3: the whole sheet. The FULL skill list including zeros —
+  // what a runner cannot do is as much of the hire decision as what
+  // they can, so the gaps are shown rather than filtered out.
+  function runnerDetail(r) {
+    const a = r.attributes;
+    const c = r.classification;
+    const eff = MJ.getEffectiveSkills(r);
+    const skills = MJ.SKILLS.map((k) => {
+      const v = eff[k] || 0;
+      return `<span class="${v > 0 ? "" : "z"}">${k}:${v}</span>`;
+    }).join("");
+    const kit = [
+      ...(r.gear || []).map((g) => `${esc(g.label)} T${g.tier}`),
+      ...(r.implants || []).map((im) => `⟨${esc(im.label)}⟩`),
+    ];
+    const track = MJ.physicalTrack(r);
+    const stun = MJ.stunTrack(r);
+    return `<div class="det"><span class="dk">discipline</span>` +
+        `${esc(MJ.describeDiscipline(r))} <span class="muted">· ${esc(r.identity.metatypeLabel)}, ${esc(c.origin)}` +
+        `${c.deckerAffinity ? " · affinity: " + esc(c.deckerAffinity) : ""}</span></div>` +
+      `<div class="det"><span class="dk">attributes</span>` +
+        `B${a.body} A${a.agility} S${a.strength} W${a.willpower} I${a.intelligence} C${a.charisma}` +
+        `${a.magic ? " M" + a.magic : ""} <span class="muted">· essence ${r.essence.current}/${r.essence.max}` +
+        ` · init ${MJ.initiativeScore({ attributes: a, effects: [] })}` +
+        ` · tracks ${track}P/${stun}S</span></div>` +
+      `<div class="det"><span class="dk">skills</span><div class="skillgrid">${skills}</div></div>` +
+      `<div class="det"><span class="dk">condition</span>karma ${r.karma}` +
+        `${r.wounds ? " · " + woundRead(r) : ' · <span class="muted">unhurt</span>'}` +
+        ` · ${fmtContract(r)}</div>` +
+      (kit.length ? `<div class="det"><span class="dk">kit</span>${kit.join(", ")}</div>`
+        : `<div class="det"><span class="dk">kit</span><span class="muted">nothing issued</span></div>`);
+  }
+
+  function runnerActions(r, i) {
     const btns = [];
     if (MJ.isHireable(r)) {
       for (const t of ["freelance", "retainer", "permanent"]) {
@@ -267,155 +150,62 @@
       }
     }
     if (r.market.hired) {
-      // Upgrades credit the unused block against today's price.
+      const order = ["freelance", "retainer", "permanent"];
       for (const t of ["retainer", "permanent"]) {
-        if (["freelance", "retainer", "permanent"].indexOf(t) > ["freelance", "retainer", "permanent"].indexOf(r.market.hired.tier)) {
+        if (order.indexOf(t) > order.indexOf(r.market.hired.tier)) {
           btns.push(`<button class="sm" data-act="upgrade" data-ridx="${i}" data-tier="${t}">upgrade→${t} ¥${MJ.upgradeCost(r, t)}</button>`);
         }
       }
       btns.push(`<button class="sm" data-act="release" data-ridx="${i}">release</button>`);
+    } else {
+      btns.push(`<button class="sm" data-act="unwatch" data-ridx="${i}">${r.market.phase === "kia" ? "strike from list" : "unwatch"}</button>`);
     }
-    else btns.push(`<button class="sm" data-act="unwatch" data-ridx="${i}">${r.market.phase === "kia" ? "strike from list" : "unwatch"}</button>`);
-    return `<div class="row">${runnerCard(r)}<br>` +
-      `<span class="muted">karma ${r.karma}  ${woundRead(r)}  </span>${fmtContract(r)}<br>${btns.join(" ")}</div>`;
+    return `<div class="actionbar">${btns.join(" ")}</div>`;
   }
 
-  // Crew and watch list are different groups with different caps
-  // (user ruling): hiring is commitment, watching is scouting.
-  function renderRoster() {
-    const cap = S.save.johnson.boardCapacity;
-    const crew = [];
-    const watchOnly = [];
-    S.roster.forEach((r, i) => (r.market.hired ? crew : watchOnly).push({ r: r, i: i }));
-    $("panel-roster").innerHTML =
-      `<div class="good">CREW — ${crew.length}/${cap} hired</div>` +
-      (crew.map((x) => rosterRow(x.r, x.i)).join("") || '<div class="row muted">nobody under contract</div>') +
-      `<div class="good" style="margin-top:10px">WATCH LIST — ${S.roster.length}/${MJ.game.watchCapacity(S)} watched in total</div>` +
-      (watchOnly.map((x) => rosterRow(x.r, x.i)).join("") || '<div class="row muted">nobody on watch</div>');
+  // ── Generic entry shell: head always, body only when open ───────
+  function entry(key, title, tag, body) {
+    const open = isOpen(key);
+    return `<div class="entry${open ? " open" : ""}">` +
+      `<div class="entry-head" data-entry="${esc(key)}">${chev(open)}` +
+        `<span class="etitle">${title}</span><span class="etag">${tag || ""}</span></div>` +
+      (open ? `<div class="entry-body">${body()}</div>` : "") + "</div>";
   }
 
-  function renderContracts() {
-    const active = S.jobs.filter((j) => !j.paid && !j.expired);
-    const done = S.jobs.filter((j) => j.paid || j.expired);
-    const activeHtml = active.map((job) => {
-      const daysLeft = job.expiryDay - S.day;
-      return `<div class="card"><div class="head">Job #${job.contractNumber} — ${job.hiringFaction} — ¥${job.pay} <span class="muted">(rush x${job.rushMultiplier.toFixed(2)}, ${job.daysPerMission}d/leg)</span> <span class="${daysLeft <= 1 ? "warn" : "muted"}">(expires day ${job.expiryDay} — ${daysLeft} day${daysLeft === 1 ? "" : "s"} left)</span>${job.chained ? ' <span class="warn">CHAINED</span>' : ""}</div>` +
-        job.missions.map((m, k) => legLineFull(job, m, k, true)).join("") + `</div>`;
-    }).join("");
-    const doneHtml = done.map((job) =>
-      `<div class="muted">${job.paid ? '<span class="good">✓</span> Job #' + job.contractNumber + " — " + job.hiringFaction + " paid ¥" + job.pay : '<span class="warn">✗</span> Job #' + job.contractNumber + " — " + job.hiringFaction + " — window closed unfinished"}</div>`
-    ).join("");
-    $("panel-contracts").innerHTML =
-      (activeHtml || '<span class="muted">No active contracts — accept something off the board.</span>') +
-      (doneHtml ? `<div style="margin-top:8px">${doneHtml}</div>` : "");
+  const emptyNote = (s) => `<span class="empty">${esc(s)}</span>`;
+
+  // ── Runner widgets ──────────────────────────────────────────────
+  function runnerList(list, keyPrefix) {
+    if (!list.length) return null;
+    return list.map(({ r, i }) =>
+      entry(`${keyPrefix}:${i}`, runnerLine(r),
+        `${fmtContract(r)}${r.wounds ? " · " + woundRead(r) : ""}`,
+        () => runnerDetail(r) + runnerActions(r, i))).join("");
   }
 
-  function renderMarket() {
-    $("panel-market").innerHTML = S.market.map((r, i) =>
-      `<div class="row">${runnerCard(r)}<br>` +
-      `<span class="muted">asking ¥${MJ.hireCost(r, "freelance")}/mission (retainer ¥${MJ.hireCost(r, "retainer")}, permanent ¥${MJ.hireCost(r, "permanent")}) · <span class="warn">leaves in ${r.market.shelfDaysRemaining}d</span></span> ` +
-      `<button class="sm" data-act="watch-market" data-idx="${i}">watch</button></div>`
-    ).join("") || '<span class="muted">Market is empty (impossible — report this).</span>';
+  function splitRoster() {
+    const crew = [], watch = [];
+    S.roster.forEach((r, i) => (r.market.hired ? crew : watch).push({ r, i }));
+    return { crew, watch };
   }
 
-  // A permanent reference list (user ruling — no watch/unwatch
-  // here): once you've been, it exists and can be gone back to.
-  // Sites related to an accepted contract show "target [N]" so a
-  // job's sites self-identify as a set (user ruling).
-  function targetMarks(site) {
-    const nums = S.jobs
-      .filter((j) => !j.paid && !j.expired && j.missions.some((m) => m.site === site))
-      .map((j) => "[" + j.contractNumber + "]");
-    return nums.length ? ` <span class="warn">target ${nums.join("")}</span>` : "";
+  // ── Contracts ───────────────────────────────────────────────────
+  function jobDetail(job, withStatus) {
+    const daysLeft = job.expiryDay - S.day;
+    return `<div class="det"><span class="dk">terms</span>` +
+        `¥${job.pay} <span class="muted">· rush x${job.rushMultiplier.toFixed(2)} · ${job.daysPerMission}d per leg` +
+        ` · <span class="${daysLeft <= 1 ? "warn" : "muted"}">expires day ${job.expiryDay} (${daysLeft}d left)</span>` +
+        `${job.chained ? ' · <span class="warn">CHAINED</span>' : ""}</span></div>` +
+      `<div class="det"><span class="dk">legs</span>` +
+        job.missions.map((m, k) => legLineFull(job, m, k, withStatus)).join("") + "</div>";
   }
 
-  function renderSites() {
-    const prevLookup = $("site-lookup") ? $("site-lookup").value : "";
-    const lookup = `<div style="margin-bottom:8px"><input type="text" class="sm" id="site-lookup" placeholder="call in by key: Boldly-Quiet-Crimson-Bicycle-0417" value="${prevLookup.replace(/"/g, "")}" /> <button class="sm" data-act="discover-name">look up</button></div>`;
-    if (S.knownSites.length === 0) { $("panel-sites").innerHTML = lookup + '<span class="muted">No known sites — accept a job, search, or call one in by name.</span>'; return; }
-    $("panel-sites").innerHTML = lookup + MJ.siteListView(S.knownSites, S.day).map((row, i) => {
-      const site = S.knownSites[i];
-      return `<div class="row">${row.universeIndex !== null ? "#" + row.universeIndex + " " : ""}<b>${row.district}</b> (${row.owningFaction}) v:${row.value} ${row.orientation} <span class="muted">via ${row.source} d${row.dayKnown}</span>${targetMarks(site)}<br>` +
-        (row.name ? `<span class="ink">"${row.name}"</span>${row.theme ? ` <span class="muted">· ${row.theme}</span>` : ""}<br>` : "") +
-        `P:${fmtAxis(row.security.physical)} A:${fmtAxis(row.security.astral)} M:${fmtAxis(row.security.matrix)}` +
-        (row.suppression ? ` <span class="warn">softened today${row.suppression.physical ? " P+" + row.suppression.physical : ""}${row.suppression.astral ? " A+" + row.suppression.astral : ""}</span>` : "") +
-        (row.tags.length ? ` <span class="muted">[${row.tags.join(", ")}]</span>` : "") + `</div>`;
-    }).join("");
-  }
-
-  function renderDispatch() {
-    const prevLoc = $("site-select") ? $("site-select").value : null;
-    const prevAct = $("action-select") ? $("action-select").value : null;
-    const prevItem = $("item-select") ? $("item-select").value : null;
-    const prevCrew = wipeChecks
-      ? new Set()
-      : new Set(Array.from(document.querySelectorAll(".crew-check:checked")).map((c) => c.dataset.ridx));
-    wipeChecks = false;
-
-    const locs = activityOptions();
-    const locSel = prevLoc && locs.some((o) => o.v === prevLoc) ? prevLoc : locs[0].v;
-    const locHtml = locs.map((o) =>
-      `<option value="${o.v}"${o.v === locSel ? " selected" : ""}${o.job ? ' class="jobopt"' : ""}>${o.job ? "⚑ " : ""}${o.label}</option>`).join("");
-
-    const acts = actionOptions(locSel);
-    const usable = acts.filter((a) => !a.disabled);
-    const actSel = prevAct && usable.some((a) => a.v === prevAct) ? prevAct : (usable[0] || {}).v;
-    const actHtml = acts.map((a) =>
-      `<option value="${a.v}"${a.v === actSel ? " selected" : ""}${a.disabled ? " disabled" : ""}>${a.label}</option>`).join("");
-
-    const items = itemOptions(locSel, actSel);
-    const itemSel = prevItem && items.some((o) => o.v === prevItem) ? prevItem : (items[0] || {}).v;
-    const itemHtml = items.map((o) =>
-      `<option value="${o.v}"${o.v === itemSel ? " selected" : ""}>${o.label}</option>`).join("");
-
-    const committed = new Set();
-    for (const q of S.queue) {
-      for (const r of q.runners) committed.add(r);
-      if (q.mission.patient) committed.add(q.mission.patient);
-    }
-    const dispatchable = S.roster.map((r, i) => ({ r, i })).filter((x) => MJ.isDispatchable(x.r));
-    // Assigned runners stay visibly checked but "turned off" until
-    // their dispatch is canceled or the day ends (user spec).
-    const checks = dispatchable.map((x) =>
-      committed.has(x.r)
-        ? `<label class="muted"><input type="checkbox" checked disabled> ${x.r.identity.handle} (queued)</label>`
-        : `<label><input type="checkbox" class="crew-check" data-ridx="${x.i}"${prevCrew.has(String(x.i)) ? " checked" : ""}> ${x.r.identity.handle}</label>`).join("");
-    // What the selected crew actually brings, per axis — the read
-    // that makes a site's estimated security mean something. Their
-    // own crew, so it is exact; the site's number stays an estimate.
-    const picked = Array.from(document.querySelectorAll(".crew-check:checked"))
-      .map((c) => S.roster[+c.dataset.ridx])
-      .concat(Array.from(committed));
-    const cap = MJ.crewCapability(picked);
-    const capLine = picked.length
-      ? `<div class="row" style="margin-top:6px">this crew brings — P:<b class="w-num">${cap.physical}d</b> A:<b class="w-num">${cap.astral}d</b> M:<b class="w-num">${cap.matrix}d</b> <span class="muted">(best single runner per axis)</span></div>`
-      : `<div class="row muted" style="margin-top:6px">pick a crew to see what they bring</div>`;
-    const queue = S.queue.map((q, i) =>
-      `<div class="queue-item"><span class="muted">${i + 1}.</span> ${q.label} <span class="muted">[${q.runners.map((r) => r.identity.handle).join(", ")}]</span>` +
-      ` <button class="sm" data-act="queue-up" data-idx="${i}">↑</button><button class="sm" data-act="queue-down" data-idx="${i}">↓</button><button class="sm" data-act="queue-del" data-idx="${i}">✕</button></div>`).join("");
-    // Yesterday's plays, each individually requeue-able — the repeat
-    // unit is the single dispatch once operations run in parallel.
-    const yesterday = (S.lastPlan || []).map((p, i) =>
-      `<div class="queue-item muted">${p.label} [${p.runners.map((r) => r.identity.handle).join(", ")}] <button class="sm" data-act="repeat-one" data-idx="${i}">requeue</button></div>`).join("");
-    $("panel-dispatch").innerHTML =
-      `<div><select id="site-select">${locHtml}</select></div>` +
-      `<div style="margin-top:6px"><select id="action-select">${actHtml || "<option disabled>nothing to do here</option>"}</select></div>` +
-      (items.length ? `<div style="margin-top:6px"><select id="item-select">${itemHtml}</select></div>` : "") +
-      `<div class="checks" style="margin:8px 0">${checks || '<span class="muted">no dispatchable runners — hire someone (a dispatch is what a contract buys)</span>'}</div>` +
-      (checks ? capLine : "") +
-      `<button class="sm" data-act="queue-add">Add to Queue</button>` +
-      `<div style="margin-top:10px">${queue || '<span class="muted">Queue is empty — End Day will just tick the world.</span>'}</div>` +
-      (yesterday ? `<div class="good" style="margin-top:10px">YESTERDAY'S PLAN</div>${yesterday}<button class="sm" data-act="repeat-plan">requeue all</button>` : "") +
-      `<div class="muted" style="margin-top:6px">Queue resolves top-to-bottom, one action per runner per day. Recon first pays: fresh intel = +1 die at that site.</div>`;
-  }
-
-  // ── The armory: the operation's second roster ───────────────────
+  // ── Armory ──────────────────────────────────────────────────────
   function itemEffectText(t) {
     if (t.category === "cyberware") return Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + ` · −${t.essenceCost} ess (implant)`;
     if (t.category === "armor") return `guards ${MJ.gearBonusForTier(t.tier)} wound(s)/mission`;
     if (t.category === "consumable") {
-      return t.effect === "absorbWound"
-        ? "absorbs a wound · single use"
+      return t.effect === "absorbWound" ? "absorbs a wound · single use"
         : `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}, one roll · single use`;
     }
     if (t.category === "program") return `+${MJ.gearBonusForTier(t.tier)}d ${t.skill} (needs a deck)`;
@@ -423,49 +213,317 @@
     return `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}`;
   }
 
-  function renderArmory() {
-    const items = S.save.armory.items.filter((it) => !it.consumed);
-    const crew = S.roster.map((r, i) => ({ r: r, i: i })).filter((x) => x.r.market.hired);
-    const crewOpts = crew.map((x) => `<option value="${x.i}">${x.r.identity.handle}</option>`).join("");
-    const mageOpts = crew.filter((x) => x.r.classification.family === "mage").map((x) => `<option value="${x.i}">${x.r.identity.handle}</option>`).join("");
-    const rows = items.map((item) => {
-      const i = S.save.armory.items.indexOf(item);
-      const t = MJ.ITEM_TEMPLATES[item.templateId];
-      const holder = item.issuedTo ? ` — <span class="good">with ${item.issuedTo.identity.handle}</span>` : ' — <span class="muted">in storage</span>';
-      let controls;
-      if (!crew.length) controls = '<span class="muted">hire someone first</span>';
-      else if (t.category === "cyberware") controls = `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="implant-item" data-idx="${i}">implant</button>`;
-      else if (t.category === "formula") controls = mageOpts
-        ? `<select class="armory-sel" data-item="${i}">${mageOpts}</select> <button class="sm" data-act="teach-item" data-idx="${i}">teach</button>`
-        : '<span class="muted">needs a mage on the crew</span>';
-      else controls = `<select class="armory-sel" data-item="${i}">${crewOpts}</select> <button class="sm" data-act="issue-item" data-idx="${i}">issue</button>` +
-        (item.issuedTo ? ` <button class="sm" data-act="reclaim-item" data-idx="${i}">reclaim</button>` : "");
-      const sell = !item.issuedTo ? ` <button class="sm" data-act="sell-item" data-idx="${i}">sell ¥${Math.round(MJ.itemCost(item.templateId) * 0.4)}</button>` : "";
-      return `<div class="row">${item.label} (T${item.tier}) <span class="muted">${itemEffectText(t)}</span>${holder}<br>${controls}${sell}</div>`;
-    }).join("") || '<span class="muted">The racks are empty — buy below, or craft at the Hub.</span>';
-    const mats = Object.entries(S.save.armory.materials || {}).filter(([, n]) => n > 0).map(([k, n]) =>
-      `<div class="row">${k.replace("resource:", "")} x${n} <button class="sm" data-act="sell-mats" data-kind="${k}">sell all</button></div>`).join("");
-    const CATEGORY_ORDER = ["weapon", "armor", "deck", "program", "drone", "focus", "gear", "consumable", "formula", "cyberware"];
-    // Collapsible category groups (user: the flat list ate the page;
-    // real tabs are a later UI pass).
-    const shop = CATEGORY_ORDER.map((cat) => {
-      const ids = Object.keys(MJ.ITEM_TEMPLATES).filter((id) => MJ.ITEM_TEMPLATES[id].category === cat);
-      if (!ids.length) return "";
-      const btns = ids.map((id) => {
-        const t = MJ.ITEM_TEMPLATES[id];
-        return `<button class="sm" data-act="buy-item" data-tpl="${id}" title="${itemEffectText(t)}">${t.label} ¥${MJ.itemCost(id)}</button>`;
-      }).join(" ");
-      return `<details class="shopcat"><summary>${cat.toUpperCase()} (${ids.length})</summary><div style="line-height:2.4">${btns}</div></details>`;
-    }).join("");
-    $("panel-armory").innerHTML = rows +
-      (mats ? `<div class="good" style="margin-top:8px">MATERIALS</div>${mats}` : "") +
-      `<div class="good" style="margin-top:8px">GEAR SHOP <span class="muted" style="text-transform:none;letter-spacing:0">(hover for effect)</span></div>${shop}`;
+  const crewOptions = (filter) => S.roster.map((r, i) => ({ r, i }))
+    .filter((x) => x.r.market.hired && (!filter || filter(x.r)))
+    .map((x) => `<option value="${x.i}">${esc(x.r.identity.handle)}</option>`).join("");
+
+  function itemDetail(item, i) {
+    const t = MJ.ITEM_TEMPLATES[item.templateId];
+    const opts = crewOptions();
+    const mageOpts = crewOptions((r) => r.classification.family === "mage");
+    let controls;
+    if (!opts) controls = '<span class="muted">hire someone first</span>';
+    else if (t.category === "cyberware") controls = `<select class="armory-sel" data-item="${i}">${opts}</select> <button class="sm" data-act="implant-item" data-idx="${i}">implant</button>`;
+    else if (t.category === "formula") controls = mageOpts
+      ? `<select class="armory-sel" data-item="${i}">${mageOpts}</select> <button class="sm" data-act="teach-item" data-idx="${i}">teach</button>`
+      : '<span class="muted">needs a mage on the crew</span>';
+    else controls = `<select class="armory-sel" data-item="${i}">${opts}</select> <button class="sm" data-act="issue-item" data-idx="${i}">issue</button>` +
+      (item.issuedTo ? ` <button class="sm" data-act="reclaim-item" data-idx="${i}">reclaim</button>` : "");
+    const sell = !item.issuedTo ? ` <button class="sm" data-act="sell-item" data-idx="${i}">sell ¥${Math.round(MJ.itemCost(item.templateId) * 0.4)}</button>` : "";
+    return `<div class="det"><span class="dk">effect</span>${esc(itemEffectText(t))}` +
+        `${item.crafted ? ` <span class="good">· crafted q${item.quality}${item.mark ? " “" + esc(item.mark) + "”" : ""}</span>` : ""}</div>` +
+      `<div class="det"><span class="dk">held by</span>${item.issuedTo
+        ? `<span class="good">${esc(item.issuedTo.identity.handle)}</span>` : '<span class="muted">storage</span>'}</div>` +
+      `<div class="actionbar">${controls}${sell}</div>`;
   }
 
-  // The placeholder shell's rendering of the log: one line each.
-  // The records carry `kind` and `refs` alongside the text, which is
-  // what a drawn console will colour, filter and link off — this
-  // view just takes the sentence.
+  // The shop, grouped by category — buying is always open (§10).
+  function shopFor(cats) {
+    return cats.map((cat) => {
+      const ids = Object.keys(MJ.ITEM_TEMPLATES).filter((id) => MJ.ITEM_TEMPLATES[id].category === cat);
+      if (!ids.length) return "";
+      return `<div class="det"><span class="dk">buy ${cat}</span>` + ids.map((id) => {
+        const t = MJ.ITEM_TEMPLATES[id];
+        return `<button class="sm" data-act="buy-item" data-tpl="${id}" title="${esc(itemEffectText(t))}">${esc(t.label)} ¥${MJ.itemCost(id)}</button>`;
+      }).join(" ") + "</div>";
+    }).join("");
+  }
+
+  function armoryWidget(cats) {
+    const items = S.save.armory.items
+      .map((it, i) => ({ it, i }))
+      .filter((x) => !x.it.consumed && cats.indexOf(MJ.ITEM_TEMPLATES[x.it.templateId].category) !== -1);
+    const rows = items.map(({ it, i }) =>
+      entry(`item:${i}`, `${esc(it.label)} <span class="muted">T${MJ.effectiveTier(it)}</span>`,
+        it.issuedTo ? esc(it.issuedTo.identity.handle) : "storage",
+        () => itemDetail(it, i))).join("");
+    return (rows || emptyNote("nothing on the racks")) + shopFor(cats);
+  }
+
+  // ── Locations: site -> intent -> crew -> queue ───────────────────
+  function targetMarks(site) {
+    const nums = S.jobs
+      .filter((j) => !j.paid && !j.expired && j.missions.some((m) => m.site === site))
+      .map((j) => "[" + j.contractNumber + "]");
+    return nums.length ? ` <span class="warn">target ${nums.join("")}</span>` : "";
+  }
+
+  function crewPicker() {
+    const committed = new Set();
+    for (const q of S.queue) {
+      for (const r of q.runners) committed.add(r);
+      if (q.mission.patient) committed.add(q.mission.patient);
+    }
+    const rows = S.roster.map((r, i) => ({ r, i })).filter((x) => MJ.isDispatchable(x.r)).map((x) =>
+      committed.has(x.r)
+        ? `<label class="out"><input type="checkbox" checked disabled> ${esc(x.r.identity.handle)} (queued)</label>`
+        : `<label><input type="checkbox" class="crew-check" data-ridx="${x.i}"${UI.crew.has(x.i) ? " checked" : ""}> ${esc(x.r.identity.handle)}</label>`).join("");
+    if (!rows) return `<div class="crewpick">${emptyNote("no dispatchable runners — a contract is what buys a dispatch")}</div>`;
+    return `<div class="crewpick">${rows}</div><div class="crewread">${crewRead()}</div>`;
+  }
+
+  // What the ticked crew actually brings, per axis. Their own crew,
+  // so it is exact — the site's number stays an estimate.
+  function crewRead() {
+    const picked = [...UI.crew].map((i) => S.roster[i]).filter(Boolean);
+    if (!picked.length) return '<span class="muted">tick a crew to see what they bring</span>';
+    const cap = MJ.crewCapability(picked);
+    return `<span class="muted">this crew brings — P:</span><b class="w-num">${cap.physical}d</b>` +
+      `<span class="muted"> A:</span><b class="w-num">${cap.astral}d</b>` +
+      `<span class="muted"> M:</span><b class="w-num">${cap.matrix}d</b>`;
+  }
+
+  // The three intents a site accepts (user spec). Anything the site
+  // cannot support is still SHOWN, with the reason — the same ruling
+  // the mission menu runs on: never silently delete an option.
+  function siteIntents(site, si) {
+    const legs = [];
+    S.jobs.forEach((job, jI) => {
+      if (job.paid || job.expired) return;
+      job.missions.forEach((m, k) => {
+        if (m.resolved || m.site !== site) return;
+        const gated = !!(m.requiresMission && !m.requiresMission.resolved);
+        legs.push(`<button class="sm" data-act="queue-site" data-si="${si}" data-plan="run:${jI}:${k}"${gated ? " disabled" : ""}>` +
+          `Job #${job.contractNumber} leg ${k + 1} — ${MJ.OBJECTIVE_VERBS[m.objectiveVerb].label} (${m.payloadDomain})${gated ? " [GATED]" : ""}</button>`);
+      });
+    });
+    const hasHost = !!(site.host && site.host.nodes.length > 1);
+    const hasResource = site.tags.some((t) => String(t.tag).indexOf("resource:") === 0);
+
+    const run = `<div class="intent"><span class="ik">Run — complete a contract objective</span>` +
+      (legs.join(" ") || emptyNote("no accepted contract points here — take a job on the Contracts tab")) +
+      `<div class="actionbar">` +
+        `<button class="sm" data-act="queue-site" data-si="${si}" data-plan="astral">Astral run — project in</button>` +
+        `<button class="sm" data-act="queue-site" data-si="${si}" data-plan="matrix:quiet"${hasHost ? "" : " disabled"}>` +
+          `Matrix run — crawl the host${hasHost ? ` (${site.host.nodes.length} nodes)` : " — no host here"}</button>` +
+      `</div></div>`;
+
+    const recon = `<div class="intent"><span class="ik">Recon — go and look</span><div class="actionbar">` +
+      MJ.RECON_LENSES.map((l) =>
+        `<button class="sm" data-act="queue-site" data-si="${si}" data-plan="recon:${l}">${l}</button>`).join(" ") +
+      `</div></div>`;
+
+    const scav = `<div class="intent"><span class="ik">Scavenge — take what is lying about</span><div class="actionbar">` +
+      `<button class="sm" data-act="queue-site" data-si="${si}" data-plan="harvest"${hasResource ? "" : " disabled"}>` +
+        `scrap / reagents${hasResource ? "" : " — nothing to harvest here"}</button>` +
+      `<button class="sm" data-act="queue-site" data-si="${si}" data-plan="matrix:data"${hasHost ? "" : " disabled"}>` +
+        `data haul${hasHost ? "" : " — no host here"}</button>` +
+      `</div></div>`;
+
+    return run + recon + scav +
+      `<div class="det" style="margin-top:8px"><span class="dk">crew for this dispatch</span>${crewPicker()}</div>`;
+  }
+
+  function siteDetail(row, site, si) {
+    return `<div class="det"><span class="dk">address</span>` +
+        (row.name ? `<span class="ink">"${esc(row.name)}"</span>${row.theme ? ` <span class="muted">· ${esc(row.theme)}</span>` : ""}`
+          : '<span class="muted">no key on file</span>') + `</div>` +
+      `<div class="det"><span class="dk">read</span>` +
+        `value ${row.value} · ${esc(row.orientation)} · <span class="muted">via ${esc(row.source)} day ${row.dayKnown}</span><br>` +
+        `P:${fmtAxis(row.security.physical)} A:${fmtAxis(row.security.astral)} M:${fmtAxis(row.security.matrix)}` +
+        (row.suppression ? ` <span class="warn">softened today</span>` : "") +
+        (row.tags.length ? ` <span class="muted">[${esc(row.tags.join(", "))}]</span>` : "") + `</div>` +
+      siteIntents(site, si);
+  }
+
+  // ── THE WIDGET REGISTRY ─────────────────────────────────────────
+  // id / label / summary line / body. `dark` gates a widget that
+  // exists but has no staff to work it (§10: the console grows with
+  // the operation).
+  const WIDGETS = {
+    runners: [
+      { id: "w-hired", label: "Hired", count: () => splitRoster().crew.length,
+        sum: () => `${splitRoster().crew.length}/${S.save.johnson.boardCapacity} under contract`,
+        body: () => runnerList(splitRoster().crew, "hired") || emptyNote("nobody under contract") },
+      { id: "w-watch", label: "Watchlist", count: () => splitRoster().watch.length,
+        sum: () => `${S.roster.length}/${MJ.game.watchCapacity(S)} watched`,
+        body: () => runnerList(splitRoster().watch, "watch") || emptyNote("nobody on watch") },
+      { id: "w-market", label: "Market", count: () => S.market.length,
+        sum: () => "the pool refreshes as the days turn",
+        body: () => `<div class="actionbar"><button class="sm" data-act="refresh-market">refresh the pool</button></div>` +
+          (S.market.map((r, i) =>
+            entry(`mkt:${i}`, runnerLine(r),
+              `¥${MJ.hireCost(r, "freelance")}/mission · <span class="warn">leaves in ${r.market.shelfDaysRemaining}d</span>`,
+              () => runnerDetail(r) +
+                `<div class="det"><span class="dk">asking</span>freelance ¥${MJ.hireCost(r, "freelance")}` +
+                ` · retainer ¥${MJ.hireCost(r, "retainer")} · permanent ¥${MJ.hireCost(r, "permanent")}</div>` +
+                `<div class="actionbar"><button class="sm" data-act="watch-market" data-idx="${i}">add to watchlist</button></div>`
+            )).join("") || emptyNote("market is empty")) },
+    ],
+    contracts: [
+      { id: "w-active", label: "Active", count: () => S.jobs.filter((j) => !j.paid && !j.expired).length,
+        sum: () => "accepted, unfinished",
+        body: () => S.jobs.map((job, i) => ({ job, i })).filter((x) => !x.job.paid && !x.job.expired)
+          .map(({ job, i }) => entry(`job:${i}`,
+            `Job #${job.contractNumber} <span class="muted">${esc(job.hiringFaction)}</span>`,
+            `¥${job.pay} · ${job.expiryDay - S.day}d left`,
+            () => jobDetail(job, true))).join("") || emptyNote("no active contracts") },
+      { id: "w-available", label: "Available", count: () => S.board.length,
+        sum: () => "the job board",
+        body: () => `<div class="actionbar"><button class="sm" data-act="refresh-board">refresh the board</button></div>` +
+          (S.board.map((e, i) => entry(`board:${i}`,
+            `${esc(e.job.hiringFaction)}`, `¥${e.job.pay} · ${e.job.missions.length} leg(s)`,
+            () => jobDetail(e.job, false) +
+              `<div class="actionbar"><button class="sm" data-act="accept" data-idx="${i}">accept this contract</button></div>`
+          )).join("") || emptyNote("no offers — refresh the board")) },
+      { id: "w-completed", label: "Completed", count: () => S.jobs.filter((j) => j.paid || j.expired).length,
+        sum: () => "paid and lapsed",
+        body: () => S.jobs.filter((j) => j.paid || j.expired).map((job) =>
+          `<div class="entry"><div class="entry-head"><span class="chev"></span><span class="etitle">` +
+          (job.paid ? `<span class="good">✓</span> Job #${job.contractNumber} — ${esc(job.hiringFaction)}`
+            : `<span class="warn">✗</span> Job #${job.contractNumber} — ${esc(job.hiringFaction)}`) +
+          `</span><span class="etag">${job.paid ? "paid ¥" + job.pay : "window closed"}</span></div></div>`
+        ).join("") || emptyNote("nothing finished yet") },
+    ],
+    armory: [
+      { id: "w-gear", label: "Gear", cats: ["weapon", "armor", "gear", "consumable", "cyberware"] },
+      { id: "w-decks", label: "Decks", cats: ["deck", "program"] },
+      { id: "w-drones", label: "Drones", cats: ["drone"] },
+      { id: "w-grimoire", label: "Grimoire", cats: ["focus", "formula"] },
+      { id: "w-medicae", label: "Medicae", medicae: true },
+    ],
+    locations: [
+      { id: "w-sites", label: "Locations", wide: true,
+        count: () => S.knownSites.length,
+        sum: () => "everywhere you have been, and anywhere you can name",
+        body: () => {
+          const lookup = `<div class="det"><span class="dk">call in a site by key</span>` +
+            `<input type="text" class="sm" id="site-lookup" placeholder="Boldly-Quiet-Crimson-Bicycle-0417" /> ` +
+            `<button class="sm" data-act="discover-name">look it up</button></div>`;
+          if (!S.knownSites.length) return lookup + emptyNote("no known sites — accept a job, search, or call one in");
+          const rows = MJ.siteListView(S.knownSites, S.day).map((row, i) => {
+            const site = S.knownSites[i];
+            return entry(`site:${i}`,
+              `${row.universeIndex !== null ? "#" + row.universeIndex + " " : ""}<b>${esc(row.district)}</b> ` +
+              `<span class="muted">(${esc(row.owningFaction)})</span>${targetMarks(site)}`,
+              `v${row.value} ${esc(row.orientation)}`,
+              () => siteDetail(row, site, i));
+          }).join("");
+          return lookup + rows;
+        } },
+    ],
+  };
+
+  // Armory widgets share one body shape, so fill them in rather than
+  // writing the same five rows out longhand.
+  for (const w of WIDGETS.armory) {
+    if (w.medicae) {
+      w.count = () => S.roster.filter((r) => r.market.hired && r.wounds > 0).length;
+      w.sum = () => "wounds always; surgery needs a Street Doc";
+      w.body = () => {
+        const hurt = S.roster.map((r, i) => ({ r, i })).filter((x) => x.r.market.hired && x.r.wounds > 0);
+        if (!hurt.length) return emptyNote("nobody is carrying anything");
+        return hurt.map(({ r, i }) =>
+          entry(`med:${i}`, runnerLine(r), woundRead(r), () =>
+            `<div class="det"><span class="dk">case</span>${r.wounds} box(es)` +
+            ` · <span class="muted">essence spent ${(r.essence.max - r.essence.current).toFixed(1)} — chrome complicates surgery</span></div>` +
+            `<div class="det"><span class="dk">crew to treat them</span>${crewPicker()}</div>` +
+            `<div class="actionbar"><button class="sm" data-act="queue-treat" data-ridx="${i}">queue treatment</button></div>`
+          )).join("");
+      };
+    } else {
+      const cats = w.cats;
+      w.count = () => S.save.armory.items.filter((it) =>
+        !it.consumed && cats.indexOf(MJ.ITEM_TEMPLATES[it.templateId].category) !== -1).length;
+      w.sum = () => cats.join(" · ");
+      w.body = () => armoryWidget(cats);
+    }
+  }
+
+  const TABS = [
+    { id: "runners", label: "Runners", count: () => S.roster.length },
+    { id: "contracts", label: "Contracts", count: () => S.jobs.filter((j) => !j.paid && !j.expired).length },
+    { id: "armory", label: "Armory", count: () => S.save.armory.items.filter((i) => !i.consumed).length },
+    { id: "locations", label: "Locations", count: () => S.knownSites.length },
+  ];
+
+  // ── The frame ───────────────────────────────────────────────────
+  function renderFrame() {
+    const j = S.save.johnson;
+    const queued = S.queue.length;
+    const stat = (k, v, alarm) =>
+      `<div class="frame-stat${alarm ? " alarm" : ""}"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    $("frame").innerHTML =
+      `<div class="frame-stats">` +
+        stat("Day", S.day) + stat("Nuyen", "¥" + j.money) +
+        stat("Rep", j.reputation) + stat("Capacity", j.boardCapacity) +
+      `</div>` +
+      `<div class="frame-plan">` +
+        `<button class="plan-toggle" data-act="toggle-plan">` +
+          `today's plan <span class="n">${queued}</span> queued ${UI.plan ? "▾" : "▸"}</button>` +
+      `</div>`;
+    $("plancard").innerHTML = UI.plan ? `<div class="plan-card">${planCard()}</div>` : "";
+  }
+
+  // The central dispatcher, kept for the activities with no home tab
+  // — crafting and searching are not done AT a site, so they cannot
+  // be queued from Locations.
+  function planCard() {
+    const queue = S.queue.map((q, i) =>
+      `<div class="queue-item"><span class="muted">${i + 1}.</span> ${esc(q.label)} ` +
+      `<span class="muted">[${q.runners.map((r) => esc(r.identity.handle)).join(", ")}]</span> ` +
+      `<button class="sm" data-act="queue-up" data-idx="${i}">↑</button>` +
+      `<button class="sm" data-act="queue-down" data-idx="${i}">↓</button>` +
+      `<button class="sm" data-act="queue-del" data-idx="${i}">✕</button></div>`).join("");
+    const crafts = Object.keys(MJ.ITEM_TEMPLATES)
+      .filter((id) => MJ.ITEM_TEMPLATES[id].category !== "cyberware" && MJ.ITEM_TEMPLATES[id].craftSkill)
+      .map((id) => `<option value="${id}">${esc(MJ.ITEM_TEMPLATES[id].label)} (T${MJ.ITEM_TEMPLATES[id].tier})</option>`).join("");
+    const yesterday = (S.lastPlan || []).map((p, i) =>
+      `<div class="queue-item muted">${esc(p.label)} <button class="sm" data-act="repeat-one" data-idx="${i}">requeue</button></div>`).join("");
+    return `<div class="det"><span class="dk">queued for today</span>` +
+        (queue || emptyNote("nothing queued — Play Day will just tick the world")) + `</div>` +
+      `<div class="det"><span class="dk">bench work — not done at a site</span>` +
+        `<select id="craft-select">${crafts}</select> ` +
+        `<button class="sm" data-act="queue-craft">queue craft</button> ` +
+        `<button class="sm" data-act="queue-search" data-kind="scrap">search: scrap yard</button> ` +
+        `<button class="sm" data-act="queue-search" data-kind="reagents">search: reagent grove</button>` +
+        `<div style="margin-top:6px">${crewPicker()}</div></div>` +
+      (yesterday ? `<div class="det"><span class="dk">yesterday</span>${yesterday}` +
+        `<button class="sm" data-act="repeat-plan">requeue all</button></div>` : "") +
+      `<div class="actionbar"><button class="sm" data-act="expand-capacity">expand capacity</button></div>` +
+      `<span class="empty">Queue resolves top-to-bottom, one action per runner per day. ` +
+      `Recon first pays: fresh intel is +1 die at that site.</span>`;
+  }
+
+  // ── Tabs and widgets ────────────────────────────────────────────
+  function renderTabs() {
+    $("tabbar").innerHTML = TABS.map((t) =>
+      `<button class="tab${UI.tab === t.id ? " active" : ""}" data-act="tab" data-tab="${t.id}">` +
+      `${esc(t.label)}<span class="badge">${t.count()}</span></button>`).join("");
+  }
+
+  function renderBody() {
+    $("tabbody").innerHTML = (WIDGETS[UI.tab] || []).map((w) => {
+      const open = UI.open.has(w.id);
+      const n = w.count();
+      return `<div class="widget${w.wide ? " wide" : ""}${n === 0 ? " dark" : ""}">` +
+        `<div class="widget-head" data-act="widget" data-wid="${w.id}">${chev(open)}` +
+          `<span class="wname">${esc(w.label)}</span><span class="wcount">${n}</span>` +
+          `<span class="wsum">${esc(w.sum())}</span></div>` +
+        (open ? `<div class="widget-body">${w.body()}</div>` : "") + `</div>`;
+    }).join("");
+  }
+
   function renderLog() {
     const el = $("panel-log");
     el.textContent = S.log.slice(-80).map(MJ.logText).join("\n");
@@ -473,32 +531,64 @@
   }
 
   function render() {
-    renderStat();
-    if (!S) return;
-    renderBoard();
-    renderContracts();
-    renderRoster();
-    renderMarket();
-    renderArmory();
-    renderSites();
-    renderDispatch();
+    if (!S) {
+      $("statline").textContent = "No game running — enter a seed (or leave blank) and hit New Game.";
+      $("frame").innerHTML = ""; $("plancard").innerHTML = "";
+      $("tabbar").innerHTML = ""; $("tabbody").innerHTML = "";
+      return;
+    }
+    $("statline").textContent = `Universe "${S.universeSeed}"`;
+    renderFrame();
+    renderTabs();
+    renderBody();
     renderLog();
   }
 
+  // ── Dispatch built from a site widget ───────────────────────────
+  function pickedCrew() {
+    return [...UI.crew].map((i) => S.roster[i]).filter((r) => r && MJ.isDispatchable(r));
+  }
+
+  function queueBuilt(mission, label) {
+    const res = MJ.game.queueDispatch(S, mission, pickedCrew(), label);
+    if (!res.ok) MJ.game.note(S, "can't queue — " + res.error, "dispatch", { refused: true });
+    else UI.crew.clear();
+    return res;
+  }
+
+  function queueForSite(si, plan) {
+    const site = S.knownSites[si];
+    if (!site) return;
+    const tag = siteTag(site);
+    if (plan.indexOf("run:") === 0) {
+      const p = plan.split(":");
+      const job = S.jobs[+p[1]];
+      const m = job.missions[+p[2]];
+      return queueBuilt(m, `Job #${job.contractNumber} leg ${+p[2] + 1} @ ${tag}`);
+    }
+    if (plan.indexOf("recon:") === 0) {
+      const lens = plan.split(":")[1];
+      return queueBuilt(MJ.createReconMission(site, lens), `recon ${lens} @ ${tag}`);
+    }
+    if (plan === "astral") return queueBuilt(MJ.createAstralMission(site), `astral run @ ${tag}`);
+    if (plan.indexOf("matrix:") === 0) {
+      const greedy = plan.split(":")[1] === "data";
+      return queueBuilt(MJ.createMatrixMission(site, { wantData: greedy }),
+        `matrix run${greedy ? " (data haul)" : ""} @ ${tag}`);
+    }
+    if (plan === "harvest") return queueBuilt(MJ.createResourceMission(site), `harvest @ ${tag}`);
+  }
+
   // ── Playing the day, one mission at a time ──────────────────────
-  // Dispatches resolve in queue order. Anything with a decision in
-  // it gets the popup; a craft or a treatment has nothing to ask, so
-  // it just lands in the log as the queue passes over it.
   function playDay() {
     const day = MJ.game.beginDay(S);
     const pending = day.entries.slice();
     step();
-
     function step() {
       while (pending.length && pending[0].done) MJ.game.resolveEntry(S, day, pending.shift());
       if (!pending.length) {
         MJ.game.settleDay(S, day);
-        wipeChecks = true;
+        UI.crew.clear();
         render();
         return;
       }
@@ -509,36 +599,40 @@
   // ── Actions ─────────────────────────────────────────────────────
   function act(action, el) {
     if (action === "new-game") {
-      const seed = $("universe-seed").value.trim();
-      S = MJ.game.newGame(seed || undefined);
+      S = MJ.game.newGame($("universe-seed").value.trim() || undefined);
       MJ.game.refreshBoard(S);
-      wipeChecks = true;
+      UI.crew.clear(); UI.entry.clear();
       render();
       return;
     }
     if (action === "load-game") {
       MJ.game.loadSession().then((loaded) => {
-        if (loaded) {
-          S = loaded;
-          wipeChecks = true;
-        } else {
-          $("statline").textContent = "No save found — start a New Game.";
-        }
+        if (loaded) { S = loaded; UI.crew.clear(); UI.entry.clear(); }
+        else $("statline").textContent = "No save found — start a New Game.";
         render();
       });
       return;
     }
-    if (action === "save-game") {
-      if (S) MJ.game.saveSession(S).then(() => render());
-      return;
+    if (action === "save-game") { if (S) MJ.game.saveSession(S).then(render); return; }
+
+    // Pure view state — no session needed, and no reason to re-derive
+    // anything but the body.
+    if (action === "tab") { UI.tab = el.dataset.tab; render(); return; }
+    if (action === "widget") {
+      const id = el.dataset.wid;
+      UI.open.has(id) ? UI.open.delete(id) : UI.open.add(id);
+      render(); return;
     }
+    if (action === "toggle-plan") { UI.plan = !UI.plan; render(); return; }
+
     if (!S) { $("statline").textContent = "Start a New Game first."; return; }
     const idx = el && el.dataset.idx !== undefined ? +el.dataset.idx : -1;
+
     if (action === "refresh-board") MJ.game.refreshBoard(S);
     else if (action === "refresh-market") MJ.game.refreshMarket(S);
     else if (action === "expand-capacity") MJ.game.expandCapacity(S);
     else if (action === "end-day") { playDay(); return; }
-    else if (action === "quick-day") { MJ.game.endDay(S); wipeChecks = true; }
+    else if (action === "quick-day") { MJ.game.endDay(S); UI.crew.clear(); }
     else if (action === "accept") MJ.game.acceptJob(S, idx);
     else if (action === "watch-market") MJ.game.watchFromMarket(S, idx);
     else if (action === "hire") MJ.game.hire(S, S.roster[+el.dataset.ridx], el.dataset.tier);
@@ -567,34 +661,53 @@
     else if (action === "queue-up") MJ.game.moveQueued(S, idx, -1);
     else if (action === "queue-down") MJ.game.moveQueued(S, idx, 1);
     else if (action === "queue-del") MJ.game.unqueue(S, idx);
-    else if (action === "queue-add") {
-      const built = buildFromSelectors();
-      if (!built) return;
-      const crew = Array.from(document.querySelectorAll(".crew-check:checked")).map((c) => S.roster[+c.dataset.ridx]);
-      const res = MJ.game.queueDispatch(S, built.mission, crew, built.label);
-      if (!res.ok) MJ.game.note(S, "can't queue — " + res.error, "dispatch", { refused: true });
+    else if (action === "queue-site") queueForSite(+el.dataset.si, el.dataset.plan);
+    else if (action === "queue-treat") {
+      const p = S.roster[+el.dataset.ridx];
+      queueBuilt(MJ.createMedicalMission(p), "treat " + p.identity.handle);
+    }
+    else if (action === "queue-craft") {
+      const sel = $("craft-select");
+      if (sel && sel.value) queueBuilt(MJ.createCraftingMission(sel.value), "craft " + MJ.ITEM_TEMPLATES[sel.value].label);
+    }
+    else if (action === "queue-search") {
+      queueBuilt(MJ.game.makeSearchMission(S, el.dataset.kind), "search: " + el.dataset.kind);
     }
     render();
   }
 
-  // Dev handle on the live session — the panels are a lossy view of
+  // Dev handle on the live session — the widgets are a lossy view of
   // it, and "what does the model actually think right now" is the
   // first question worth asking when they disagree.
-  MJ.ui = { session: () => S, play: playDay };
+  MJ.ui = { session: () => S, play: playDay, state: UI };
 
   document.addEventListener("click", (e) => {
-    const el = e.target.closest("[data-act]");
-    if (el) act(el.dataset.act, el);
+    const ent = e.target.closest("[data-entry]");
+    const btn = e.target.closest("[data-act]");
+    // A button inside an opened entry acts; the head itself toggles.
+    if (btn) { act(btn.dataset.act, btn); return; }
+    if (ent) {
+      const k = ent.dataset.entry;
+      isOpen(k) ? UI.entry.delete(k) : UI.entry.add(k);
+      render();
+    }
   });
 
-  // Changing the activity re-derives the action list; changing the
-  // craft discipline re-derives the item list.
+  // Ticking a runner must NOT re-render the window. A full render
+  // replaces the very checkbox that was just clicked, which loses the
+  // click, loses scroll position, and made picking a crew of three
+  // silently queue a crew of one. Update the state and repaint only
+  // the read-out — every copy of it, since the picker appears in more
+  // than one open widget at a time.
   document.addEventListener("change", (e) => {
-    if (!e.target) return;
-    if (e.target.id === "site-select" || e.target.id === "action-select") render();
-    // Ticking a runner changes what the crew brings, so the capability
-    // read has to follow the selection rather than the last render.
-    else if (e.target.classList && e.target.classList.contains("crew-check")) renderDispatch();
+    if (!e.target || !e.target.classList || !e.target.classList.contains("crew-check")) return;
+    const i = +e.target.dataset.ridx;
+    e.target.checked ? UI.crew.add(i) : UI.crew.delete(i);
+    for (const box of document.querySelectorAll('.crew-check[data-ridx="' + i + '"]')) {
+      box.checked = e.target.checked;
+    }
+    const read = crewRead();
+    for (const el of document.querySelectorAll(".crewread")) el.innerHTML = read;
   });
 
   window.addEventListener("DOMContentLoaded", render);

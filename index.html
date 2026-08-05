@@ -7,20 +7,18 @@
   <link rel="stylesheet" href="css/main.css" />
 </head>
 <body>
-  <div id="hud" class="hud"></div>
   <div class="game-wrap">
     <header>
       <h1>Mr. Johnson</h1>
-      <div class="tagline">Playable v0 — the management loop, text-first and deliberately ugly. <a class="navlink" href="inspector.html">&larr; dev inspector</a></div>
+      <div class="tagline">The hub console — an instrument panel over the mechanics. <a class="navlink" href="inspector.html">&larr; dev inspector</a></div>
       <div id="statline" class="statline">No game running.</div>
       <div class="controls" style="margin-top:10px">
         <input type="text" id="universe-seed" placeholder="universe seed (blank = fresh entropy)" />
         <button data-act="new-game">New Game</button>
         <button data-act="load-game">Continue (Load)</button>
         <button data-act="save-game">Save</button>
-        <button data-act="expand-capacity">Expand Capacity</button>
         <button data-act="end-day" style="border-color: var(--accent); color: var(--accent)">Play Day &raquo;</button>
-        <button data-act="quick-day" class="sm" title="let the crew make their own calls">quick resolve</button>
+        <button data-act="quick-day" class="sm" title="AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME — the skip button">quick resolve</button>
       </div>
     </header>
 
@@ -28,20 +26,15 @@
          first, full width (playtest ruling). -->
     <div class="panel" style="margin-bottom:14px"><h2>Log — the street talks</h2><div id="panel-log" class="game-log log-top"></div></div>
 
-    <div class="panels">
-      <div>
-        <div class="panel"><h2>Active Contracts</h2><div id="panel-contracts"></div></div>
-        <div class="panel" style="margin-top:14px"><h2>Job Board <button class="sm" data-act="refresh-board">refresh</button></h2><div id="panel-board"></div></div>
-        <div class="panel" style="margin-top:14px"><h2>Known Sites</h2><div id="panel-sites"></div></div>
-      </div>
-      <div>
-        <div class="panel"><h2>Roster</h2><div id="panel-roster"></div></div>
-        <div class="panel" style="margin-top:14px"><h2>Runner Market <button class="sm" data-act="refresh-market">refresh</button></h2><div id="panel-market"></div></div>
-      </div>
-      <div>
-        <div class="panel"><h2>Dispatch — today's queue</h2><div id="panel-dispatch"></div></div>
-        <div class="panel" style="margin-top:14px"><h2>Armory</h2><div id="panel-armory"></div></div>
-      </div>
+    <!-- ONE WINDOW. Frame (monitor) + tabs + widgets (operate).
+         Everything below the log used to be three columns of panels
+         splayed down the page; it is now tab -> widget -> item, per
+         UNDERSTANDING.md §10's three levels of zoom. -->
+    <div id="hub" class="hub">
+      <div id="frame" class="frame"></div>
+      <div id="plancard"></div>
+      <div id="tabbar" class="tabbar"></div>
+      <div id="tabbody" class="tabbody"></div>
     </div>
   </div>
 
