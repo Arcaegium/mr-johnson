@@ -593,23 +593,31 @@
   // camera cannot tell level 1 from level 5. So the tick waits until
   // they have met everything of that kind the route holds.
   //
-  // RESPONDERS DO NOT COUNT, on either side. A response team's tier
-  // comes from the ALERT LEVEL, not from what the place normally
-  // fields — so meeting a tier-8 kick-in-the-door squad is evidence
-  // about the noise you made, not about the site's standing security.
-  // Reading it as proof would let a crew "confirm" a quiet site by
-  // making enough racket to summon something big.
+  // RESPONDERS PROVE CAPABILITY, BUT ARE NOT PART OF THE CENSUS.
+  // A response team's tier is drawn from the alert level, which is
+  // bounded by the site's own [Current, Max] — so a building that
+  // fields a tier-8 squad is DEMONSTRABLY a place with tier-8 in it.
+  // Noise only calls out what it was already capable of; it does not
+  // manufacture a threat the site did not have. So a responder raises
+  // the FLOOR: the estimate corrects upward the moment one turns up.
+  //
+  // It does not count toward the CENSUS, though. "Have I met
+  // everything of this kind on this route" is a question about the
+  // standing security the crew walked in on, and a squad that arrived
+  // because of them is not part of that route — counting it would
+  // move the goalposts every time somebody made a noise.
   const isStanding = (o) => !o.responder;
 
   function axisTally(run, axis) {
     let faced = 0, total = 0, maxTier = 0;
     run.obstacles.forEach((o, i) => {
-      if (o.projection !== axis || !isStanding(o)) return;
-      total += 1;
-      if (i < run.index) {
-        faced += 1;
-        if (o.tier > maxTier) maxTier = o.tier;
-      }
+      if (o.projection !== axis) return;
+      const standing = isStanding(o);
+      if (standing) total += 1;
+      if (i >= run.index) return;
+      if (standing) faced += 1;
+      // Met is met, whoever sent them.
+      if (o.tier > maxTier) maxTier = o.tier;
     });
     return { faced: faced, total: total, maxTier: maxTier };
   }

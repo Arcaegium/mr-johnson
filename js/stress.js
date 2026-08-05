@@ -1909,6 +1909,46 @@
     check(MJ.astralAct(rng0, run, "nonesuch").ok === false, "C19: the astral has its own verbs and only those");
   }
 
+  // ── Class 24: an archetype can always do its own job ────────────
+  // Three cases of one bug now. Generation fills only primary +
+  // secondary, so a role whose defining second skill sits in the
+  // tertiary tail rolls ZERO of it and cannot do the thing it exists
+  // for. Baselines fix it the way the file already fixed Firearms:
+  // some skills are what it MEANS to be that kind of person.
+  function class24_baselines() {
+    const tally = { mage: { n: 0, assens: 0 }, decker: { n: 0, comp: 0, hack: 0 },
+                    other: { n: 0, assens: 0, comp: 0 } };
+    for (let i = 0; i < 4000; i++) {
+      const r = MJ.generateRunner(MJ.makeRNG("c24-" + i), {});
+      const fam = r.classification.family;
+      if (fam === "mage") {
+        tally.mage.n++;
+        if ((r.skills.assensing || 0) > 0) tally.mage.assens++;
+      } else if (fam === "decker") {
+        tally.decker.n++;
+        if ((r.skills.computer || 0) > 0) tally.decker.comp++;
+        if ((r.skills.hacking || 0) > 0) tally.decker.hack++;
+      } else {
+        tally.other.n++;
+        if ((r.skills.assensing || 0) > 0) tally.other.assens++;
+        if ((r.skills.computer || 0) > 0) tally.other.comp++;
+      }
+    }
+    check(tally.mage.n > 200 && tally.decker.n > 100, "C24: the sample needs both families in it");
+    check(tally.mage.assens === tally.mage.n,
+      "C24: every mage can assense — astral perception is the Awakened sense");
+    check(tally.decker.comp === tally.decker.n,
+      "C24: every decker can program — Computer is what the program forge runs on");
+    check(tally.decker.hack === tally.decker.n, "C24: and hacking is their key skill regardless");
+    check(tally.other.assens === 0,
+      "C24: the Awakened baseline must not leak to the unawakened");
+    // Computer is UNIVERSAL, not gated — anyone may study programming,
+    // which is exactly why the baseline is decker-only rather than a
+    // gate. Non-deckers get it sometimes, from their own lists.
+    check(tally.other.comp > 0 && tally.other.comp < tally.other.n,
+      "C24: Computer stays learnable by anyone, and guaranteed to nobody else");
+  }
+
   // ── Class 23: what the live read may claim ──────────────────────
   // A leg IS the sample — walk the route, meet what is on it, and by
   // the time you leave you have seen what there was to see. So leg-end
@@ -1944,11 +1984,14 @@
     check(MJ.axisProven(run, "physical").proven,
       "C23: meeting everything of that kind on the route DOES confirm it");
 
-    // ── A RESPONSE SQUAD IS NOT EVIDENCE ─────────────────────────
-    // Their tier comes from the ALERT LEVEL, not from what the place
-    // normally fields — so reading it as proof would let a crew
-    // "confirm" a quiet site by making enough noise to summon
-    // something big.
+    // ── A RESPONSE SQUAD PROVES CAPABILITY ───────────────────────
+    // Its tier is drawn from the alert level, which is bounded by the
+    // site's own [Current, Max] — so a place that fields a tier-9
+    // squad demonstrably HAS a tier-9 in it. Noise calls out what the
+    // building could already do; it does not manufacture a threat.
+    // So it raises the floor. What it must NOT do is join the census
+    // of the route, or every noisy moment would move the goalposts on
+    // "have I met everything here".
     const quiet = MJ.mintSite("c23-quiet", 7, { value: 2, orientation: "physical" });
     MJ.initSecurityState(MJ.makeRNG("c23q"), quiet);
     const qr = MJ.beginMission(MJ.makeRNG("c23qr"),
@@ -1959,10 +2002,10 @@
     qr.obstacles = [heavy];
     qr.index = 1;
     const rr = MJ.axisProven(qr, "physical");
-    check(rr.maxTier === 0,
-      "C23: a tier-9 response squad must not raise the floor — that is your own noise");
+    check(rr.maxTier === 9,
+      "C23: a tier-9 response squad DOES raise the floor — a place that can field one has it");
     check(rr.total === 0 && !rr.proven,
-      "C23: and it must not count toward proving the site's standing security");
+      "C23: but it is not part of the route's census, so it cannot move the goalposts");
   }
 
   // ── Class 22: verbs × properties — the world decides ────────────
@@ -2930,6 +2973,7 @@
       ["21. The street pillar, and three clocks", class21_street],
       ["22. Verbs x properties — the world decides, not the menu", class22_verbs],
       ["23. What a crew can honestly claim to know", class23_knowing],
+      ["24. An archetype can always do its own job", class24_baselines],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

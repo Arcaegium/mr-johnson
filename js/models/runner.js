@@ -469,6 +469,22 @@
     if (isSkillEligible("assensing", focus.family) && skills.assensing === 0) {
       skills.assensing = rng.int(1, 3);
     }
+
+    // ── Baseline Computer: a decker programs, by definition ─────────
+    // Third case of the same shape, and the same reasoning. Measured:
+    // 50% of deckers rolled ZERO Computer, and 74% of decker
+    // specialists — so half the archetype could not work the program
+    // forge that §10 says a Computer-skilled runner is what lights up.
+    //
+    // The split between the two skills is the whole reason this is
+    // decker-only rather than universal. COMPUTER is programming:
+    // studied, portable, and anybody could take it up. HACKING is
+    // what needs a datajack and a deck in your hands, which is why it
+    // is gated the way it is and why it departs from the source.
+    // So: anyone COULD build Computer. A decker WILL have some.
+    if (focus.family === "decker" && skills.computer === 0) {
+      skills.computer = rng.int(1, 3);
+    }
     return skills;
   }
 
