@@ -1540,6 +1540,136 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 16: the Lattice — the astral's own grammar ────────────
+  // Magic is a structure you manipulate, not a roll you make. The
+  // load-bearing property is that the RUNNER's stats set the puzzle:
+  // the player is the Johnson and never personally goes, so if
+  // cleverness could beat a bad mage's lattice, runner skill would
+  // quietly stop mattering and the roster loop would be hollow.
+  function class16_lattice() {
+    const mage = (magic, sorcery, conjuring, assensing) => {
+      const r = MJ.generateRunner(MJ.makeRNG("lat-" + magic + sorcery + conjuring + assensing), {});
+      r.attributes.magic = magic;
+      r.skills.sorcery = sorcery; r.skills.conjuring = conjuring; r.skills.assensing = assensing;
+      r.wounds = 0;
+      return r;
+    };
+    const adept = mage(6, 6, 5, 6);
+    const dabbler = mage(2, 1, 1, 1);
+
+    // Every mode builds, and none of them start finished.
+    for (const mode of MJ.LATTICE_MODES) {
+      const l = MJ.beginLattice(MJ.makeRNG("mode-" + mode), mode, { force: 4 }, adept, { rating: 4 });
+      check(!!l, "C16: " + mode + " must build a lattice");
+      check(!MJ.latticeDone(l), "C16: a fresh " + mode + " lattice is not already resolved");
+      const view = MJ.latticeRead(l);
+      check(view && view.threads.length > 0, "C16: " + mode + " must present threads to work with");
+      check(view.pushing && view.pushing.force >= 1, "C16: the read must say how hard the caster is pushing");
+    }
+    check(MJ.beginLattice(MJ.makeRNG("bad"), "nonesuch", {}, adept, {}) === null,
+      "C16: an unknown mode builds nothing");
+
+    // ── Assensing buys INFORMATION, never visibility ──────────────
+    // The lattice is always on screen. What changes is how much of
+    // each thread's truth comes with it.
+    const seen = (runner) => {
+      const l = MJ.beginLattice(MJ.makeRNG("see"), "unravel", { force: 3 }, runner, { rating: 4 });
+      return MJ.latticeRead(l);
+    };
+    const sharp = seen(adept), dull = seen(dabbler);
+    check(sharp.threads.length === dull.threads.length,
+      "C16: a weak assenser must see the SAME number of threads — assensing is not visibility");
+    check(sharp.depth === "exact" && dull.depth === "blind",
+      "C16: read depth must track assensing (" + sharp.depth + " vs " + dull.depth + ")");
+    check(sharp.threads.some((t) => typeof t.strength === "number"),
+      "C16: an exact read gives real thread strengths");
+    check(dull.threads.every((t) => t.strength === null),
+      "C16: a blind read gives no strengths at all");
+    check(sharp.threads.some((t) => t.role === "dead end"),
+      "C16: an exact read names dead ends");
+    check(dull.threads.every((t) => t.role === null),
+      "C16: a blind read names none");
+
+    // Force is a throttle on Magic, and the read says so as a share.
+    const gentle = MJ.latticeRead(MJ.beginLattice(MJ.makeRNG("g"), "unwind", { force: 2 }, adept, { rating: 4 }));
+    const hard = MJ.latticeRead(MJ.beginLattice(MJ.makeRNG("h"), "unwind", { force: 8 }, adept, { rating: 4 }));
+    check(gentle.pushing.share < hard.pushing.share, "C16: Force must read as a share of the caster's max");
+    check(hard.pushing.perMove > gentle.pushing.perMove, "C16: pushing harder must carry further per move");
+    check(hard.pushing.force <= hard.pushing.max, "C16: Force can never exceed the caster's ceiling");
+
+    // Drain is owed on the attempt and scales with Force, through the
+    // same SR5 path everything else uses.
+    const drainRng = MJ.makeRNG("drain");
+    const soft = MJ.latticeDrain(drainRng.fork("a"), MJ.beginLattice(drainRng.fork("b"), "unwind", { force: 1 }, adept, { rating: 3 }));
+    const fierce = MJ.latticeDrain(drainRng.fork("c"), MJ.beginLattice(drainRng.fork("d"), "unwind", { force: 8 }, adept, { rating: 3 }));
+    check(soft && fierce, "C16: a lattice must be able to report its Drain");
+    check(fierce.drainValue > soft.drainValue, "C16: pushing harder must cost more Drain");
+    check(fierce.overcast === true, "C16: pushing past Magic must register as overcasting");
+
+    // ── The constraint: the runner sets the puzzle ────────────────
+    // Solved using ONLY what latticeRead exposes, because that is all
+    // a renderer may ever hand the player. A solver given the raw
+    // lattice would look competent for both mages, which is exactly
+    // the bug this probe exists to catch.
+    const solveByRead = (runner, mode, rating, label) => {
+      const rng = MJ.makeRNG(label);
+      const l = MJ.beginLattice(rng, mode, { force: runner.attributes.magic }, runner, { rating: rating });
+      let guard = 0;
+      while (!MJ.latticeDone(l) && guard++ < 40) {
+        const view = MJ.latticeRead(l);
+        const open = view.threads.filter((t) => !t.cut);
+        if (!open.length) break;
+        let pick;
+        if (mode === "unwind") {
+          const known = open.filter((t) => typeof t.strength === "number");
+          pick = known.length ? known.reduce((a, b) => (a.strength >= b.strength ? a : b)) : open[0];
+        } else if (mode === "unravel") {
+          const ordered = open.filter((t) => typeof t.order === "number");
+          if (ordered.length) pick = ordered.reduce((a, b) => (a.order <= b.order ? a : b));
+          else { const safe = open.filter((t) => t.role !== "dead end"); pick = (safe.length ? safe : open)[0]; }
+        } else {
+          const want = view.shape[(view.built || []).length];
+          pick = (want && open.find((t) => t.resonance === want)) || open[0];
+        }
+        MJ.latticePull(l, pick.id);
+      }
+      return !!l.success;
+    };
+    const rate = (runner, mode) => {
+      let wins = 0;
+      for (let i = 0; i < 40; i++) if (solveByRead(runner, mode, 4, "rate-" + mode + i)) wins += 1;
+      return wins / 40;
+    };
+    for (const mode of MJ.LATTICE_MODES) {
+      const good = rate(adept, mode), poor = rate(dabbler, mode);
+      check(good > poor, "C16: " + mode + " — a strong mage must outperform a weak one on the same puzzle (" +
+        (100 * good).toFixed(0) + "% vs " + (100 * poor).toFixed(0) + "%)");
+      check(good >= 0.6, "C16: " + mode + " — a strong mage must usually get through (" + (100 * good).toFixed(0) + "%)");
+    }
+
+    // A ward re-closes: a caster who cannot out-push the repair rate
+    // cannot break it however many strands they pull. That is the
+    // whole character of the mode and it must not erode.
+    const ward = MJ.beginLattice(MJ.makeRNG("wall"), "unwind", { force: 1 }, dabbler, { rating: 10 });
+    const wardView = MJ.latticeRead(ward);
+    check(wardView.pushing.perMove <= wardView.recloseRate,
+      "C16: a weak caster on a strong ward must not out-pace the re-closing");
+    let g2 = 0;
+    while (!MJ.latticeDone(ward) && g2++ < 60) {
+      const open = ward.threads.filter((t) => !t.cut);
+      if (!open.length) break;
+      MJ.latticePull(ward, open[0].id);
+    }
+    check(!ward.success, "C16: and must therefore fail to break it");
+
+    // Abandoning keeps nothing — a half-unwound ward re-closes.
+    const walk = MJ.beginLattice(MJ.makeRNG("walk"), "unwind", { force: 4 }, adept, { rating: 6 });
+    MJ.latticePull(walk, 0);
+    MJ.latticeAbandon(walk);
+    check(walk.done && !walk.success && walk.abandoned, "C16: walking away resolves as failure, keeping nothing");
+    check(MJ.latticePull(walk, 1) === null, "C16: an abandoned lattice takes no further moves");
+  }
+
   // ── Class 15: the shared frame — modes and the world seam ───────
   // All three pillars run inside one mode structure: free flow like
   // the Genesis game, with the player able to drop into turn-based
@@ -1905,6 +2035,7 @@
       ["13. The combat modifier layer", class13_effects],
       ["14. Site condition — the first word of the address", class14_conditions],
       ["15. The shared frame — modes and the world seam", class15_tempo],
+      ["16. The Lattice — the astral's own grammar", class16_lattice],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

@@ -184,6 +184,42 @@ crew can do in a beat rather than doing it better.
 
 ---
 
+### 3.5 Spells in meatspace — in and out of combat
+Magic is not an astral-only pillar. A mage walks the street with the crew, and
+SR5 spells are cast **into physical reality** from a body standing in it. The
+astral is where you *project*; spellcasting is something you do anywhere.
+
+**Stubs now, content later.** The point is the seams, not a full grimoire.
+
+SR5's five categories, each with a representative entry or two:
+
+| category | examples | where it lands here |
+|---|---|---|
+| **Combat** | Manabolt (direct), Fireball (indirect) | a combat action alternative to a weapon; direct vs indirect decides whether armour applies |
+| **Detection** | Detect Life, Clairvoyance | out of combat: buys knowledge, like `observe` but through mana |
+| **Health** | Heal, Increase Reflexes | Heal touches `runner.wounds`; Increase Reflexes is the `initiativeDice` channel — the seam already exists |
+| **Illusion** | Invisibility, Confusion | Invisibility feeds `run.concealment`, the hook already built for exactly this |
+| **Manipulation** | Levitate, Armor, Physical Barrier | Armor is the `armour` channel; Levitate/Barrier bypass or create obstacles |
+
+**Everything it needs already exists:**
+- **Force / Drain** — `maxForceFor` (Magic + 2), `drainValueFor`, `resistDrain`,
+  with overcast Drain going physical. Complete.
+- **The combat modifier layer** — channels `accuracy`, `defence`, `power`,
+  `damage`, `armour`, `soak`, `initiative`, `initiativeDice`. A sustained combat
+  spell IS an effect; nothing new is required to hold one.
+- **`run.concealment`** — built when the witness rules changed, explicitly as the
+  hook a spell would plug into.
+- **The Lattice** — casting resolves as assembling a circuit, so spells depend on
+  it and are built after.
+
+**Sustaining** is the cost that makes spells a decision rather than free power:
+a sustained spell should hold an effect open and charge for it. The effects layer
+already supports an indefinite effect with a channel, so sustaining is a
+`sustained` effect on the caster carrying a penalty — the standard tabletop
+trade, expressed in machinery that already exists.
+
+---
+
 ## 4. BUILD ORDER
 
 1. ~~**`js/core/tempo.js`** — the mode machine and the world-advance seam.~~
