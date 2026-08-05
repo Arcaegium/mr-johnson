@@ -262,11 +262,17 @@
         const est = run.site.estimatedSecurity ? run.site.estimatedSecurity[a] : null;
         const letter = a[0].toUpperCase();
         if (p && p.proven) {
-          return letter + ":" + ok(run.state.axes[a].current + "✓") +
-            '<span class="dimmed">(' + (p.why === "calibre" ? "saw their best" : "saw enough") + ")</span>";
+          return letter + ":" + ok(run.state.axes[a].current + "✓");
         }
-        const seen = p && p.faced ? '<span class="dimmed">·' + p.faced + " seen</span>" : "";
-        return letter + ':<span class="dimmed">~' + (est === null ? "?" : est) + "</span>" + seen;
+        // A FLOOR is honest the moment you meet something: "at least
+        // this bad." The ceiling is the expensive half, so the readout
+        // says how much more looking it would take rather than
+        // pretending the guess is a fact.
+        if (p && p.floor > 0) {
+          return letter + ':<span class="w-warn">≥' + p.floor + "</span>" +
+            '<span class="dimmed">(' + p.faced + " seen, " + p.shortBy + " more to be sure)</span>";
+        }
+        return letter + ':<span class="dimmed">~' + (est === null ? "?" : est) + "</span>";
       }).join(" ");
       lines.push('<span class="dimmed">security </span>' + axes);
     }

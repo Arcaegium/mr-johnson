@@ -118,10 +118,23 @@
       loud: false, threat: "QUESTIONABLE", extended: true, disables: true,
       describe: "its own wiring, turned against it",
     },
+    // The melee answer, and the game's guarantee that brute force is
+    // ALWAYS on the table: everyone has feet. But someone carrying a
+    // blade should be swinging the blade — hardcoding `unarmed` meant
+    // a runner with a monofilament edge kicked the door instead, and
+    // their weapon may as well not have existed. So it uses whatever
+    // they are actually holding, and falls back to fists when that is
+    // a gun or nothing at all. Every melee weapon rolls `melee`, so
+    // the skill never changes; only the Power and the DV do.
     kick: {
-      pillar: "physical", label: "kick it in", skill: "melee", weapon: "unarmed",
+      pillar: "physical", skill: "melee",
+      label: (t, runner) => {
+        const w = runner && MJ.meleeProfileFor(runner);
+        return !w || w.id === "unarmed" ? "kick it in" : "swing the " + w.label.toLowerCase();
+      },
+      weaponFor: (runner) => MJ.meleeProfileFor(runner).id,
       damaging: true, loud: true, threat: "THREATENING",
-      describe: "feet and perseverance — everyone has both",
+      describe: "feet and perseverance — everyone has both, and some have better",
     },
     shoot: {
       pillar: "physical", label: "shoot it",
@@ -242,9 +255,9 @@
   }
 
   // What this verb is called against THIS thing.
-  function labelOf(verb, thing) {
+  function labelOf(verb, thing, runner) {
     if (!verb) return "";
-    return typeof verb.label === "function" ? verb.label(thing || {}) : verb.label;
+    return typeof verb.label === "function" ? verb.label(thing || {}, runner) : verb.label;
   }
 
   // Which skill a given runner would actually roll. Constant for

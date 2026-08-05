@@ -1909,6 +1909,50 @@
     check(MJ.astralAct(rng0, run, "nonesuch").ok === false, "C19: the astral has its own verbs and only those");
   }
 
+  // ── Class 23: what a crew can honestly claim to know ────────────
+  // "It takes 2 wipes to know you need 3, but 3 wipes to know you only
+  // needed 2." A floor is cheap and a ceiling is expensive, and the
+  // confirmation rule has to respect the asymmetry — an earlier
+  // version confirmed on meeting something rated at the site's value,
+  // which is knowledge the CREW cannot have: a tier-3 guard looks the
+  // same whether the place tops out at 3 or at 8.
+  function class23_knowing() {
+    // More sightings are needed to cap a HIGHER value, because m and
+    // m+1 sit proportionally closer together the larger they get.
+    let last = 0;
+    for (let m = 1; m <= 10; m++) {
+      const need = MJ.sightingsNeeded(m);
+      check(need >= last, "C23: capping a higher value must never take FEWER sightings (m=" + m + ")");
+      check(need >= 2, "C23: one sighting can never cap anything (m=" + m + ")");
+      last = need;
+    }
+    check(MJ.sightingsNeeded(0) === Infinity, "C23: having seen nothing proves nothing");
+    check(MJ.sightingsNeeded(10) > MJ.sightingsNeeded(2),
+      "C23: calling a fortified site must cost more looking than calling a quiet one");
+
+    // A floor is honest immediately; a ceiling is not.
+    const site = MJ.mintSite("c23", 3, { value: 8, orientation: "physical" });
+    MJ.initSecurityState(MJ.makeRNG("c23s"), site);
+    site.sightings = { physical: { count: 1, maxTier: 6 } };
+    const one = MJ.securityRead(site, "physical");
+    check(one.floor === 6, "C23: one sighting establishes a FLOOR");
+    check(!one.confirmed, "C23: but one sighting must never confirm");
+    check(one.shortBy > 0, "C23: and it must say how much more looking is needed");
+
+    site.sightings.physical.count = MJ.sightingsNeeded(6);
+    check(MJ.securityRead(site, "physical").confirmed,
+      "C23: enough sightings without anything worse turning up DOES confirm");
+
+    // Sightings accumulate across visits and survive a save.
+    const s = MJ.game.newGame("c23-universe");
+    s.knownSites.push(site);
+    const back = MJ.game.deserializeSession(MJ.game.serializeSession(s));
+    check(!!back.knownSites[0].sightings,
+      "C23: what a Johnson has learned about a place must survive a reload");
+    check(back.knownSites[0].sightings.physical.maxTier === 6,
+      "C23: including the floor they paid for");
+  }
+
   // ── Class 22: verbs × properties — the world decides ────────────
   // The menu is not the authority on what is possible. Every verb the
   // game has is crossed against what a thing IS, and two gates decide
@@ -2873,6 +2917,7 @@
       ["20. The Matrix pillar's verbs", class20_matrix],
       ["21. The street pillar, and three clocks", class21_street],
       ["22. Verbs x properties — the world decides, not the menu", class22_verbs],
+      ["23. What a crew can honestly claim to know", class23_knowing],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

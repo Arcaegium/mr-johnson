@@ -581,45 +581,83 @@
     return casualty;
   }
 
-  // ── When has a crew SEEN enough to confirm a security value? ────
-  // Walking past one camera does not tell you whether you are looking
-  // at level 1 or level 5 — so facing a single obstacle should never
-  // have confirmed an axis, and used to.
+  // ── What a crew can HONESTLY claim to know ──────────────────────
+  // "It takes 2 wipes to know you need 3, but 3 wipes to know you
+  // only needed 2." A floor is cheap; a ceiling is expensive, and the
+  // rule has to respect the difference.
   //
-  // Both proofs are derived from how the generator actually spends a
-  // security value, not invented:
+  // An earlier version confirmed an axis the moment the crew met
+  // something rated at the site's value — but that used knowledge the
+  // CREW DOES NOT HAVE. A tier-3 guard on a P3 site looks exactly
+  // like a tier-3 guard on a P8 site. Nothing about meeting one tells
+  // you it was the biggest thing they had.
   //
-  //   CALIBRE  every obstacle's tier is rng.int(1, N), so N is the
-  //            ceiling on what a site can field. Meet something rated
-  //            N and you have met the top of what they have.
-  //   VOLUME   a value buys coverage of N/10 of that projection's
-  //            slots, so density is the other tell. Face enough of
-  //            them and the budget speaks for itself.
+  // So there is only one honest proof, and it is the expensive one:
   //
-  // Either proof alone confirms. Neither, and the read stays an
-  // estimate, which is correct: you were there, you did not see enough.
-  function confirmVolumeFor(n) { return Math.max(2, Math.ceil(n / 2)); }
+  //   FLOOR    the worst thing you have met. Known instantly, and
+  //            always true — "it is AT LEAST this bad."
+  //   CEILING  established only by NOT meeting anything worse, over
+  //            enough encounters that something worse would very
+  //            likely have turned up by now.
+  //
+  // Every obstacle's tier is rng.int(1, N), so having seen k of them
+  // topping out at m, the chance of that happening when the truth is
+  // m+1 is (m/(m+1))^k. Require that under a quarter and the sample
+  // is doing real work. It scales the way the fiction does: a couple
+  // of sightings settle a quiet block, and calling a fortified one
+  // takes a dozen — which is several visits, not one walk through.
+  const CEILING_DOUBT = 0.25;
 
-  function facedOn(run, axis) {
-    let count = 0, maxTier = 0;
+  function sightingsNeeded(maxTier) {
+    if (maxTier <= 0) return Infinity;
+    return Math.ceil(Math.log(CEILING_DOUBT) / Math.log(maxTier / (maxTier + 1)));
+  }
+
+  // Sightings ACCUMULATE ON THE SITE, across every visit. One walk
+  // through rarely settles a serious address, and going back is how a
+  // Johnson actually learns a place.
+  function recordSightings(site, run) {
+    if (!site) return;
+    site.sightings = site.sightings || {};
+    for (const o of run.obstacles.slice(0, run.index)) {
+      const a = o.projection;
+      if (!a) continue;
+      const s = site.sightings[a] || (site.sightings[a] = { count: 0, maxTier: 0 });
+      s.count += 1;
+      if (o.tier > s.maxTier) s.maxTier = o.tier;
+    }
+  }
+
+  // The read a player is entitled to, from what has actually been seen.
+  function securityRead(site, axis) {
+    const s = (site && site.sightings && site.sightings[axis]) || { count: 0, maxTier: 0 };
+    const need = sightingsNeeded(s.maxTier);
+    return {
+      axis: axis, seen: s.count, floor: s.maxTier, need: need,
+      confirmed: s.maxTier > 0 && s.count >= need,
+      // How much more looking it would take. The player can see the
+      // price of certainty before paying it.
+      shortBy: s.maxTier > 0 && s.count < need ? need - s.count : 0,
+    };
+  }
+
+  // Live during a run: what this crew has turned up so far, folded on
+  // top of what the site already knew.
+  function axisProven(run, axis) {
+    const site = run.site;
+    const prior = (site && site.sightings && site.sightings[axis]) || { count: 0, maxTier: 0 };
+    let count = prior.count, maxTier = prior.maxTier;
     for (const o of run.obstacles.slice(0, run.index)) {
       if (o.projection !== axis) continue;
       count += 1;
       if (o.tier > maxTier) maxTier = o.tier;
     }
-    return { count: count, maxTier: maxTier };
-  }
-
-  function axisProven(run, axis) {
-    const st = run.state && run.state.axes && run.state.axes[axis];
-    if (!st) return null;
-    const n = st.current;
-    const f = facedOn(run, axis);
-    const need = confirmVolumeFor(n);
-    const why = f.maxTier >= n ? "calibre" : f.count >= need ? "volume" : null;
+    const need = sightingsNeeded(maxTier);
     return {
-      axis: axis, faced: f.count, maxTier: f.maxTier,
-      needVolume: need, proven: !!why, why: why,
+      axis: axis, faced: count, maxTier: maxTier, floor: maxTier,
+      needVolume: need, proven: maxTier > 0 && count >= need,
+      why: maxTier > 0 && count >= need ? "seen enough" : null,
+      shortBy: maxTier > 0 && count < need ? need - count : 0,
     };
   }
 
@@ -1070,6 +1108,12 @@
     let quality = 0;
     if (verb.skill === "sorcery") {
       profile = manaProfile(Math.max(1, opts.force || (runner.attributes.magic || 0)));
+    } else if (verb.weaponFor) {
+      // Whatever they are holding — a crafted edge is genuinely better
+      // than the shop's, so its quality rides along.
+      const pick = MJ.meleeProfileFor(runner);
+      profile = MJ.weaponProfile(pick.id);
+      quality = pick.quality || 0;
     } else if (verb.weapon) {
       profile = MJ.weaponProfile(verb.weapon);
     } else {
@@ -1126,6 +1170,7 @@
       const tries = triesOn(run, obstacle, act.id);
       const option = {
         verbId: act.id, approach: act.id, verb: act.label,
+        _relabel: true,
         skill: verb.skill, runner: null, pool: 0, noRoll: false,
         loud: !!verb.loud, damaging: !!verb.damaging, extended: !!verb.extended,
         lands: act.lands, why: act.why, discovered: null,
@@ -1173,7 +1218,11 @@
         option.runner = best.runner;
         option.skill = best.skill;
         option.pool = best.pool;
+        // Now that a runner is attached, the label can say what THEY
+        // are actually bringing to it.
+        option.verb = MJ.verbLabel(verb, obstacle, best.runner);
       }
+      delete option._relabel;
       option.discovered = knownUseless(run, obstacle, option.skill);
       // Nothing is used up. A way in is unavailable only when nobody
       // can attempt it, when it is the wrong kind of act for this
@@ -2113,10 +2162,10 @@
     // every axis it interacted with. Faced obstacles confirm their
     // projection; working a deck (hacking) confirms matrix; a recon
     // sweep confirms its own lens once it faced anything at all.
+    recordSightings(site, run);
     const confirmedAxes = new Set();
     for (const axis of MJ.SECURITY_AXES) {
-      const p = axisProven(run, axis);
-      if (p && p.proven) confirmedAxes.add(axis);
+      if (securityRead(site, axis).confirmed) confirmedAxes.add(axis);
     }
     // A recon sweep is the exception: LOOKING is the whole job, so it
     // confirms its own lens on the strength of having gone and looked.
@@ -2471,6 +2520,8 @@
   // count, because they are one function.
   MJ.remainingApproaches = remainingApproaches;
   MJ.axisProven = axisProven;
+  MJ.securityRead = securityRead;
+  MJ.sightingsNeeded = sightingsNeeded;
   MJ.missionExtendedStep = missionExtendedStep;
   MJ.extendedThreshold = extendedThreshold;
   MJ.missionAbort = missionAbort;

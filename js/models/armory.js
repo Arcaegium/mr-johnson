@@ -495,6 +495,20 @@
     return { ok: true };
   }
 
+  // What this runner would swing. Their carried weapon if it can be
+  // swung, otherwise their fists — so brute force is always available
+  // and a blade is never wasted. One definition, because the option
+  // list, the label and the force chain must all agree on it.
+  function meleeProfileFor(runner) {
+    const loadout = MJ.combatLoadoutFor(runner);
+    const w = MJ.weaponProfile(loadout.weaponId);
+    if ((w.modes || []).indexOf("melee") !== -1) {
+      return { id: loadout.weaponId, label: w.label, quality: loadout.weaponQuality || 0 };
+    }
+    return { id: "unarmed", label: MJ.weaponProfile("unarmed").label, quality: 0 };
+  }
+  MJ.meleeProfileFor = meleeProfileFor;
+
   MJ.ITEM_TEMPLATES = ITEM_TEMPLATES;
   MJ.gearBonusForTier = gearBonusForTier;
   MJ.makeItem = makeItem;
