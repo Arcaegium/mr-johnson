@@ -445,6 +445,30 @@
     if (skills.firearms === 0) {
       skills.firearms = rng.int(1, 3);
     }
+
+    // ── Baseline Assensing: astral perception is the Awakened sense ──
+    // Same shape as the Firearms baseline above, and for the same
+    // reason: some things are what it MEANS to be that kind of person
+    // rather than a specialisation on top.
+    //
+    // Measured before adding this: across 1,448 generated mages, ZERO
+    // had all four magic skills, and Assensing specifically was absent
+    // from 70% of Conjuring specialists and 100% of Illusionists. That
+    // is not a rare roll, it is structural — generation fills only
+    // primary + secondary, and a 4-long mage list with 2 secondary
+    // slots can never fill all four.
+    //
+    // The result was a conjurer who summons and commands spirits THEY
+    // CANNOT SEE, which the astral pillar makes nonsense of: assensing
+    // is the verb that reads anything out there, so a mage without it
+    // is blind on the one plane they are the specialist for.
+    //
+    // This does NOT make the four common — conjuring and enchanting
+    // stay genuinely specialist, which is correct. It makes the
+    // Awakened able to perceive.
+    if (isSkillEligible("assensing", focus.family) && skills.assensing === 0) {
+      skills.assensing = rng.int(1, 3);
+    }
     return skills;
   }
 

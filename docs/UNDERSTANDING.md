@@ -473,6 +473,25 @@ to a resolver playing itself. **AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME**: it
 drives this engine with house policy so the systems can be exercised, and the
 day the player's seat is wired the engine underneath does not change.
 
+> ### ⚠ What turn-based actually IS
+>
+> **A SEQUENCE, not a universal menu.** Turn-based puts every runner and every
+> hostile into an initiative order and steps through them one at a time. When a
+> combatant comes up, the player is prompted with **only the actions relevant to
+> THAT character** — this runner's weapon, this runner's spells, this runner's
+> reach and stance options.
+>
+> It is *not* "every character may choose from every option at every action
+> point." A menu of everything at every step is a spreadsheet with dice; the
+> sequence is what makes a fight a series of specific people doing specific
+> things in a specific order.
+>
+> **This is a many-factors-at-once read** — position, cover, who is next, what
+> is in reach — which is why the player's combat seat waits for the **visual
+> layer**. Wiring it as a text prompt would bake in a shape the spatial layer
+> then has to fight. Building the text version first is how the destination
+> keeps getting mistaken for the renderer.
+
 ### 7.2 Initiative — deterministic
 - **Initiative Attribute = Agility + Intelligence.** Flat, no roll. Perfect
   information, plannable, chess. Reading the order before committing is what

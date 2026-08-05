@@ -124,10 +124,23 @@
     return session;
   }
 
-  function fillMarket(session) {
-    while (session.market.length < MARKET_SLOTS) {
-      session.market.push(MJ.mintRunner(session.universeSeed, session.runnerMintIndex++));
+  // ── Filling the market, and SCOUTING a class ────────────────────
+  // `family` narrows the pool to one class. It does NOT mint a
+  // different kind of runner at a given index — runner #N of a
+  // universe stays a pure function of (universeSeed, index), which is
+  // the whole entropy model. It ADVANCES PAST the ones that do not
+  // match, which is exactly what scouting for specific talent is:
+  // you look through more people to find the one you want.
+  const MINT_SCAN_CAP = 400; // a family this rare does not exist; a guard, not a rule
+  function fillMarket(session, family) {
+    let scanned = 0;
+    while (session.market.length < MARKET_SLOTS && scanned < MINT_SCAN_CAP) {
+      const runner = MJ.mintRunner(session.universeSeed, session.runnerMintIndex++);
+      scanned += 1;
+      if (family && runner.classification.family !== family) continue;
+      session.market.push(runner);
     }
+    return session.market;
   }
 
   function siteProviderFor(session) {
@@ -148,11 +161,24 @@
   }
 
   // New faces: the current crowd moves on, the next indices mint in.
-  function refreshMarket(session) {
+  // Refreshing costs, so the RNG cannot be farmed for free. Thirty
+  // refreshes hunting one affordable mage is not a decision, it is a
+  // slot machine — a price makes each pull a choice.
+  const MARKET_REFRESH_COST = 100;
+
+  function refreshMarket(session, family) {
+    if (!MJ.canAfford(session.save, MARKET_REFRESH_COST)) {
+      return { ok: false, error: "can't cover the asking fee for a fresh sweep" };
+    }
+    MJ.spend(session.save, MARKET_REFRESH_COST);
     session.market = [];
-    fillMarket(session);
-    logLine(session, "market refreshed — new faces (the old ones moved on)", "system");
-    return session.market;
+    fillMarket(session, family);
+    logLine(session,
+      family
+        ? `scouted the ${family} circuit — ¥${MARKET_REFRESH_COST} to the fixers`
+        : `market refreshed — new faces, ¥${MARKET_REFRESH_COST} to the fixers`,
+      "system", { money: -MARKET_REFRESH_COST });
+    return { ok: true, market: session.market };
   }
 
   function acceptJob(session, boardIndex) {

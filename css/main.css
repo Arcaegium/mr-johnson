@@ -464,8 +464,65 @@ button.warn-btn:hover { background: #d4735e; color: var(--bg); }
    latched. */
 .widget.teach { border-color: var(--accent-2); }
 .widget.teach > .widget-head .wname { color: var(--accent); }
-.teachtag {
-  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em;
-  color: var(--accent); border: 1px solid var(--accent);
-  border-radius: 2px; padding: 1px 6px; white-space: nowrap;
+/* No words. The border lighting up and the widget floating to the top
+   of the tab is the whole instruction — a player learns the motion by
+   seeing which area is live, not by being told. */
+
+
+/* ── Sticky telemetry footer ──────────────────────────────────────
+   The frame is what you MONITOR, so it stops scrolling away. Pinned
+   to the bottom of the viewport, plan card opening upward from it. */
+body { padding-bottom: 76px; }
+
+.framebar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  background: #0a1016; border-top: 1px solid var(--line);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.45);
 }
+.framebar .frame { border-bottom: none; background: transparent; }
+.framebar .plan-card {
+  border-top: none; border-bottom: 1px solid var(--line);
+  max-height: 46vh; overflow-y: auto;
+}
+
+/* An entry the crew's attention lands on after the open one vanished.
+   Highlighted, never expanded — losing your place should not throw a
+   different dossier in your face. */
+.entry.focus { border-color: var(--accent); background: #131a21; }
+.entry.focus > .entry-head .chev { color: var(--accent); }
+
+/* ── Market scouting row ─────────────────────────────────────── */
+.scout { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.scout select { font-family: var(--mono); font-size: 0.8rem; background: #0b1017;
+  color: var(--ink); border: 1px solid var(--line); border-radius: 2px; padding: 4px 6px; }
+
+/* ── The crew dialog ─────────────────────────────────────────── */
+.crew-scrim {
+  position: fixed; inset: 0; z-index: 60; display: flex;
+  align-items: center; justify-content: center;
+  background: rgba(4, 8, 12, 0.82); padding: 20px;
+}
+.crew-modal {
+  width: min(880px, 100%); max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--accent-2); border-radius: 3px;
+}
+.crew-head { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.crew-head .ct { color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.78rem; }
+.crew-head .cs { color: var(--ink); margin-top: 3px; }
+.crew-tabs { display: flex; border-bottom: 1px solid var(--line); background: #0c1218; }
+.crew-body { overflow-y: auto; padding: 10px 12px; flex: 1; }
+.crew-foot {
+  padding: 10px 14px; border-top: 1px solid var(--line);
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #0c1218;
+}
+.crew-foot .spacer { margin-left: auto; }
+
+.pick { border: 1px solid var(--line); border-radius: 2px; margin-bottom: 5px; }
+.pick.on { border-color: var(--accent); background: #141b12; }
+.pick.out { opacity: 0.5; }
+.pick-head { display: flex; gap: 10px; align-items: baseline; padding: 7px 9px; cursor: pointer; }
+.pick-head:hover { background: #131c26; }
+.pick-head .box { color: var(--accent); width: 14px; flex: none; }
+.pick-head .who { flex: 1; }
+.pick-head .cost { color: var(--dim); font-size: 0.78rem; }
+.pick-body { border-top: 1px solid var(--line); padding: 8px 10px; font-size: 0.85rem; }

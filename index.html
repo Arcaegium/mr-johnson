@@ -31,11 +31,17 @@
          splayed down the page; it is now tab -> widget -> item, per
          UNDERSTANDING.md §10's three levels of zoom. -->
     <div id="hub" class="hub">
-      <div id="frame" class="frame"></div>
-      <div id="plancard"></div>
       <div id="tabbar" class="tabbar"></div>
       <div id="tabbody" class="tabbody"></div>
     </div>
+  </div>
+
+  <!-- The frame is state you MONITOR, so it does not scroll away with
+       the widgets. Pinned to the bottom of the viewport; the day's
+       plan opens upward out of it. -->
+  <div class="framebar">
+    <div id="plancard"></div>
+    <div id="frame" class="frame"></div>
   </div>
 
   <!-- Modules, loaded in dependency order (no build step) -->

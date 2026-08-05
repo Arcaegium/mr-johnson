@@ -244,8 +244,32 @@
     return { kind: "medical", patient: patient, site: null, locationType: "hub", resolved: false, karmaAward: null };
   }
 
-  function createResourceMission(site) {
-    return { kind: "resourceGathering", site: site, locationType: "site", resolved: false, karmaAward: null };
+  // ── Scavenging: what you are after decides who goes ─────────────
+  // SCRAP is a physical sweep — a crew walking the place, meeting its
+  // guards and its cameras. REAGENTS are gathered on the ASTRAL, by a
+  // projecting mage, against wards and spirits and a running tether.
+  // Same address, entirely different night, which is why they are two
+  // dispatches rather than one button with a label.
+  //
+  // §4.7's two secondary yields exit differently for exactly this
+  // reason: Matrix data goes out through a fence, astral reagents go
+  // straight to the bench with no nuyen middleman.
+  const RESOURCE_KINDS = {
+    scrap:    { label: "scrap", viaAstral: false, wants: "resource:scrap" },
+    reagents: { label: "reagents", viaAstral: true, wants: "resource:reagents" },
+  };
+
+  function createResourceMission(site, kind) {
+    const spec = RESOURCE_KINDS[kind] || RESOURCE_KINDS.scrap;
+    return {
+      kind: "resourceGathering", site: site, locationType: "site",
+      resourceKind: kind && RESOURCE_KINDS[kind] ? kind : "scrap",
+      // Gathering reagents means projecting, so the route ignores the
+      // room graph the way any astral run does.
+      viaAstral: spec.viaAstral,
+      wants: spec.wants,
+      resolved: false, karmaAward: null,
+    };
   }
 
   // Search: the discovery legwork is itself a dispatch (user ruling
@@ -635,7 +659,10 @@
     const site = mission.site;
     const kind = missionKind(mission);
     const matrixRun = kind === "matrixRun" ? hostRoute(site, { wantData: !!mission.wantData }) : null;
-    const astralRun = kind === "astralRun" ? astralRoute(site) : null;
+    // Projecting, not walking. An astral run always does; a reagent
+    // sweep does too, because reagents are gathered out there.
+    const projecting = kind === "astralRun" || !!mission.viaAstral;
+    const astralRun = projecting ? astralRoute(site) : null;
     // The meat run walks the building. Held like the other two routes
     // so a readout can say which room the crew is standing in.
     const streetRun = kind === "recon" || matrixRun || astralRun ? null : routeObstacles(site);
@@ -657,14 +684,14 @@
       intelBonus: hasFreshIntel(site, day) ? INTEL_BONUS_DICE : 0,
       obstacles: kind === "recon" ? reconObstacles(site, mission.lens)
         : kind === "matrixRun" ? matrixRun.obstacles
-        : kind === "astralRun" ? astralRun.obstacles
+        : astralRun ? astralRun.obstacles
         : streetRun.obstacles,
       // The room path the crew walks, for anything that draws it.
       streetRoute: streetRun,
       // Sized by the strongest projector on the crew. Null for every
       // other kind of run — only an astral form is on a tether.
-      tether: kind === "astralRun" ? tetherFor(runners) : null,
-      tetherMax: kind === "astralRun" ? tetherFor(runners) : null,
+      tether: projecting ? tetherFor(runners) : null,
+      tetherMax: projecting ? tetherFor(runners) : null,
       astralRun: astralRun,
       // Matrix runs carry their route so the readout can say WHERE
       // in the host the decker is, and what is still worth grabbing.
@@ -916,7 +943,7 @@
   // in the building and a decker is not in the room, so what can
   // actually get in their way is not the same list.
   function runPlane(run) {
-    if (run.kind === "astralRun") return "astral";
+    if (run.kind === "astralRun" || (run.mission && run.mission.viaAstral)) return "astral";
     if (run.kind === "matrixRun") return "matrix";
     return "physical";
   }
@@ -2103,7 +2130,14 @@
       // table is as canonical as the walls — same name, same odds).
       const table = site.lootTable;
       if (table) {
-        const entry = rng.weighted(table.entries.map((e) => ({ item: e, weight: e.weight })));
+        // You found what you went looking for. A crew sent for scrap
+        // comes back with scrap; a mage sent for reagents comes back
+        // with reagents. Only if the place holds none of it does the
+        // draw fall back to whatever is actually there.
+        const wanted = mission.wants
+          ? table.entries.filter((e) => String(e.kind) === mission.wants) : [];
+        const pool = wanted.length ? wanted : table.entries;
+        const entry = rng.weighted(pool.map((e) => ({ item: e, weight: e.weight })));
         result.yield = { kind: entry.kind, amount: rng.int(1, entry.amountMax) };
         if (rng.chance(table.itemDropChance)) {
           const pool = Object.keys(MJ.ITEM_TEMPLATES).filter((id) =>
