@@ -240,9 +240,9 @@
     if (!state.alert) return { ratcheted: false, maxGrew: false, movedAxes: [] };
     let ratcheted = false;
     let maxGrew = false;
-    // WHICH axes moved, not just whether any did. Anything holding a
-    // sample of a site's strength was measuring a population that no
-    // longer exists the moment they field more than they used to.
+    // WHICH axes moved, not just whether any did — a readout that can
+    // say "they stood up the physical reserves and left the astral
+    // alone" is telling the player something actionable.
     const movedAxes = [];
     for (const axis of AXES) {
       const a = state.axes[axis];

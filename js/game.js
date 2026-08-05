@@ -776,7 +776,6 @@
       estimatedSecurity: site.estimatedSecurity || null,
       knownMeta: site.knownMeta || null,
       securityState: site.securityState || null,
-      sightings: site.sightings || null,
     });
     const missionRecord = (m, all) => ({
       siteName: m.site ? m.site.identity.name : null,
@@ -882,7 +881,6 @@
       site.intel = rec.intel || {};
       if (rec.knownMeta) site.knownMeta = rec.knownMeta;
       if (rec.securityState) site.securityState = rec.securityState;
-      if (rec.sightings) site.sightings = rec.sightings;
       session.knownSites.push(site);
     }
     const reviveJob = (jr) => {

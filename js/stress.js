@@ -1909,93 +1909,60 @@
     check(MJ.astralAct(rng0, run, "nonesuch").ok === false, "C19: the astral has its own verbs and only those");
   }
 
-  // ── Class 23: what a crew can honestly claim to know ────────────
-  // "It takes 2 wipes to know you need 3, but 3 wipes to know you only
-  // needed 2." A floor is cheap and a ceiling is expensive, and the
-  // confirmation rule has to respect the asymmetry — an earlier
-  // version confirmed on meeting something rated at the site's value,
-  // which is knowledge the CREW cannot have: a tier-3 guard looks the
-  // same whether the place tops out at 3 or at 8.
+  // ── Class 23: what the live read may claim ──────────────────────
+  // A leg IS the sample — walk the route, meet what is on it, and by
+  // the time you leave you have seen what there was to see. So leg-end
+  // confirmation is not in question. What this class holds is the read
+  // WHILE INSIDE, and the one thing that must never count as evidence.
   function class23_knowing() {
-    // More sightings are needed to cap a HIGHER value, because m and
-    // m+1 sit proportionally closer together the larger they get.
-    let last = 0;
-    for (let m = 1; m <= 10; m++) {
-      const need = MJ.sightingsNeeded(m);
-      check(need >= last, "C23: capping a higher value must never take FEWER sightings (m=" + m + ")");
-      check(need >= 2, "C23: one sighting can never cap anything (m=" + m + ")");
-      last = need;
+    const crew = [MJ.mintRunner("c23-crew", 1)];
+    crew[0].market.hired = { tier: "permanent", missionsRemaining: 99, blockSize: 99 };
+    let run = null;
+    for (let i = 0; i < 120 && !run; i++) {
+      const site = MJ.mintSite("c23-site", i, { value: 6, orientation: "physical" });
+      MJ.initSecurityState(MJ.makeRNG("c23i" + i), site);
+      const r = MJ.beginMission(MJ.makeRNG("c23r" + i),
+        { site: site, kind: "jobObjective", objective: {} }, crew, 1);
+      if (r.obstacles.filter((o) => o.projection === "physical").length >= 3) run = r;
     }
-    check(MJ.sightingsNeeded(0) === Infinity, "C23: having seen nothing proves nothing");
-    check(MJ.sightingsNeeded(10) > MJ.sightingsNeeded(2),
-      "C23: calling a fortified site must cost more looking than calling a quiet one");
+    check(!!run, "C23: the probe needs a route with real security on it");
+    if (!run) return;
 
-    // A floor is honest immediately; a ceiling is not.
-    const site = MJ.mintSite("c23", 3, { value: 8, orientation: "physical" });
-    MJ.initSecurityState(MJ.makeRNG("c23s"), site);
-    site.sightings = { physical: { count: 1, maxTier: 6 } };
-    const one = MJ.securityRead(site, "physical");
-    check(one.floor === 6, "C23: the model tracks the worst thing seen");
-    check(!one.confirmed, "C23: but one sighting must never confirm");
+    // Nothing seen yet: no tick.
+    run.index = 0;
+    check(!MJ.axisProven(run, "physical").proven, "C23: an untouched axis is never confirmed");
 
-    site.sightings.physical.count = MJ.sightingsNeeded(6);
-    check(MJ.securityRead(site, "physical").confirmed,
-      "C23: enough sightings without anything worse turning up DOES confirm");
+    // ONE encounter must not confirm — that was the bug. A single
+    // camera cannot tell level 1 from level 5.
+    run.index = 1;
+    const one = MJ.axisProven(run, "physical");
+    check(!one.proven, "C23: one encounter must not confirm an axis");
+    check(one.faced === 1 || one.faced === 0, "C23: and it counts what was actually met");
 
-    // WHAT THE PLAYER SEES IS TWO STATES: a guess or a fact. The
-    // sample size needed is derived from the population size, which
-    // the crew has no access to — so "N more to be sure" is a number
-    // nobody in the fiction could compute, and it leaked onto the
-    // screen once already. siteIntelView is the whole player-facing
-    // vocabulary: an estimate, or a confirmed value.
-    const view = MJ.siteIntelView(site, 1);
-    for (const a of ["physical", "astral", "matrix"]) {
-      const keys = Object.keys(view[a]).sort().join(",");
-      check(keys === "confirmed,estimated",
-        "C23: a player-facing read offers an estimate or a confirmation and nothing else (" + a + ")");
-    }
+    // Having met everything of that kind on the route: confirmed.
+    run.index = run.obstacles.length;
+    check(MJ.axisProven(run, "physical").proven,
+      "C23: meeting everything of that kind on the route DOES confirm it");
 
-    // The FLOOR raises the estimate, for free, and never confirms it.
-    const lowSite = MJ.mintSite("c23-low", 9, { value: 3, orientation: "physical" });
-    MJ.initSecurityState(MJ.makeRNG("c23l"), lowSite);
-    lowSite.estimatedSecurity = { physical: 3, astral: 3, matrix: 3 };
-    const before = MJ.siteIntelView(lowSite, 1).physical;
-    check(before.estimated === 3 && !before.confirmed, "C23: an untested site reads as its guess");
-    lowSite.sightings = { physical: { count: 1, maxTier: 5 } };
-    const after = MJ.siteIntelView(lowSite, 1).physical;
-    check(after.estimated === 5,
-      "C23: walking into a tier-5 raises a ~3 to ~5 — you have MET a five");
-    check(!after.confirmed,
-      "C23: but meeting a five says nothing about a nine — it stays an estimate");
-    lowSite.sightings.physical.maxTier = 2;
-    check(MJ.siteIntelView(lowSite, 1).physical.estimated === 3,
-      "C23: and meeting something SMALLER never talks the guess down");
-
-    // A RATCHET INVALIDATES THE SAMPLE. You counted what they USED to
-    // field; the moment they stand up reserves, that tally describes a
-    // population that no longer exists.
-    const ratSite = MJ.mintSite("c23-rat", 21, { value: 6, orientation: "physical" });
-    MJ.initSecurityState(MJ.makeRNG("c23r"), ratSite);
-    ratSite.sightings = { physical: { count: 40, maxTier: 4 }, astral: { count: 40, maxTier: 4 } };
-    ratSite.intel = { physical: { snapshot: {}, dayTaken: 1 }, astral: { snapshot: {}, dayTaken: 1 } };
-    const moved = { ratcheted: true, movedAxes: ["physical"] };
-    for (const axis of moved.movedAxes) { delete ratSite.sightings[axis]; delete ratSite.intel[axis]; }
-    check(!ratSite.sightings.physical,
-      "C23: a ratcheted axis must lose the sample that measured the old posture");
-    check(!!ratSite.sightings.astral,
-      "C23: an axis they did NOT provoke keeps what was learned about it");
-    check(MJ.settleIncident(MJ.initSecurityState(MJ.makeRNG("c23r2"),
-      MJ.mintSite("c23-rat2", 22, { value: 6 })).securityState || {}) !== undefined,
-      "C23: settleIncident answers even with nothing to settle");
-
-    // Sightings accumulate across visits and survive a save.
-    const s = MJ.game.newGame("c23-universe");
-    s.knownSites.push(site);
-    const back = MJ.game.deserializeSession(MJ.game.serializeSession(s));
-    check(!!back.knownSites[0].sightings,
-      "C23: what a Johnson has learned about a place must survive a reload");
-    check(back.knownSites[0].sightings.physical.maxTier === 6,
-      "C23: including the floor they paid for");
+    // ── A RESPONSE SQUAD IS NOT EVIDENCE ─────────────────────────
+    // Their tier comes from the ALERT LEVEL, not from what the place
+    // normally fields — so reading it as proof would let a crew
+    // "confirm" a quiet site by making enough noise to summon
+    // something big.
+    const quiet = MJ.mintSite("c23-quiet", 7, { value: 2, orientation: "physical" });
+    MJ.initSecurityState(MJ.makeRNG("c23q"), quiet);
+    const qr = MJ.beginMission(MJ.makeRNG("c23qr"),
+      { site: quiet, kind: "jobObjective", objective: {} }, crew, 1);
+    const heavy = MJ.generateObstacleInstance(MJ.makeRNG("c23h"), "guard", 9, "physical");
+    heavy.responder = "physical";
+    heavy.rooms = [1];
+    qr.obstacles = [heavy];
+    qr.index = 1;
+    const rr = MJ.axisProven(qr, "physical");
+    check(rr.maxTier === 0,
+      "C23: a tier-9 response squad must not raise the floor — that is your own noise");
+    check(rr.total === 0 && !rr.proven,
+      "C23: and it must not count toward proving the site's standing security");
   }
 
   // ── Class 22: verbs × properties — the world decides ────────────

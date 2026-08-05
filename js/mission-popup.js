@@ -271,9 +271,11 @@
         // itself. The math decides WHEN the tick appears; it is not
         // something to narrate at the player.
         if (p && p.proven) return letter + ":" + ok(run.state.axes[a].current + "✓");
-        // Contact raises the guess as it happens — including what this
-        // crew has walked into in the last few minutes, before any of
-        // it has been banked on the site.
+        // Still guessing — but contact corrects the guess upward as it
+        // happens. Meet a tier-5 on a place pencilled at ~3 and it
+        // reads ~5, because you have MET a five. Only the site's own
+        // security counts; a response squad's rating is a fact about
+        // the noise you made.
         const shown = Math.max(est === null ? 0 : est, (p && p.maxTier) || 0);
         return letter + ':<span class="dimmed">~' + (shown || "?") + "</span>";
       }).join(" ");

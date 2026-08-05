@@ -581,83 +581,45 @@
     return casualty;
   }
 
-  // ── What a crew can HONESTLY claim to know ──────────────────────
-  // "It takes 2 wipes to know you need 3, but 3 wipes to know you
-  // only needed 2." A floor is cheap; a ceiling is expensive, and the
-  // rule has to respect the difference.
+  // ── The live read, during a run ─────────────────────────────────
+  // Everything at a site resets nightly, and the ratchet is what
+  // carries change forward — so there is nothing to accumulate across
+  // visits. A leg IS the sample: the crew walks the route, meets what
+  // is on it, and by the time they leave they have seen what there
+  // was to see. Confirmation at the end of a leg is not in question.
   //
-  // An earlier version confirmed an axis the moment the crew met
-  // something rated at the site's value — but that used knowledge the
-  // CREW DOES NOT HAVE. A tier-3 guard on a P3 site looks exactly
-  // like a tier-3 guard on a P8 site. Nothing about meeting one tells
-  // you it was the biggest thing they had.
+  // What this is for is the READOUT WHILE THEY ARE IN THERE. Ticking
+  // an axis over on first contact was the thing worth fixing: one
+  // camera cannot tell level 1 from level 5. So the tick waits until
+  // they have met everything of that kind the route holds.
   //
-  // So there is only one honest proof, and it is the expensive one:
-  //
-  //   FLOOR    the worst thing you have met. Known instantly, and
-  //            always true — "it is AT LEAST this bad."
-  //   CEILING  established only by NOT meeting anything worse, over
-  //            enough encounters that something worse would very
-  //            likely have turned up by now.
-  //
-  // Every obstacle's tier is rng.int(1, N), so having seen k of them
-  // topping out at m, the chance of that happening when the truth is
-  // m+1 is (m/(m+1))^k. Require that under a quarter and the sample
-  // is doing real work. It scales the way the fiction does: a couple
-  // of sightings settle a quiet block, and calling a fortified one
-  // takes a dozen — which is several visits, not one walk through.
-  const CEILING_DOUBT = 0.25;
+  // RESPONDERS DO NOT COUNT, on either side. A response team's tier
+  // comes from the ALERT LEVEL, not from what the place normally
+  // fields — so meeting a tier-8 kick-in-the-door squad is evidence
+  // about the noise you made, not about the site's standing security.
+  // Reading it as proof would let a crew "confirm" a quiet site by
+  // making enough racket to summon something big.
+  const isStanding = (o) => !o.responder;
 
-  function sightingsNeeded(maxTier) {
-    if (maxTier <= 0) return Infinity;
-    return Math.ceil(Math.log(CEILING_DOUBT) / Math.log(maxTier / (maxTier + 1)));
+  function axisTally(run, axis) {
+    let faced = 0, total = 0, maxTier = 0;
+    run.obstacles.forEach((o, i) => {
+      if (o.projection !== axis || !isStanding(o)) return;
+      total += 1;
+      if (i < run.index) {
+        faced += 1;
+        if (o.tier > maxTier) maxTier = o.tier;
+      }
+    });
+    return { faced: faced, total: total, maxTier: maxTier };
   }
 
-  // Sightings ACCUMULATE ON THE SITE, across every visit. One walk
-  // through rarely settles a serious address, and going back is how a
-  // Johnson actually learns a place.
-  function recordSightings(site, run) {
-    if (!site) return;
-    site.sightings = site.sightings || {};
-    for (const o of run.obstacles.slice(0, run.index)) {
-      const a = o.projection;
-      if (!a) continue;
-      const s = site.sightings[a] || (site.sightings[a] = { count: 0, maxTier: 0 });
-      s.count += 1;
-      if (o.tier > s.maxTier) s.maxTier = o.tier;
-    }
-  }
-
-  // The read a player is entitled to, from what has actually been seen.
-  function securityRead(site, axis) {
-    const s = (site && site.sightings && site.sightings[axis]) || { count: 0, maxTier: 0 };
-    const need = sightingsNeeded(s.maxTier);
-    return {
-      axis: axis, seen: s.count, floor: s.maxTier, need: need,
-      confirmed: s.maxTier > 0 && s.count >= need,
-      // How much more looking it would take. The player can see the
-      // price of certainty before paying it.
-      shortBy: s.maxTier > 0 && s.count < need ? need - s.count : 0,
-    };
-  }
-
-  // Live during a run: what this crew has turned up so far, folded on
-  // top of what the site already knew.
   function axisProven(run, axis) {
-    const site = run.site;
-    const prior = (site && site.sightings && site.sightings[axis]) || { count: 0, maxTier: 0 };
-    let count = prior.count, maxTier = prior.maxTier;
-    for (const o of run.obstacles.slice(0, run.index)) {
-      if (o.projection !== axis) continue;
-      count += 1;
-      if (o.tier > maxTier) maxTier = o.tier;
-    }
-    const need = sightingsNeeded(maxTier);
+    const t = axisTally(run, axis);
     return {
-      axis: axis, faced: count, maxTier: maxTier, floor: maxTier,
-      needVolume: need, proven: maxTier > 0 && count >= need,
-      why: maxTier > 0 && count >= need ? "seen enough" : null,
-      shortBy: maxTier > 0 && count < need ? need - count : 0,
+      axis: axis, faced: t.faced, total: t.total, maxTier: t.maxTier,
+      // Everything of that kind on this route has been met.
+      proven: t.total > 0 && t.faced >= t.total,
     };
   }
 
@@ -2160,24 +2122,12 @@
     // no longer CONFIRMS anything — see securityRead: a floor is free
     // and a ceiling has to be earned by patience. A recon sweep is
     // still the exception, because looking is the entire job.
-    recordSightings(site, run);
-    // A RATCHET INVALIDATES THE SAMPLE. Everything the crew counted
-    // was a count of what this place USED to field; the moment they
-    // stand up reserves and keep them standing, that tally is a
-    // measurement of a population that no longer exists. Knowing a
-    // site is not a thing you buy once — provoke them into changing
-    // and you are back to guessing, which is the cost of kicking the
-    // same door repeatedly.
-    if (incident && incident.ratcheted) {
-      for (const axis of incident.movedAxes || []) {
-        if (site.sightings) delete site.sightings[axis];
-        if (site.intel) delete site.intel[axis];
-      }
-    }
-    const confirmedAxes = new Set();
-    for (const axis of MJ.SECURITY_AXES) {
-      if (securityRead(site, axis).confirmed) confirmedAxes.add(axis);
-    }
+    // A completed leg confirms what it walked through. The crew was
+    // there and met the place's own security; responders are excluded
+    // because a squad that turned up because of the noise says nothing
+    // about what the site normally fields.
+    const confirmedAxes = new Set(
+      obstacles.slice(0, run.index).filter(isStanding).map((o) => o.projection));
     // A recon sweep is the exception: LOOKING is the whole job, so it
     // confirms its own lens on the strength of having gone and looked.
     if (kind === "recon" && (success || obstacles.length > 0)) confirmedAxes.add(mission.lens);
@@ -2393,21 +2343,8 @@
       // A site with no rolled estimate yet falls back to its public
       // profile ceiling — shouldn't happen once every entry path
       // (job introduction, discovery) rolls one, but never crash.
-      const guess = site.estimatedSecurity ? site.estimatedSecurity[axis] : site.security[axis];
-      // THE FLOOR RAISES THE GUESS, FOR FREE. Walk into a tier-5
-      // response on a place you had pencilled at ~3 and the estimate
-      // becomes ~5 — you have MET a five, so it is at least a five,
-      // and no amount of not-knowing changes that.
-      //
-      // It stays an estimate, though. A floor is free and a ceiling is
-      // expensive: meeting a five says nothing about whether a nine is
-      // waiting round the corner, so the tilde stays until the sample
-      // is big enough to cap it. This is the whole asymmetry in one
-      // line — contact corrects you upward immediately, and only
-      // patience ever lets you stop guessing.
-      const floor = (site.sightings && site.sightings[axis] && site.sightings[axis].maxTier) || 0;
       view[axis] = {
-        estimated: Math.max(guess, floor),
+        estimated: site.estimatedSecurity ? site.estimatedSecurity[axis] : site.security[axis],
         confirmed: null,
       };
     }
@@ -2544,8 +2481,6 @@
   // count, because they are one function.
   MJ.remainingApproaches = remainingApproaches;
   MJ.axisProven = axisProven;
-  MJ.securityRead = securityRead;
-  MJ.sightingsNeeded = sightingsNeeded;
   MJ.missionExtendedStep = missionExtendedStep;
   MJ.extendedThreshold = extendedThreshold;
   MJ.missionAbort = missionAbort;
