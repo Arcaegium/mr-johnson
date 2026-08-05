@@ -41,6 +41,7 @@
     entry: new Set(),
     crew: new Set(),   // roster indices selected for the next dispatch
     plan: false,       // is the day's-plan card open
+    led: {},           // tab -> the teaching widget we last auto-opened
   };
 
   const $ = (id) => document.getElementById(id);
@@ -48,6 +49,9 @@
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   const isOpen = (k) => UI.entry.has(k);
+  // Commands answer {ok}; a few older ones answer nothing at all, and
+  // silence there has always meant it went through.
+  const ok = (res) => !res || res.ok !== false;
   const chev = (open) => `<span class="chev">${open ? "▾" : "▸"}</span>`;
 
   // ── Formatting helpers ──────────────────────────────────────────
@@ -450,6 +454,50 @@
     }
   }
 
+  // ── The teaching order ──────────────────────────────────────────
+  // Widgets normally sit in their written order. Until the player has
+  // performed a motion for the FIRST TIME, the widget that teaches
+  // that motion leads its tab instead: nothing hired yet, so Market
+  // leads; someone watched, so Watchlist leads; someone hired, and the
+  // tab settles into its real order for good.
+  //
+  // LATCHED, NOT DERIVED. A live check ("do they have zero hired?")
+  // would drag the beginner layout back the day a veteran Johnson
+  // releases their last runner, which is a tutorial ambushing someone
+  // forty days in. A motion performed once is remembered forever, so
+  // this retires itself and never returns.
+  //
+  // Milestones live on save.johnson, which round-trips wholesale — no
+  // schema change, and a save from before this existed simply reads as
+  // "nothing learned yet" and is healed below from what it contains.
+  const TEACHING = {
+    runners: [
+      { motion: "watched", lead: "w-market", hint: "start here — watching costs nothing" },
+      { motion: "hired", lead: "w-watch", hint: "start here — hire someone off the list" },
+    ],
+    contracts: [
+      { motion: "accepted", lead: "w-available", hint: "start here — take a contract" },
+    ],
+  };
+
+  const learned = () => (S.save.johnson.learned = S.save.johnson.learned || {});
+  const learn = (motion) => { learned()[motion] = true; };
+
+  // A loaded save — or one made before any of this — should not be
+  // taught motions it has plainly already performed.
+  function healLearned() {
+    const L = learned();
+    if (S.roster.length) L.watched = true;
+    if (S.roster.some((r) => r.market.hired)) L.hired = true;
+    if (S.jobs.length) L.accepted = true;
+  }
+
+  // The first motion on this tab the player has yet to perform.
+  function teachingFor(tab) {
+    const L = learned();
+    return (TEACHING[tab] || []).find((t) => !L[t.motion]) || null;
+  }
+
   const TABS = [
     { id: "runners", label: "Runners", count: () => S.roster.length },
     { id: "contracts", label: "Contracts", count: () => S.jobs.filter((j) => !j.paid && !j.expired).length },
@@ -513,12 +561,29 @@
   }
 
   function renderBody() {
-    $("tabbody").innerHTML = (WIDGETS[UI.tab] || []).map((w) => {
+    const teach = teachingFor(UI.tab);
+    let list = (WIDGETS[UI.tab] || []).slice();
+    if (teach) {
+      // Float the teaching widget to the front, everything else stable
+      // behind it. When the last motion latches this stops happening
+      // and the tab keeps its written order permanently.
+      const i = list.findIndex((w) => w.id === teach.lead);
+      if (i > 0) list.unshift(list.splice(i, 1)[0]);
+      // Open it — but only when the lead has just CHANGED, so a player
+      // who deliberately collapsed it is not overruled every render.
+      if (UI.led[UI.tab] !== teach.lead) {
+        UI.led[UI.tab] = teach.lead;
+        UI.open.add(teach.lead);
+      }
+    }
+    $("tabbody").innerHTML = list.map((w) => {
       const open = UI.open.has(w.id);
       const n = w.count();
-      return `<div class="widget${w.wide ? " wide" : ""}${n === 0 ? " dark" : ""}">` +
+      const leading = teach && teach.lead === w.id;
+      return `<div class="widget${w.wide ? " wide" : ""}${n === 0 && !leading ? " dark" : ""}${leading ? " teach" : ""}">` +
         `<div class="widget-head" data-act="widget" data-wid="${w.id}">${chev(open)}` +
           `<span class="wname">${esc(w.label)}</span><span class="wcount">${n}</span>` +
+          (leading ? `<span class="teachtag">${esc(teach.hint)}</span>` : "") +
           `<span class="wsum">${esc(w.sum())}</span></div>` +
         (open ? `<div class="widget-body">${w.body()}</div>` : "") + `</div>`;
     }).join("");
@@ -538,6 +603,7 @@
       return;
     }
     $("statline").textContent = `Universe "${S.universeSeed}"`;
+    healLearned();
     renderFrame();
     renderTabs();
     renderBody();
@@ -633,9 +699,12 @@
     else if (action === "expand-capacity") MJ.game.expandCapacity(S);
     else if (action === "end-day") { playDay(); return; }
     else if (action === "quick-day") { MJ.game.endDay(S); UI.crew.clear(); }
-    else if (action === "accept") MJ.game.acceptJob(S, idx);
-    else if (action === "watch-market") MJ.game.watchFromMarket(S, idx);
-    else if (action === "hire") MJ.game.hire(S, S.roster[+el.dataset.ridx], el.dataset.tier);
+    // The three motions the teaching order exists to introduce. Latch
+    // on the COMMAND SUCCEEDING, not on the click — a refused hire has
+    // taught nothing and should leave the prompt where it is.
+    else if (action === "accept") { if (ok(MJ.game.acceptJob(S, idx))) learn("accepted"); }
+    else if (action === "watch-market") { if (ok(MJ.game.watchFromMarket(S, idx))) learn("watched"); }
+    else if (action === "hire") { if (ok(MJ.game.hire(S, S.roster[+el.dataset.ridx], el.dataset.tier))) learn("hired"); }
     else if (action === "upgrade") MJ.game.upgrade(S, S.roster[+el.dataset.ridx], el.dataset.tier);
     else if (action === "release") MJ.game.release(S, S.roster[+el.dataset.ridx]);
     else if (action === "unwatch") MJ.game.unwatch(S, S.roster[+el.dataset.ridx]);

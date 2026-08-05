@@ -457,3 +457,15 @@ button.warn-btn:hover { background: #d4735e; color: var(--bg); }
 .crewpick label.out { color: var(--dim); cursor: default; }
 
 .empty { color: var(--dim); font-size: 0.84rem; padding: 4px 8px; display: block; }
+
+/* The teaching order: the widget leading a tab because the player has
+   not yet performed the motion it introduces. Quiet — a nudge, not a
+   tutorial popup — and it stops appearing for good once the motion is
+   latched. */
+.widget.teach { border-color: var(--accent-2); }
+.widget.teach > .widget-head .wname { color: var(--accent); }
+.teachtag {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 2px; padding: 1px 6px; white-space: nowrap;
+}
