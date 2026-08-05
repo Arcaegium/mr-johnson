@@ -574,6 +574,26 @@
   // unwind a decision to go hire the specialist you just realised you
   // were missing. This is the whole roster, in front of the job:
   // look at anyone, hire on the spot, then commit.
+  // The number the player is being SHOWN for an axis — confirmed if
+  // they have earned it, the estimate otherwise. Comparing what they
+  // bring against anything else would be measuring it against a fact
+  // they do not have.
+  function shownSecurity(site, axis) {
+    if (!site) return null;
+    const v = MJ.siteIntelView(site, S.day)[axis];
+    return v.confirmed ? v.confirmed.value : v.estimated;
+  }
+
+  // Teal when the crew meets or beats what is waiting on that axis,
+  // grey when it falls short. Judged per axis and against the group
+  // total, so "strong here, blind there" is one glance rather than
+  // three subtractions.
+  function bringsAxis(label, dice, against) {
+    const enough = against === null || dice >= against;
+    return `<span class="muted"> ${label}:</span>` +
+      `<span class="${enough ? "w-num" : "short"}">${dice}d</span>`;
+  }
+
   function renderCrewDialog() {
     let host = $("crew-host");
     if (!UI.pending) { if (host) host.remove(); return; }
@@ -614,11 +634,25 @@
           ["hired", "watchlist", "market"].map((t) =>
             `<button class="tab${UI.crewTab === t ? " active" : ""}" data-act="crew-tab" data-ct="${t}">${t}<span class="badge">${(sections[t] || []).length}</span></button>`).join("") +
         `</div>` +
+        // The market is a place you SHOP, so it gets its counter here
+        // too — realising mid-assembly that you need a mage and having
+        // to close the job to go looking is the unwind this dialog
+        // exists to prevent.
+        (UI.crewTab === "market"
+          ? `<div class="crew-scout"><select id="crew-scout-select">` +
+              `<option value="">any class</option>` +
+              FAMILIES.map((f) => `<option value="${f}"${UI.scout === f ? " selected" : ""}>${f}</option>`).join("") +
+            `</select><button class="sm" data-act="refresh-market">sweep the circuit ¥100</button>` +
+            `<span class="muted">you hold ¥${S.save.johnson.money}</span></div>`
+          : "") +
         `<div class="crew-body">${rows}</div>` +
         `<div class="crew-foot">` +
           `<span class="slots${full ? " full" : ""}">${picked.length}/${MAX_CREW} slots</span>` +
           (picked.length
-            ? `<span class="muted"> — brings P:</span><b class="w-num">${cap.physical}d</b><span class="muted"> A:</span><b class="w-num">${cap.astral}d</b><span class="muted"> M:</span><b class="w-num">${cap.matrix}d</b>`
+            ? `<span class="muted"> — brings</span>` +
+              bringsAxis("P", cap.physical, shownSecurity(site, "physical")) +
+              bringsAxis("A", cap.astral, shownSecurity(site, "astral")) +
+              bringsAxis("M", cap.matrix, shownSecurity(site, "matrix"))
             : '<span class="muted"> — nobody assigned yet</span>') +
           `<span class="spacer"></span>` +
           `<button class="sm" data-act="crew-cancel">cancel</button>` +
@@ -767,7 +801,9 @@
 
     if (action === "refresh-board") MJ.game.refreshBoard(S);
     else if (action === "refresh-market") {
-      const sel = $("scout-select");
+      // The dialog's own selector wins while it is open — it is the
+      // one in front of the player; the hub's sits behind a scrim.
+      const sel = $("crew-scout-select") || $("scout-select");
       UI.scout = sel ? sel.value : "";
       const res = MJ.game.refreshMarket(S, UI.scout || undefined);
       if (res && res.ok === false) MJ.game.note(S, res.error, "money", { refused: true });

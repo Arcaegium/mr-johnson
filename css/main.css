@@ -634,3 +634,17 @@ body.railed .framebar { left: 300px; }
   border-left: 1px solid var(--line);
   font-size: 0.9em; line-height: 1.6;
 }
+
+/* A capability that does not reach what is waiting. Greyed rather than
+   coloured, so "enough" and "not enough" separate at a glance without
+   reading the numbers against each other. */
+.short { color: var(--dim); }
+
+.crew-scout {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 9px 12px; border-bottom: 1px solid var(--line); background: #0c1218;
+}
+.crew-scout select {
+  font-family: var(--mono); font-size: 0.8rem; background: #0b1017;
+  color: var(--ink); border: 1px solid var(--line); border-radius: 2px; padding: 4px 6px;
+}
