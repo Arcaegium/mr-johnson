@@ -1253,6 +1253,20 @@ edits and confirm the change took effect.
 
 ## 17. WORKING PRACTICES
 
+- **SEARCH BEFORE YOU INVENT.** Before building any mechanic, grep the docs and
+  the code for the concept. Almost every "new" mechanic proposed in this project
+  turned out to already exist, designed, under a name nobody looked for.
+  Reagents are the standing example: `RESOURCE_SITE_KINDS` already put them on
+  an astrally-oriented site and `generateLootTable` already weighted what is
+  findable by orientation — so "scrap vs reagents is a different run" was
+  already true and needed nothing added. What got built instead was a parallel
+  mechanic where a projecting mage gathered them on the astral, which is not
+  merely redundant but **incoherent**: an astral form has no hands and cannot
+  carry anything home.
+  **A gap between what was asked for and what exists is a signal to go looking,
+  not a licence to design.** If the search genuinely comes up empty, say so and
+  ask — an invented mechanic costs far more to remove than a question costs to
+  ask, because it looks finished.
 - **Measure, then set the dial.** Sample the real distribution — how many ticks a
   run actually consumes, how many dice a crew actually brings — and set the
   number against it. Every balance value in the game should be traceable to a

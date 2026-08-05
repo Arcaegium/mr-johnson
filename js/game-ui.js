@@ -289,13 +289,15 @@
         (legs.join(" ") || emptyNote("no accepted contract points here — take a job on the Contracts tab")) + `</div>` +
       `<div class="intent"><span class="ik">Recon — go and look</span><div class="actionbar">` +
         MJ.RECON_LENSES.map((l) => btn("recon:" + l, l, true)).join(" ") + `</div></div>` +
-      // Three different nights, three different runners: a crew walking
-      // the place for scrap, a mage out on the astral for reagents, a
-      // decker who never leaves the room for paydata.
+      // You go looking for one thing. Scrap and reagents are both a
+      // crew walking the place — what differs is the ground: a reagent
+      // grove is astrally secured, a scrap yard physically. Paydata is
+      // the one that is genuinely a different night, because a decker
+      // hits the host without ever going there.
       `<div class="intent"><span class="ik">Scavenge — take what is lying about</span><div class="actionbar">` +
-        btn("scav:scrap", "scrap — walk the place", hasResource, "nothing to harvest here") + " " +
-        btn("scav:reagents", "reagents — project in", hasResource, "nothing to harvest here") + " " +
-        btn("scav:data", "paydata — hack it remotely", hasHost, "no host here") +
+        btn("scav:scrap", "scrap", hasResource, "nothing to harvest here") + " " +
+        btn("scav:reagents", "reagents", hasResource, "nothing to harvest here") + " " +
+        btn("scav:data", "paydata — hack the host", hasHost, "no host here") +
       `</div></div>`;
   }
 
@@ -562,8 +564,8 @@
       const lens = plan.split(":")[1];
       return { mission: MJ.createReconMission(site, lens), label: `recon ${lens} @ ${tag}` };
     }
-    if (plan === "scav:scrap") return { mission: MJ.createResourceMission(site, "scrap"), label: `scrap sweep @ ${tag}` };
-    if (plan === "scav:reagents") return { mission: MJ.createResourceMission(site, "reagents"), label: `reagent gathering @ ${tag}` };
+    if (plan === "scav:scrap") return { mission: MJ.createResourceMission(site, "scrap"), label: `scrap harvest @ ${tag}` };
+    if (plan === "scav:reagents") return { mission: MJ.createResourceMission(site, "reagents"), label: `reagent harvest @ ${tag}` };
     if (plan === "scav:data") return { mission: MJ.createMatrixMission(site, { wantData: true }), label: `paydata run @ ${tag}` };
     if (plan.indexOf("search:") === 0) {
       const kind = plan.split(":")[1];
