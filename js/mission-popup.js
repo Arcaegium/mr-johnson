@@ -261,18 +261,21 @@
         const p = MJ.axisProven(run, a);
         const est = run.site.estimatedSecurity ? run.site.estimatedSecurity[a] : null;
         const letter = a[0].toUpperCase();
-        if (p && p.proven) {
-          return letter + ":" + ok(run.state.axes[a].current + "✓");
-        }
-        // A FLOOR is honest the moment you meet something: "at least
-        // this bad." The ceiling is the expensive half, so the readout
-        // says how much more looking it would take rather than
-        // pretending the guess is a fact.
-        if (p && p.floor > 0) {
-          return letter + ':<span class="w-warn">≥' + p.floor + "</span>" +
-            '<span class="dimmed">(' + p.faced + " seen, " + p.shortBy + " more to be sure)</span>";
-        }
-        return letter + ':<span class="dimmed">~' + (est === null ? "?" : est) + "</span>";
+        // TWO STATES ONLY: a guess, or a fact. `~4` while it is still
+        // an estimate, `4` with a tick once the crew has earned it.
+        //
+        // Nothing about "how much more looking" belongs on screen —
+        // knowing what counts as a big enough sample requires knowing
+        // the size of the population you are sampling, and the crew
+        // has no more access to that than they do to the number
+        // itself. The math decides WHEN the tick appears; it is not
+        // something to narrate at the player.
+        if (p && p.proven) return letter + ":" + ok(run.state.axes[a].current + "✓");
+        // Contact raises the guess as it happens — including what this
+        // crew has walked into in the last few minutes, before any of
+        // it has been banked on the site.
+        const shown = Math.max(est === null ? 0 : est, (p && p.maxTier) || 0);
+        return letter + ':<span class="dimmed">~' + (shown || "?") + "</span>";
       }).join(" ");
       lines.push('<span class="dimmed">security </span>' + axes);
     }

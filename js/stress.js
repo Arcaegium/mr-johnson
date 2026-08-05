@@ -1935,13 +1935,58 @@
     MJ.initSecurityState(MJ.makeRNG("c23s"), site);
     site.sightings = { physical: { count: 1, maxTier: 6 } };
     const one = MJ.securityRead(site, "physical");
-    check(one.floor === 6, "C23: one sighting establishes a FLOOR");
+    check(one.floor === 6, "C23: the model tracks the worst thing seen");
     check(!one.confirmed, "C23: but one sighting must never confirm");
-    check(one.shortBy > 0, "C23: and it must say how much more looking is needed");
 
     site.sightings.physical.count = MJ.sightingsNeeded(6);
     check(MJ.securityRead(site, "physical").confirmed,
       "C23: enough sightings without anything worse turning up DOES confirm");
+
+    // WHAT THE PLAYER SEES IS TWO STATES: a guess or a fact. The
+    // sample size needed is derived from the population size, which
+    // the crew has no access to — so "N more to be sure" is a number
+    // nobody in the fiction could compute, and it leaked onto the
+    // screen once already. siteIntelView is the whole player-facing
+    // vocabulary: an estimate, or a confirmed value.
+    const view = MJ.siteIntelView(site, 1);
+    for (const a of ["physical", "astral", "matrix"]) {
+      const keys = Object.keys(view[a]).sort().join(",");
+      check(keys === "confirmed,estimated",
+        "C23: a player-facing read offers an estimate or a confirmation and nothing else (" + a + ")");
+    }
+
+    // The FLOOR raises the estimate, for free, and never confirms it.
+    const lowSite = MJ.mintSite("c23-low", 9, { value: 3, orientation: "physical" });
+    MJ.initSecurityState(MJ.makeRNG("c23l"), lowSite);
+    lowSite.estimatedSecurity = { physical: 3, astral: 3, matrix: 3 };
+    const before = MJ.siteIntelView(lowSite, 1).physical;
+    check(before.estimated === 3 && !before.confirmed, "C23: an untested site reads as its guess");
+    lowSite.sightings = { physical: { count: 1, maxTier: 5 } };
+    const after = MJ.siteIntelView(lowSite, 1).physical;
+    check(after.estimated === 5,
+      "C23: walking into a tier-5 raises a ~3 to ~5 — you have MET a five");
+    check(!after.confirmed,
+      "C23: but meeting a five says nothing about a nine — it stays an estimate");
+    lowSite.sightings.physical.maxTier = 2;
+    check(MJ.siteIntelView(lowSite, 1).physical.estimated === 3,
+      "C23: and meeting something SMALLER never talks the guess down");
+
+    // A RATCHET INVALIDATES THE SAMPLE. You counted what they USED to
+    // field; the moment they stand up reserves, that tally describes a
+    // population that no longer exists.
+    const ratSite = MJ.mintSite("c23-rat", 21, { value: 6, orientation: "physical" });
+    MJ.initSecurityState(MJ.makeRNG("c23r"), ratSite);
+    ratSite.sightings = { physical: { count: 40, maxTier: 4 }, astral: { count: 40, maxTier: 4 } };
+    ratSite.intel = { physical: { snapshot: {}, dayTaken: 1 }, astral: { snapshot: {}, dayTaken: 1 } };
+    const moved = { ratcheted: true, movedAxes: ["physical"] };
+    for (const axis of moved.movedAxes) { delete ratSite.sightings[axis]; delete ratSite.intel[axis]; }
+    check(!ratSite.sightings.physical,
+      "C23: a ratcheted axis must lose the sample that measured the old posture");
+    check(!!ratSite.sightings.astral,
+      "C23: an axis they did NOT provoke keeps what was learned about it");
+    check(MJ.settleIncident(MJ.initSecurityState(MJ.makeRNG("c23r2"),
+      MJ.mintSite("c23-rat2", 22, { value: 6 })).securityState || {}) !== undefined,
+      "C23: settleIncident answers even with nothing to settle");
 
     // Sightings accumulate across visits and survive a save.
     const s = MJ.game.newGame("c23-universe");

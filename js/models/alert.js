@@ -237,15 +237,20 @@
   // job). Sustained pressure at the ceiling is what finally moves
   // Max — permanently.
   function settleIncident(state) {
-    if (!state.alert) return { ratcheted: false, maxGrew: false };
+    if (!state.alert) return { ratcheted: false, maxGrew: false, movedAxes: [] };
     let ratcheted = false;
     let maxGrew = false;
+    // WHICH axes moved, not just whether any did. Anything holding a
+    // sample of a site's strength was measuring a population that no
+    // longer exists the moment they field more than they used to.
+    const movedAxes = [];
     for (const axis of AXES) {
       const a = state.axes[axis];
       const level = alertLevel(state, axis);
       if (level > a.current) {
         a.current = Math.min(a.max, level);
         ratcheted = true;
+        movedAxes.push(axis);
       }
     }
     if (state.pinnedBeats >= MAX_GROWTH_PINNED_BEATS) {
@@ -262,7 +267,7 @@
     }
     state.daysSinceThreat = 0;
     state.quietDays = 0;
-    return { ratcheted: ratcheted, maxGrew: maxGrew };
+    return { ratcheted: ratcheted, maxGrew: maxGrew, movedAxes: movedAxes };
   }
 
   // ── The nightly tick ────────────────────────────────────────────

@@ -2153,16 +2153,27 @@
     // nothing ratchets — Alert never rose above where it started.
     const incident = run.engagedAlert
       ? MJ.settleIncident(state)
-      : { ratcheted: false, maxGrew: false };
+      : { ratcheted: false, maxGrew: false, movedAxes: [] };
     const band = MJ.threatBand(state, day);
 
-    // Interaction confirms security (user ruling): a crew that comes
-    // home knows what it actually touched — success OR failure, a
-    // completed attempt is a fresh, day-stamped confirmed read on
-    // every axis it interacted with. Faced obstacles confirm their
-    // projection; working a deck (hacking) confirms matrix; a recon
-    // sweep confirms its own lens once it faced anything at all.
+    // What the crew saw goes on the site's record. Interaction alone
+    // no longer CONFIRMS anything — see securityRead: a floor is free
+    // and a ceiling has to be earned by patience. A recon sweep is
+    // still the exception, because looking is the entire job.
     recordSightings(site, run);
+    // A RATCHET INVALIDATES THE SAMPLE. Everything the crew counted
+    // was a count of what this place USED to field; the moment they
+    // stand up reserves and keep them standing, that tally is a
+    // measurement of a population that no longer exists. Knowing a
+    // site is not a thing you buy once — provoke them into changing
+    // and you are back to guessing, which is the cost of kicking the
+    // same door repeatedly.
+    if (incident && incident.ratcheted) {
+      for (const axis of incident.movedAxes || []) {
+        if (site.sightings) delete site.sightings[axis];
+        if (site.intel) delete site.intel[axis];
+      }
+    }
     const confirmedAxes = new Set();
     for (const axis of MJ.SECURITY_AXES) {
       if (securityRead(site, axis).confirmed) confirmedAxes.add(axis);
@@ -2379,11 +2390,24 @@
   function siteIntelView(site, day) {
     const view = {};
     for (const axis of ["physical", "astral", "matrix"]) {
+      // A site with no rolled estimate yet falls back to its public
+      // profile ceiling — shouldn't happen once every entry path
+      // (job introduction, discovery) rolls one, but never crash.
+      const guess = site.estimatedSecurity ? site.estimatedSecurity[axis] : site.security[axis];
+      // THE FLOOR RAISES THE GUESS, FOR FREE. Walk into a tier-5
+      // response on a place you had pencilled at ~3 and the estimate
+      // becomes ~5 — you have MET a five, so it is at least a five,
+      // and no amount of not-knowing changes that.
+      //
+      // It stays an estimate, though. A floor is free and a ceiling is
+      // expensive: meeting a five says nothing about whether a nine is
+      // waiting round the corner, so the tilde stays until the sample
+      // is big enough to cap it. This is the whole asymmetry in one
+      // line — contact corrects you upward immediately, and only
+      // patience ever lets you stop guessing.
+      const floor = (site.sightings && site.sightings[axis] && site.sightings[axis].maxTier) || 0;
       view[axis] = {
-        // A site with no rolled estimate yet falls back to its public
-        // profile ceiling — shouldn't happen once every entry path
-        // (job introduction, discovery) rolls one, but never crash.
-        estimated: site.estimatedSecurity ? site.estimatedSecurity[axis] : site.security[axis],
+        estimated: Math.max(guess, floor),
         confirmed: null,
       };
     }
