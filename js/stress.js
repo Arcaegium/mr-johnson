@@ -1540,6 +1540,112 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 17: spells in meatspace ───────────────────────────────
+  // A mage walks the street with the crew. What matters mechanically
+  // is that DIRECT spells reach past armour and INDIRECT ones do not,
+  // that sustaining costs the caster while it is held, and that every
+  // out-of-combat effect lands on a hook that already existed rather
+  // than a parallel system.
+  function class17_spells() {
+    const rng = MJ.makeRNG("stress-spells");
+    const mage = MJ.generateRunner(rng.fork("m"), {});
+    mage.attributes.magic = 5; mage.attributes.willpower = 5;
+    mage.skills.sorcery = 5; mage.skills.assensing = 6; mage.wounds = 0;
+
+    // A mundane cannot cast, whatever their skills say.
+    const mundane = MJ.generateRunner(rng.fork("mun"), {});
+    mundane.attributes.magic = 0; mundane.skills.sorcery = 6;
+    check(MJ.spellsFor(mundane).length === 0, "C17: no Magic means no spells, whatever the skill sheet says");
+    check(MJ.spellsFor(mage).length > 0, "C17: a mage with sorcery has a spell list");
+
+    // The table itself must be coherent.
+    for (const id of Object.keys(MJ.SPELLS)) {
+      const def = MJ.SPELLS[id];
+      check(MJ.SPELL_CATEGORIES.indexOf(def.category) !== -1, "C17: " + id + " has an unknown category");
+      check(!!def.label && !!def.skill, "C17: " + id + " needs a label and a governing skill");
+      if (def.direct) check(def.combat, "C17: " + id + " is direct but not usable in combat");
+    }
+
+    // ── Direct vs indirect: the distinction that earns its keep ───
+    const tank = () => MJ.makeCombatant(
+      { label: "Hardsuit", attributes: { body: 6, willpower: 4, agility: 4, intelligence: 3 }, skills: { firearms: 5 } },
+      { side: "enemy", armour: 12 });
+    const cast = (spellId, i) => {
+      const t = tank();
+      const c = MJ.beginCombat(MJ.makeRNG("sp" + spellId + i), [MJ.makeCombatant(mage, { side: "crew" })], [t], {});
+      return MJ.spellCombatAction(c, c.combatants[0], spellId, t, { force: 5 });
+    };
+    let directArmour = null, indirectArmour = null, directDmg = 0, indirectDmg = 0;
+    for (let i = 0; i < 120; i++) {
+      const d = cast("manabolt", i), f = cast("fireball", i);
+      if (d.armourApplied !== undefined) directArmour = d.armourApplied;
+      if (f.armourApplied !== undefined) indirectArmour = f.armourApplied;
+      directDmg += d.damage || 0; indirectDmg += f.damage || 0;
+    }
+    check(directArmour === 0, "C17: a DIRECT spell must ignore armour entirely (saw " + directArmour + ")");
+    check(indirectArmour === 12, "C17: an INDIRECT spell must face armour normally (saw " + indirectArmour + ")");
+    check(directDmg > indirectDmg,
+      "C17: against heavy armour, direct magic must outperform indirect (" + directDmg + " vs " + indirectDmg + ")");
+
+    // ── Sustaining costs you while you hold it ────────────────────
+    const c2 = MJ.beginCombat(MJ.makeRNG("sus"), [MJ.makeCombatant(mage, { side: "crew" })], [tank()], {});
+    const me = c2.combatants[0];
+    const actionsBefore = MJ.actionsFor(me), accBefore = MJ.effectModifier(me, "accuracy");
+    MJ.spellCombatAction(c2, me, "increaseReflexes", me, { force: 4 });
+    check(MJ.actionsFor(me) > actionsBefore, "C17: Increase Reflexes must buy an action through the initiativeDice channel");
+    check(MJ.effectModifier(me, "accuracy") < accBefore, "C17: sustaining must cost the caster while it is held");
+    check(MJ.hasEffect(me, "sustaining"), "C17: a sustained spell must be visible as an effect");
+    MJ.dropSustained(me, "increaseReflexes");
+    check(MJ.actionsFor(me) === actionsBefore && MJ.effectModifier(me, "accuracy") === accBefore,
+      "C17: dropping a sustained spell must return both the benefit and the cost");
+
+    // ── Out of combat: every effect lands on an existing hook ─────
+    const site = MJ.mintSite("stress-spell-u", 4);
+    const crew = makeRoster(rng.fork("crew"), 2);
+    for (const r of crew) { MJ.watchRunner(r, rng); MJ.hireRunner(r, "permanent"); }
+    MJ.watchRunner(mage, rng); MJ.hireRunner(mage, "permanent");
+    const run = MJ.beginMission(rng.fork("run"), { site: site, kind: "jobObjective", objective: {} }, [mage].concat(crew), 1);
+
+    const drive = (spellId, force) => {
+      const c = MJ.castSpell(rng.fork("c" + spellId), mage, spellId, { force: force });
+      let g = 0;
+      while (!MJ.latticeDone(c.lattice) && g++ < 20) {
+        const v = MJ.latticeRead(c.lattice);
+        const open = v.threads.filter((t) => !t.cut);
+        if (!open.length) break;
+        const want = v.shape[(v.built || []).length];
+        MJ.latticePull(c.lattice, ((want && open.find((t) => t.resonance === want)) || open[0]).id);
+      }
+      MJ.finishCast(rng.fork("f" + spellId), c);
+      return { cast: c, applied: MJ.applySpellToRun(run, mage, c) };
+    };
+
+    const conceal = (run.concealment || 0);
+    const inv = drive("invisibility", 4);
+    if (inv.cast.success) {
+      check((run.concealment || 0) > conceal,
+        "C17: Invisibility must feed run.concealment — the hook built for exactly this");
+      check((run.sustaining || []).some((s) => s.spell === "invisibility"),
+        "C17: a sustained spell must be recorded on the run");
+    }
+    mage.wounds = 4;
+    const healed = drive("heal", 5);
+    if (healed.cast.success) check(mage.wounds < 4, "C17: Heal must close boxes on the physical track");
+    const det = drive("detectLife", 3);
+    if (det.cast.success) check(!!(run.revealed && run.revealed.life), "C17: Detection must buy knowledge on the run");
+
+    // ── Overcasting bites, through the existing SR5 path ──────────
+    const over = MJ.castSpell(rng.fork("ov"), mage, "fireball", { force: MJ.maxForceFor(mage) });
+    MJ.latticeAbandon(over.lattice);
+    MJ.finishCast(rng.fork("ovf"), over);
+    check(over.drain.overcast === true, "C17: pushing past Magic must register as overcasting");
+    check(over.drain.physical === true, "C17: overcast Drain must be PHYSICAL, not stun");
+
+    // Unknown and untrained cast nothing.
+    check(MJ.castSpell(rng, mage, "nonesuch", {}).ok === false, "C17: an unknown spell cannot be cast");
+    check(MJ.castSpell(rng, mundane, "manabolt", {}).ok === false, "C17: an untrained caster cannot cast");
+  }
+
   // ── Class 16: the Lattice — the astral's own grammar ────────────
   // Magic is a structure you manipulate, not a roll you make. The
   // load-bearing property is that the RUNNER's stats set the puzzle:
@@ -2036,6 +2142,7 @@
       ["14. Site condition — the first word of the address", class14_conditions],
       ["15. The shared frame — modes and the world seam", class15_tempo],
       ["16. The Lattice — the astral's own grammar", class16_lattice],
+      ["17. Spells in meatspace", class17_spells],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
