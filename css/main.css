@@ -595,3 +595,27 @@ body.railed .framebar { left: 300px; }
   font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
   color: var(--dim); display: block; margin-bottom: 3px;
 }
+
+/* ── Site links ───────────────────────────────────────────────────
+   The address key is a way IN, not a label. It has to LOOK like one:
+   a link nobody can tell is a link is not a link, however correctly
+   the handler fires. */
+.sitelink {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--accent-2);
+  cursor: pointer;
+}
+.sitelink:hover {
+  color: var(--accent);
+  text-decoration-style: solid;
+  text-decoration-color: var(--accent);
+}
+.sitelink::after {
+  content: " \2197";
+  font-size: 0.78em;
+  color: var(--accent-2);
+}
+.sitelink:hover::after { color: var(--accent); }
