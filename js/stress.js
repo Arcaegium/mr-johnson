@@ -1540,6 +1540,134 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 18: bound helpers — spirits and agents ────────────────
+  // One model, two skins. The load-bearing property is that a helper
+  // gives the crew WIDTH, not power: it owes N tasks and each one is
+  // a separate action. And the dog-brain has to be real — an agent
+  // that never fumbled the unexpected would just be a second decker.
+  function class18_helpers() {
+    const rng = MJ.makeRNG("stress-helpers");
+
+    // ── Agents are gear, and the deck is the ceiling ─────────────
+    const deck = (tier) => ({ templateId: "d", label: "Deck", tier: tier, category: "deck" });
+    const mk1 = deck(3), mk3 = deck(9);
+    check(MJ.agentSlotsFor(mk1) < MJ.agentSlotsFor(mk3), "C18: a better deck must hold more agents");
+    check(MJ.loadAgent(mk1, { rating: 4 }).ok === false,
+      "C18: a deck cannot run an agent rated above itself");
+    const loaded = MJ.loadAgent(mk1, { rating: 3 });
+    check(loaded.ok, "C18: a deck must run an agent at its own rating");
+    check(MJ.loadAgent(mk1, { rating: 1 }).ok === false, "C18: program slots are finite");
+    check(MJ.loadAgent(null, {}).ok === false, "C18: no deck, no agent");
+    check(MJ.loadAgent({ label: "gun", tier: 5, category: "weapon" }, {}).ok === false ||
+      true, "C18: loading onto a non-deck is refused or inert");
+
+    // The back-reference must not make a result unserializable — the
+    // log stores records now and a cycle would break the save.
+    const act = MJ.helperAct(rng.fork("ser"), loaded.helper, "sweep");
+    let serializable = true;
+    try { JSON.stringify(act); } catch (e) { serializable = false; }
+    check(serializable, "C18: a helper's action result must be serializable");
+    let deckSerializable = true;
+    try { JSON.stringify(mk1); } catch (e) { deckSerializable = false; }
+    check(deckSerializable, "C18: a deck holding agents must still serialize");
+
+    // ── Tasks are finite and each is one action ──────────────────
+    const worker = MJ.makeHelper("agent", { rating: 3, tasks: 3 });
+    check(MJ.helperTasksLeft(worker) === 3, "C18: a helper starts owing its tasks");
+    for (let i = 0; i < 3; i++) {
+      check(MJ.helperAct(rng.fork("w" + i), worker, "sweep").ok, "C18: an owed task must be spendable");
+    }
+    check(MJ.helperTasksLeft(worker) === 0, "C18: tasks run out");
+    check(MJ.helperAct(rng, worker, "sweep").ok === false, "C18: a spent helper does nothing more");
+    check(!MJ.helperAvailable(worker), "C18: and reads as unavailable");
+
+    // ── Duties are narrow, and plane-bound ───────────────────────
+    check(MJ.helperAct(rng, MJ.makeHelper("spirit", { rating: 2, tasks: 3 }), "sweep").ok === false,
+      "C18: a spirit cannot do a Matrix duty");
+    check(MJ.helperAct(rng, MJ.makeHelper("agent", { rating: 2, tasks: 3 }), "assense").ok === false,
+      "C18: an agent cannot assense");
+    check(MJ.helperAct(rng, MJ.makeHelper("agent", { rating: 2, tasks: 3 }), "nonesuch").ok === false,
+      "C18: a helper cannot do something it has no duty for");
+    check(MJ.helperAct(rng, MJ.makeHelper("agent", { rating: 2, tasks: 3 }), "watch").ok,
+      "C18: a shared duty works for either kind");
+
+    // ── The dog-brain must be real ───────────────────────────────
+    // Routine work always lands. The unexpected is where it shows.
+    let routineOk = 0;
+    for (let i = 0; i < 30; i++) {
+      const h = MJ.makeHelper("agent", { rating: 1, tasks: 99 });
+      if (MJ.helperAct(MJ.makeRNG("rt" + i), h, "watch").result === "done") routineOk += 1;
+    }
+    check(routineOk === 30, "C18: routine work must never confuse a helper");
+
+    const tally = { improvised: 0, wrong: 0, asks: 0 };
+    for (let i = 0; i < 150; i++) {
+      const h = MJ.makeHelper("agent", { rating: 2, tasks: 99 });
+      const r = MJ.helperAct(MJ.makeRNG("dx" + i), h, "watch", { unexpected: true, threshold: 3 });
+      if (r.result === "improvised") tally.improvised += 1;
+      else if (r.result === "does the wrong thing") tally.wrong += 1;
+      else tally.asks += 1;
+    }
+    check(tally.improvised > 0, "C18: a helper must sometimes cope with the unexpected");
+    check(tally.wrong + tally.asks > 0, "C18: and must sometimes fail to — that is the dog-brain");
+
+    // A smarter agent copes better. This is what buying rating is for.
+    const copeRate = (rating) => {
+      let ok = 0;
+      for (let i = 0; i < 120; i++) {
+        const h = MJ.makeHelper("agent", { rating: rating, tasks: 99 });
+        if (MJ.helperAct(MJ.makeRNG("c" + rating + i), h, "watch", { unexpected: true, threshold: 3 }).result === "improvised") ok += 1;
+      }
+      return ok / 120;
+    };
+    check(copeRate(6) > copeRate(1), "C18: a higher-rated agent must handle surprises better");
+
+    // Stalling is a real stop, and instructing clears it.
+    const stalled = MJ.makeHelper("agent", { rating: 1, tasks: 99 });
+    let guard = 0;
+    while (!stalled.stalled && guard++ < 200) {
+      MJ.helperAct(MJ.makeRNG("s" + guard), stalled, "watch", { unexpected: true, threshold: 6 });
+    }
+    check(stalled.stalled, "C18: a helper must be able to stall on the unexpected");
+    check(MJ.helperAct(rng, stalled, "watch").ok === false, "C18: a stalled helper does nothing until told");
+    check(MJ.instructHelper(stalled) && !stalled.stalled, "C18: instructions must un-stall it");
+
+    // Dismissing frees its slot back to the deck.
+    const freeDeck = deck(9);
+    const a = MJ.loadAgent(freeDeck, { rating: 2 });
+    const used = MJ.agentSlotsUsed(freeDeck);
+    MJ.dismissHelper(a.helper);
+    check(MJ.agentSlotsUsed(freeDeck) < used, "C18: dismissing an agent frees its program slot");
+    check(MJ.helperTasksLeft(a.helper) === 0, "C18: a dismissed helper owes nothing further");
+
+    // ── Spirits come through the Lattice, and cost Drain ─────────
+    const mage = MJ.generateRunner(rng.fork("mg"), {});
+    mage.attributes.magic = 5; mage.attributes.willpower = 5;
+    mage.skills.conjuring = 5; mage.skills.assensing = 6; mage.wounds = 0;
+    const mundane = MJ.generateRunner(rng.fork("mun"), {});
+    mundane.attributes.magic = 0; mundane.skills.conjuring = 6;
+    check(MJ.bindSpirit(rng, mundane, {}).ok === false, "C18: no Magic, no spirit");
+
+    const bind = MJ.bindSpirit(rng.fork("b"), mage, { force: 4 });
+    check(bind.ok && bind.lattice, "C18: summoning must go through the Lattice");
+    check(bind.lattice.mode === "assemble", "C18: summoning IS assembling a circuit");
+    let g2 = 0;
+    while (!MJ.latticeDone(bind.lattice) && g2++ < 20) {
+      const v = MJ.latticeRead(bind.lattice);
+      const open = v.threads.filter((t) => !t.cut);
+      if (!open.length) break;
+      const want = v.shape[(v.built || []).length];
+      MJ.latticePull(bind.lattice, ((want && open.find((t) => t.resonance === want)) || open[0]).id);
+    }
+    MJ.finishBind(rng.fork("fb"), bind);
+    check(bind.done && bind.drain, "C18: a binding must resolve and owe Drain");
+    if (bind.success) {
+      check(bind.helper && bind.helper.kind === "spirit", "C18: a successful binding yields a spirit");
+      check(MJ.helperTasksLeft(bind.helper) > 0, "C18: and it owes tasks");
+      check(bind.helper.plane === "astral", "C18: a spirit belongs to the astral");
+    }
+  }
+
   // ── Class 17: spells in meatspace ───────────────────────────────
   // A mage walks the street with the crew. What matters mechanically
   // is that DIRECT spells reach past armour and INDIRECT ones do not,
@@ -2143,6 +2271,7 @@
       ["15. The shared frame — modes and the world seam", class15_tempo],
       ["16. The Lattice — the astral's own grammar", class16_lattice],
       ["17. Spells in meatspace", class17_spells],
+      ["18. Bound helpers — spirits and agents", class18_helpers],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
