@@ -1,8 +1,8 @@
 # Mr. Johnson — System State
 
-**The volatile document.** `UNDERSTANDING.md` is what the game is;
-`BUILD-PLAN.md` is how we build it; this is **what is actually in the code
-right now**, what is a placeholder, and what is built-but-unreachable.
+**The volatile document, and one of only two.** `UNDERSTANDING.md` is what the
+game is and how we build it; this is **what is actually in the code right now**,
+what is a placeholder, what is built-but-unreachable, and what happens next.
 
 Update this whenever a system lands. If it disagrees with the code, the code
 wins and this file is stale — verify before trusting a line here.
@@ -103,7 +103,7 @@ js/models/verbs.js    230  VERBS x PROPERTIES. VERBS verbDef verbsFor
                            verbReaches verbLands verbWhyNot verbThreat
                            -- two gates: PRESENCE (can it reach) then NATURE
                               (does it land). Built but NOT yet driving
-                              missionPrompt -- see PILLAR-PLAN steps 3-4.
+                              missionPrompt -- see section 7, the open refactor.
 js/models/lattice.js  330  THE ASTRAL PUZZLE. beginLattice latticePull
                            latticeAbandon latticeDone latticeRead latticeDrain
                            latticeMoveStrength latticeReadDepth
@@ -294,7 +294,7 @@ byte-identical state" true.
 ## 4. WHAT IS BUILT BUT INVISIBLE / UNREACHABLE
 
 **This is the coverage target for the console build-out.** See
-`BUILD-PLAN.md` §5.
+section 7 below.
 
 | system | exists | surfaced? |
 |---|---|---|
@@ -354,16 +354,114 @@ Anything here is a dial, not a decision.
 
 ---
 
-## 7. IMMEDIATE NEXT WORK
+---
 
-1. **The console rebuild** (see `BUILD-PLAN.md` §5 and `UNDERSTANDING.md` §10
-   CURRENT DIRECTION). Decisions still open: home/level-0 tab?
-   where Medicae and Contacts land? is Runners one widget or three?
-2. **Runner career record** — data model first, then the sheet.
-3. **Simultaneity** — the last Phase 2 item, gated on the console.
-4. **Postures versus geometry.** The posture effects are position expressed as a
-   menu choice. When the top-down street arrives it supplies real position, and
-   `cover` becomes ground the crew is standing behind rather than a posture they
-   select — but it stays the same effect on the same channels, so the spatial
-   layer changes what APPLIES it, not what it does. Conditions and boons are
-   unaffected. The three-gate chain does not move.
+## 7. THE PLAN OF RECORD
+
+| phase | what gets built | ends when |
+|---|---|---|
+| **0** Foundation | three data models (runner, site, save), seeded RNG, day clock, save/load. A dev harness to inspect generated state. | generate runners and sites from seeds, save and reload them. **✅ DONE** |
+| **1** Management Game | hub console, job board, roster/market, hire/watch/retain, gear armory, **quick-resolve missions**, market state machine. | **GO/NO-GO GATE** — is the roster loop fun? **✅ DONE** (console work continues, §5) |
+| **2** Text Missions | all three pillars as **scene-text**. Matrix node-crawl, meatspace scene-and-roll, astral sense-and-resolve, multi-front ops. Play-through vs quick-resolve becomes a real choice. | the **whole game** is playable in text — every pillar, every system. **◀ CURRENT** |
+| **3+** Visual Layer | rendering laid over the proven core, one pillar at a time (Matrix cheapest first). Then depth & content: crafting benches, tag/combo, faction-heat, job variety, balance, art. | never — the "infinite game" content, added at leisure from a position of a working, fun game |
+
+**The critical property:** after Phase 1 there is a shippable game, and every
+phase after is independent and optional. Stop, pause or reorder between phases
+and it stays playable.
+
+---
+
+---
+
+### Phase 2 status
+
+| id | item | status |
+|----|------|--------|
+| P2.0 | Attributes into the dice pool | **DONE** |
+| P2.1 | Extended tests | **DONE** |
+| P2.2 | Turn-based mode | **DONE** — engine and wired |
+| P2.3 | Combat, health, Drain, death | **DONE** |
+| P2.4 | Planes and witnessing | **DONE** |
+| P2.5 | Pillar scene-text | **DONE** — all three built, each with its own verbs and its own pressure clock |
+| P2.6 | Obstacles as situations | **IN PROGRESS** — verbs × properties; foundation landed, `missionPrompt` switch remains |
+| P2.7 | The shared frame | **DONE** — free ⇄ turn-based, combat forces it; world-seam inert by constraint |
+| P2.8 | The Lattice, spells, bound helpers | **DONE** |
+| P2.9 | Simultaneity | remaining — the last Phase 2 item, following the console build-out |
+
+**Where the live detail is:** the open-refactor subsection below.
+
+---
+
+---
+
+### The open refactor: verbs × properties
+
+The model is in `UNDERSTANDING.md` §11.5. Two steps remain, and they land
+together because the second depends on the first:
+
+1. **`missionPrompt` builds options from verbs × properties** instead of
+   iterating hand-authored affordances. Damaging verbs route through the
+   three-gate chain against `armour`/`structure`. This is the breaking change,
+   and the probe classes written against affordance lists migrate in the same
+   commit.
+2. **Discovery annotates instead of removing.** Hopeless verbs stay on the menu,
+   resolve as failure, and are thereafter marked ineffective. Watsonian
+   immunities currently *delete* an option (`available: !!best && !known`) and
+   must become annotations.
+
+`js/models/verbs.js` and the properties on `OBSTACLE_TEMPLATES` are built and
+green; nothing is driving play from them yet.
+
+---
+
+### The console build-out
+
+The hub console is the instrument panel over the mechanics
+(`UNDERSTANDING.md` §0.II, §10). Phase 1 delivered a working v0; the mechanics
+have since grown well past what it surfaces, so the next pass gives every system
+a home.
+
+**It also unblocks the last Phase 2 item.** *Simultaneity* — multi-front
+operations — needs a UI that can convey several teams acting in one day against
+one site. The console build-out is that UI.
+
+### The coverage goal
+`SYSTEM-STATE.md` §4 holds the live table of what is built and where it should
+surface. In summary, the console should give a home to:
+
+- **Runners:** the full skill list including zeros, career record, bench value
+  alongside field value, health tracks, initiative, weapon profile.
+- **Sites:** the host graph, room layout, obstacle inventory, loot table, and the
+  live Min/Current/Max per axis.
+- **Recon:** the obstacle knowledge it buys, surfaced **on the contract**, since
+  that is where prep decisions are made.
+- **Gear:** Power, AP, armour rating, crafted quality and mark, on a card.
+- **Run state:** Drain, tether, extended-test progress, ammunition, the data
+  haul — legible during a run and recorded after it.
+
+### The bar
+A console that can show the systems is one that can be used to **judge** the
+systems, which is why this rung is built first. It stays plain; the drawn CRT
+terminal in Phase 3 is a later rendering of the same model.
+
+### The model/renderer split
+The console and the pillar worlds both read the same state and issue the same
+operations — a street mission needs the crew, their loadout, the site, the intel.
+A layer that *describes* console state and operations lets the text renderer and
+the CRT renderer be two consumers of one model. Same move `MJ.decide` made for
+prompts, one level up.
+
+---
+
+---
+
+### After that
+- **Simultaneity** — the last Phase 2 item, gated on the console.
+- **Runner career record** — data model first, then the sheet.
+- **The astral is thin** — routes measure p50 0 obstacles, max 4. The mechanism
+  is sound; there is almost no content in it. Cheapest real improvement
+  available.
+- **Postures versus geometry** — the posture effects are position expressed as a
+  menu choice. The top-down street supplies real position later; `cover` stays
+  the same effect on the same channels, so the spatial layer changes what
+  APPLIES it, not what it does.

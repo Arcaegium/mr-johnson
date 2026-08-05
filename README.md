@@ -15,22 +15,21 @@ browser's local storage. Saves live on the device you played on.
 
 ## Design documents
 
-> **Working on this? Read `docs/UNDERSTANDING.md` first, every time.** It is
-> written for an AI assistant's recall and opens with the four pillars of
-> perspective that orient every decision. `docs/BUILD-PLAN.md` is how we build;
-> `docs/SYSTEM-STATE.md` is what is currently in the code.
+**Two, and only two.** Both are written for an AI assistant's recall rather than
+for a human reader.
 
-| document | in this repo | living artifact |
-|---|---|---|
-| **Understanding** — what the game is; read first | [`docs/UNDERSTANDING.md`](docs/UNDERSTANDING.md) | — |
-| **System state** — what's built, placeholder, or orphaned | [`docs/SYSTEM-STATE.md`](docs/SYSTEM-STATE.md) | — |
-| *Current understanding (HTML)* — the older prose version, kept for the §NN section numbers the code cites | [`docs/current-understanding.html`](docs/current-understanding.html) | [artifact](https://claude.ai/code/artifact/43d59edd-4438-4069-af3b-f9262adacff8) |
-| **Build plan** — phases, the fidelity ladder, working practices | [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) · [older HTML](docs/build-plan.html) | [artifact](https://claude.ai/code/artifact/225900e6-99bc-408a-9ea7-0533d727140d) |
-| **Phase 2 work plan** — the current phase, in dependency order | [`docs/PHASE-2-PLAN.md`](docs/PHASE-2-PLAN.md) | [artifact](https://claude.ai/code/artifact/ae02034e-d2a1-4496-9828-fc84d275eba3) |
+| document | what it is |
+|---|---|
+| [`docs/UNDERSTANDING.md`](docs/UNDERSTANDING.md) | **what the game is, and how we build it.** Read first, every session. Opens with the four pillars of perspective, which decide most questions on their own. |
+| [`docs/SYSTEM-STATE.md`](docs/SYSTEM-STATE.md) | **what is in the code right now** — built, placeholder, built-but-unreachable — and what happens next. |
 
-The artifacts are the editable originals; the repo copies are the durable
-mirror, so nothing is lost if a link goes stale. **When you change one, update
-the other** — a stale mirror is worse than no mirror.
+Earlier sessions produced a build plan, a phase plan, a pillar plan and two HTML
+artifacts. All of it is folded into these two or deleted. If you go looking for a
+third document, it does not exist.
+
+`§NN` in code comments is dead numbering from a retired HTML version of the
+design; it does not match the sections in `UNDERSTANDING.md`. Ignore it, and
+strip it when you touch the surrounding comment.
 
 Phase 0 (foundation) and Phase 1 (management game) are complete. **Phase 2 —
 Text Missions — is the current work.**
