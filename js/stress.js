@@ -1540,6 +1540,113 @@
     check(!!hardCase, "C12: a full-track patient must still be treatable");
   }
 
+  // ── Class 20: the Matrix pillar's verbs ─────────────────────────
+  // The Genesis reference: a PERSONA crawling geometric node
+  // structures, dodging IC, to take data or crash the system. The
+  // host graph existed here for a long time without the verbs to
+  // treat it as one. The pillar's identity is OVERWATCH: a decker is
+  // arithmetically hunted from the moment they touch anything, which
+  // no other pillar is.
+  function class20_matrix() {
+    const rng0 = MJ.makeRNG("stress-matrix");
+    const deckerFor = (i) => {
+      const d = MJ.generateRunner(rng0.fork("d" + i), {});
+      d.skills.hacking = 6; d.skills.computer = 5;
+      d.attributes.intelligence = 5; d.wounds = 0;
+      MJ.watchRunner(d, rng0); MJ.hireRunner(d, "permanent");
+      return d;
+    };
+    let run = null;
+    for (let i = 0; i < 300 && !run; i++) {
+      const site = MJ.mintSite("stress-mx-u", i);
+      if (!site.host || site.host.nodes.length < 4) continue;
+      const r = MJ.beginMission(rng0.fork("r" + i), MJ.createMatrixMission(site, { wantData: true }), [deckerFor(i)], 1);
+      if (r.hostRoute && r.hostRoute.host) run = r;
+    }
+    check(!!run, "C20: the probe needs a host with a real graph");
+    if (!run) return;
+
+    check(MJ.isMatrixRun(run), "C20: a Matrix mission must read as one");
+    const p = MJ.matrixPrompt(run);
+    check(p && p.pillar === "matrix", "C20: the Matrix prompt must name its own pillar");
+    for (const v of ["traverse", "probe", "run", "exfiltrate", "jackOut"]) {
+      check(p.options.some((o) => o.verb === v), "C20: the Matrix must offer " + v);
+    }
+    // Different grammar, not different nouns: astral verbs must not
+    // exist here, and Matrix verbs must not exist on a street run.
+    check(MJ.astralPrompt(run) === null, "C20: astral verbs must not exist on a Matrix run");
+    const streetRun = MJ.beginMission(rng0.fork("st"),
+      { site: MJ.mintSite("stress-mx-u", 3), kind: "jobObjective", objective: {} }, [deckerFor("s")], 1);
+    check(MJ.matrixPrompt(streetRun) === null, "C20: Matrix verbs must not exist on a street run");
+
+    // ── Overwatch is the clock, and every act shows its price ────
+    const ow0 = MJ.overwatchOf(run);
+    check(ow0.score === 0 && ow0.convergence === 40, "C20: a run starts unhunted, converging at 40");
+    check(p.options.every((o) => typeof o.overwatchCost === "number"),
+      "C20: every verb must price itself on the clock, since that IS the decision");
+    check(MJ.MATRIX_OVERWATCH_COST.exfiltrate > MJ.MATRIX_OVERWATCH_COST.traverse,
+      "C20: taking data must cost more than moving");
+    check(MJ.MATRIX_OVERWATCH_COST.probe > 0,
+      "C20: probing must cost the clock — the knowledge that saves you is bought with what kills you");
+
+    MJ.matrixAct(rng0.fork("t"), run, "probe");
+    check(MJ.overwatchOf(run).score > 0, "C20: acting must raise Overwatch");
+
+    // ── The persona walks a topology ─────────────────────────────
+    const adj = MJ.matrixAdjacent(run);
+    check(adj.length > 0, "C20: there must be somewhere to go from the entry node");
+    const before = run.node === undefined ? 0 : run.node;
+    const moved = MJ.matrixAct(rng0.fork("m"), run, "traverse", { node: adj[0] });
+    check(moved.ok && run.node === adj[0], "C20: traversing must move the persona");
+    check(MJ.matrixAct(rng0, run, "traverse", { node: 999 }).ok === false,
+      "C20: you cannot reach a node that is not adjacent");
+
+    // ── A store holds what it holds ──────────────────────────────
+    const dataRun = (() => {
+      for (let i = 0; i < 300; i++) {
+        const site = MJ.mintSite("stress-mx-u", i);
+        if (!site.host) continue;
+        const node = (site.host.nodes || []).find((n) => n.holdsData);
+        if (!node) continue;
+        const r = MJ.beginMission(rng0.fork("dr" + i), MJ.createMatrixMission(site, { wantData: true }), [deckerFor("dd" + i)], 1);
+        if (r.hostRoute && r.hostRoute.host) { r.node = node.id; return r; }
+      }
+      return null;
+    })();
+    if (dataRun) {
+      const first = MJ.matrixAct(rng0.fork("x1"), dataRun, "exfiltrate");
+      check(first.ok, "C20: a data node must be strippable");
+      const again = MJ.matrixAct(rng0.fork("x2"), dataRun, "exfiltrate");
+      check(again.ok === false,
+        "C20: a store holds what it holds — milking one node forever would make the topology pointless");
+      const promptAfter = MJ.matrixPrompt(dataRun);
+      check(!promptAfter.options.find((o) => o.verb === "exfiltrate").available,
+        "C20: and the prompt must stop offering it");
+    }
+
+    // ── Convergence ends the run, whatever else was going well ───
+    const doomed = MJ.beginMission(rng0.fork("dm"),
+      MJ.createMatrixMission(MJ.mintSite("stress-mx-u", 5), { wantData: true }), [deckerFor("dm")], 1);
+    MJ.raiseOverwatch(doomed, 40);
+    check(MJ.overwatchOf(doomed).converged, "C20: reaching 40 must converge");
+    check(MJ.threatBand(doomed.state, doomed.day) === "threatening",
+      "C20: convergence means the host has located the persona");
+    check(MJ.matrixAct(rng0, doomed, "traverse").ok === false,
+      "C20: once converged, the only move left is out");
+    const outNow = MJ.matrixAct(rng0.fork("jo"), doomed, "jackOut");
+    check(outNow.ok && outNow.traced, "C20: jacking out while traced must register as being yanked");
+    check(doomed.downed && doomed.downed.size > 0,
+      "C20: being yanked hurts — that is what makes convergence something to fear");
+
+    // Leaving clean costs nothing.
+    const calm = MJ.beginMission(rng0.fork("cl"),
+      MJ.createMatrixMission(MJ.mintSite("stress-mx-u", 6), { wantData: true }), [deckerFor("cl")], 1);
+    const clean = MJ.matrixAct(rng0.fork("jo2"), calm, "jackOut");
+    check(clean.ok && !clean.traced, "C20: an untraced decker walks away clean");
+
+    check(MJ.matrixAct(rng0, run, "nonesuch").ok === false, "C20: the Matrix has its own verbs and only those");
+  }
+
   // ── Class 19: the astral pillar's verbs ─────────────────────────
   // What a projecting mage can do that nobody else can, and what it
   // costs. The pillar is defined by its clock: out here the currency
@@ -2397,6 +2504,7 @@
       ["17. Spells in meatspace", class17_spells],
       ["18. Bound helpers — spirits and agents", class18_helpers],
       ["19. The astral pillar's verbs", class19_astral],
+      ["20. The Matrix pillar's verbs", class20_matrix],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
