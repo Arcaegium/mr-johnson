@@ -188,38 +188,39 @@ a.navlink:hover { text-decoration: underline; }
   position: fixed; inset: 0; z-index: 50;
   background: rgba(6, 9, 13, 0.82);
   display: flex; align-items: center; justify-content: center;
-  padding: 24px 16px;
+  padding: 18px 14px;
 }
 .modal {
   background: var(--panel); border: 1px solid var(--line);
-  width: 100%; max-width: 620px; max-height: 100%;
+  width: 100%; max-width: 1080px; max-height: 100%;
   display: flex; flex-direction: column;
-  font-family: var(--mono); font-size: 15px; color: var(--ink);
+  font-family: var(--mono); font-size: 17px; color: var(--ink);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
 }
-.modal-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
-.modal-title { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; font-size: 13.5px; }
-.modal-sub { margin-top: 4px; font-size: 14px; }
-.modal-context { padding: 10px 16px; border-bottom: 1px solid var(--line); line-height: 1.6; }
+.modal-head { padding: 16px 22px 12px; border-bottom: 1px solid var(--line); }
+.modal-title { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; }
+.modal-sub { margin-top: 5px; font-size: 16px; }
+.modal-context { padding: 13px 22px; border-bottom: 1px solid var(--line); line-height: 1.7; }
 .modal-transcript {
-  padding: 10px 16px; border-bottom: 1px solid var(--line);
-  max-height: 230px; overflow-y: auto; line-height: 1.75; font-size: 14px;
+  padding: 13px 22px; border-bottom: 1px solid var(--line);
+  /* The transcript IS the run. It gets room to be read. */
+  max-height: 46vh; overflow-y: auto; line-height: 1.8; font-size: 16px;
 }
-.modal-heading { padding: 12px 16px 4px; line-height: 1.5; }
-.modal-heading .ask { color: var(--dim); margin-top: 7px; font-size: 14px; }
-.modal-options { padding: 6px 16px 12px; overflow-y: auto; }
-.modal-actions { padding: 10px 16px; border-top: 1px solid var(--line); text-align: right; }
+.modal-heading { padding: 15px 22px 6px; line-height: 1.55; }
+.modal-heading .ask { color: var(--dim); margin-top: 9px; font-size: 16px; }
+.modal-options { padding: 8px 22px 14px; overflow-y: auto; }
+.modal-actions { padding: 13px 22px; border-top: 1px solid var(--line); text-align: right; }
 
 button.opt {
   display: block; width: 100%; text-align: left;
-  margin: 4px 0; padding: 8px 10px;
+  margin: 5px 0; padding: 11px 14px;
   background: #0d131a; border: 1px solid var(--line); color: var(--ink);
-  font-family: var(--mono); font-size: 15px; letter-spacing: 0; cursor: pointer;
+  font-family: var(--mono); font-size: 17px; letter-spacing: 0; cursor: pointer;
   /* The panel shouts its buttons in caps; prose options must not. */
   text-transform: none;
 }
 button.opt:hover { background: #18222d; border-color: var(--accent-2); color: var(--ink); }
-button.opt .opt-meta { display: block; margin-top: 4px; font-size: 13px; }
+button.opt .opt-meta { display: block; margin-top: 5px; font-size: 15px; }
 button.opt.dead { opacity: 0.45; cursor: not-allowed; }
 button.opt.dead:hover { background: #0d131a; border-color: var(--line); }
 button.warn-btn { border-color: #d4735e; color: #d4735e; }
@@ -624,7 +625,7 @@ body.railed .framebar { left: 300px; }
    a long firefight reads as one block rather than flooding the
    transcript. */
 .fightlog {
-  margin: 4px 0 2px 14px; padding-left: 8px;
+  margin: 5px 0 3px 16px; padding-left: 10px;
   border-left: 1px solid var(--line);
-  font-size: 0.86em; line-height: 1.5;
+  font-size: 0.9em; line-height: 1.6;
 }
