@@ -197,15 +197,25 @@
       describe: "nothing to hide from if nothing is watching the wire",
     },
     sleaze: {
-      pillar: "matrix", label: "pass as legitimate traffic", skill: "computer",
+      pillar: "matrix", label: "pass as legitimate traffic", skill: "hacking",
       loud: false, threat: "AWKWARD", escalates: true,
       describe: "credentials it has no reason to doubt",
     },
-    attackIce: {
-      pillar: "matrix", label: "hammer it down", skill: "hacking",
-      damaging: true, loud: true, threat: "THREATENING", weapon: "blackHammer",
-      describe: "brute force, in the only currency code understands",
-    },
+    // ── There is no Matrix attack verb, and that is deliberate ─────
+    // `attackIce` used to sit here and it was a category error. A
+    // physical attack is one body applying force to another body:
+    // Power against Armour, damage against a track, and when the
+    // track fills the thing is on the floor. None of that describes
+    // the Matrix. You do not out-muscle a host — every real way past
+    // a system is to be taken for someone who belongs there
+    // (`sleaze`), to not be seen at all (`maskIcon`), or to talk to
+    // the device in its own protocol (`hackDevice`). Dressing brute
+    // force up as a fourth option made all three of those optional.
+    //
+    // Black ICE is why the removal matters rather than being a
+    // tidy-up: `fights: true` is exactly the thing hackDevice cannot
+    // touch, so the decker who meets one has to go quiet or go
+    // legitimate. That is a real decision. "Hammer it down" was not.
 
     // ── Astral pillar ────────────────────────────────────────────
     // ── Assensing is NOT here, and that is the point ─────────────

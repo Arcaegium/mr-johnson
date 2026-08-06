@@ -175,7 +175,21 @@
       // things that can fight turn a violent approach into an
       // actual exchange rather than target practice.
       fights: true,
-      armour: 3, weapon: "smg",
+      armour: 3,
+      // TIER BUYS BETTER GUNS. mission.js's own note on tier says what
+      // a rating actually purchases is "more of them, better armed and
+      // better armoured" — armour and stats scaled and the gun never
+      // did, so a T10 corp trooper answered the door with the same SMG
+      // as the T1 rent-a-cop. That flattened the Penetrate gate from
+      // the site's side: whatever the rating, the incoming Power was
+      // 6, so armour was worth the same everywhere and there was
+      // nothing to shop for.
+      //
+      // Indexed by tier, 1-10. `weapon` stays the fallback for
+      // anything without a ladder.
+      weapon: "smg",
+      weaponByTier: ["holdout", "holdout", "pistol", "pistol", "smg",
+                     "smg", "rifle", "rifle", "machinegun", "machinegun"],
       bypassable: false,
     },
     camera: {
@@ -301,6 +315,12 @@
   // expansion is explicitly deferred (build plan backlog), this
   // just proves the mechanic. Loud skills never appear here; they're
   // never eligible for immunity.
+  //
+  // Only skills that actually FRONT a non-loud way past something
+  // belong here. `computer` and `assensing` used to and no longer do
+  // — decking collapsed to one skill, and assensing is receptive, so
+  // neither can ever be rolled against an obstacle. A reason keyed to
+  // a skill nothing offers is a line that can never be read.
   const IMMUNITY_REASONS = {
     con:         "won't engage — non-verbal, drone-piloted, or simply not listening",
     intimidation: "unshakeable — doesn't rattle, doesn't scare off",
@@ -308,8 +328,6 @@
     electronics: "hardened against tampering",
     hacking:     "air-gapped — no wireless signal reaches it",
     larceny:     "tamper-evident — no clean pick",
-    computer:    "credentialled — nothing you can forge satisfies it",
-    assensing:   "cloaked — masks itself from astral perception",
     conjuring:   "resists binding — too old, too strong, or already spoken for",
     sorcery:     "anchored — the weave will not come apart from out here",
   };
@@ -323,9 +341,23 @@
   function nonLoudWaysFor(thing) {
     const acts = MJ.actsFor(thing).filter((a) => a.effective && !a.def.loud);
     return {
+      acts: acts,
       skills: [...new Set(acts.map((a) => a.def.skill).filter(Boolean))],
       free: acts.some((a) => !a.def.skill),
     };
+  }
+
+  // How many non-loud APPROACHES survive a given set of blocked
+  // skills. Approaches, not skills — those are different numbers, and
+  // the difference is the whole Matrix. Every way past a host is
+  // hacking now (hackDevice, maskIcon, sleaze), so counting SKILLS
+  // says a host offers one way in and the ≥2 floor is unmeetable;
+  // counting what the crew can actually DO says two or three, which
+  // is both true and what the prompt will show them. Meanwhile a
+  // guard offers con and intimidation — two skills, two approaches —
+  // so nothing changes where a skill fronts exactly one act.
+  function survivingWays(ways, blocked) {
+    return ways.acts.filter((a) => !a.def.skill || !blocked.has(a.def.skill)).length;
   }
 
   // Builds one obstacle instance: what it IS, plus tier-scaled
@@ -336,6 +368,16 @@
   // ways always survive: exactly 2 is a fair outcome, never fewer, at
   // any tier and at any future obstacle type this scales to.
   const MIN_NONLOUD_WAYS = 2;
+
+  // What this thing is holding at this tier. A ladder if it has one,
+  // its fixed weapon otherwise — a spirit's claws do not improve
+  // because the building got a bigger budget.
+  function weaponForTier(template, tier) {
+    const ladder = template.weaponByTier;
+    if (!ladder || !ladder.length) return template.weapon || "unarmed";
+    const t = Math.max(1, Math.min(ladder.length, Math.round(tier || 1)));
+    return ladder[t - 1];
+  }
 
   function generateObstacleInstance(rng, typeId, tier, projection) {
     const template = OBSTACLE_TEMPLATES[typeId];
@@ -383,7 +425,7 @@
       // a door has to survive being shot at.
       armour: (template.armour || 0) + Math.floor(tier / 2),
       structure: Math.max(1, (template.structure || 6) + tier),
-      weapon: template.weapon || "unarmed",
+      weapon: weaponForTier(template, tier),
       // Skill → why it cannot work HERE. Filled in below; the crew
       // learns these by trying, never by reading them off a card.
       immune: {},
@@ -394,10 +436,7 @@
     for (const skill of ways.skills) {
       if (rng.chance(0.1 * tier)) blocked.add(skill);
     }
-    while (
-      ways.skills.length - blocked.size + (ways.free ? 1 : 0) < MIN_NONLOUD_WAYS &&
-      blocked.size > 0
-    ) {
+    while (survivingWays(ways, blocked) < MIN_NONLOUD_WAYS && blocked.size > 0) {
       blocked.delete(rng.pick([...blocked]));
     }
     for (const skill of blocked) {
@@ -1195,23 +1234,37 @@
 
   // ── Invariant-checking helpers — used by the dev harness to
   // verify generation across many seeds, not by generation itself.
-  // Invariant 1: brute force is always available in SOME form matched
-  // to what the thing is. Nothing declares that any more — it falls
-  // out of the crossing, because every pillar carries a damaging verb
-  // and everything is present on at least one pillar. This confirms
-  // it held for a specific instance.
+  // Invariant 1: brute force is always available against anything
+  // that HAS A BODY. Nothing declares that any more — it falls out of
+  // the crossing, because the physical and astral pillars each carry
+  // a damaging verb and anything on either can be hit.
+  //
+  // The Matrix does not, and that is the design, not a gap. Force is
+  // a currency between bodies: Power against Armour, damage against a
+  // structure that eventually gives. Nothing on the wire has any of
+  // that. A matrix-only thing is got past by belonging, by not being
+  // seen, or by talking to it in protocol — so this invariant is
+  // asserted where force is a meaningful answer and nowhere else.
+  function canBeForced(obstacle) {
+    return (obstacle.presence || []).some((p) => p !== "matrix");
+  }
+
   function hasBruteForceOption(obstacle) {
+    if (!canBeForced(obstacle)) return true; // not claimed here
     return MJ.actsFor(obstacle).some((a) => a.effective && a.def.loud);
   }
 
   // Invariant 3 (no obstacle single-skill-locked): counts genuinely
-  // USABLE non-loud ways in — distinct skills that land and are not
-  // immune here, plus a skill-less way like "go around it" if the
-  // thing is something there is a way around. Must be >= 2.
+  // USABLE non-loud ways in — APPROACHES that land, whose skill is not
+  // immune here, plus any skill-less way like "go around it". Must be
+  // >= 2. Approaches rather than distinct skills for the same reason
+  // the generator floor counts them (see survivingWays): one skill can
+  // front several genuinely different acts, and on the Matrix all of
+  // them do.
   function usableNonLoudWays(obstacle) {
-    const ways = nonLoudWaysFor(obstacle);
     const immune = obstacle.immune || {};
-    return ways.skills.filter((s) => !immune[s]).length + (ways.free ? 1 : 0);
+    const blocked = new Set(Object.keys(immune));
+    return survivingWays(nonLoudWaysFor(obstacle), blocked);
   }
 
   // Invariant 2 (>=1 additional distinct solution chain): finds
@@ -1263,6 +1316,8 @@
   MJ.OBSTACLE_TEMPLATES = OBSTACLE_TEMPLATES;
   MJ.generateObstacleInstance = generateObstacleInstance;
   MJ.nonLoudWaysFor = nonLoudWaysFor;
+  MJ.weaponForTier = weaponForTier;
+  MJ.OBSTACLE_TEMPLATE = (id) => OBSTACLE_TEMPLATES[id] || null;
   MJ.generateHost = generateHost;
   MJ.NODE_TYPES = NODE_TYPES;
   MJ.PHYSICAL_OBSTACLE_TYPES = PHYSICAL_OBSTACLE_TYPES;
@@ -1280,6 +1335,7 @@
   MJ.mintSite = mintSite;
   MJ.mintSiteByName = mintSiteByName;
   MJ.allObstacles = allObstacles;
+  MJ.canBeForced = canBeForced;
   MJ.hasBruteForceOption = hasBruteForceOption;
   MJ.usableNonLoudWays = usableNonLoudWays;
   MJ.findPaths = findPaths;

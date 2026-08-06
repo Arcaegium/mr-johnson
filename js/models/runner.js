@@ -29,13 +29,13 @@
 (function () {
   window.MJ = window.MJ || {};
 
-  // ── The 19-skill registry (current understanding §09 + the gated-skill split) ─
+  // ── The 21-skill registry (current understanding §09 + the gated-skill split) ─
   // Every skill maps to real verbs elsewhere in the design; this
   // list is the canonical set every runner's skill map is keyed by.
   const SKILLS = [
     "firearms", "heavyWeapons", "marksmanship", "melee", "demolitions",
     "stealth", "athletics", "medicine", "leadership", "intimidation", "con", "larceny",
-    "computer", "hacking", "electronics", "rigging",
+    "computer", "hacking", "electronics", "rigging", "perception",
     "sorcery", "conjuring", "enchanting", "assensing",
   ];
 
@@ -64,6 +64,10 @@
 
     demolitions: "intelligence", medicine: "intelligence", computer: "intelligence",
     hacking: "intelligence", electronics: "intelligence",
+    // The source links Perception to Intuition; Intuition folded into
+    // Intelligence when the attribute set was collapsed, so it lands
+    // here with the rest of the noticing skills.
+    perception: "intelligence",
 
     con: "charisma", leadership: "charisma", intimidation: "charisma",
 
@@ -248,18 +252,18 @@
   const ARCHETYPE_SKILLS = {
     heavyWeapons:     { list: ["heavyWeapons", "firearms", "demolitions", "marksmanship", "athletics"], specialistSecondary: 1, generalistSecondary: 3 },
     demolitions:      { list: ["demolitions", "firearms", "electronics", "athletics", "heavyWeapons"],   specialistSecondary: 1, generalistSecondary: 3 },
-    stealth:          { list: ["stealth", "firearms", "larceny", "athletics", "melee"],                  specialistSecondary: 1, generalistSecondary: 3 },
+    stealth:          { list: ["stealth", "perception", "firearms", "larceny", "athletics"],                  specialistSecondary: 1, generalistSecondary: 3 },
     melee:            { list: ["melee", "athletics", "firearms", "intimidation", "stealth"],             specialistSecondary: 1, generalistSecondary: 3 },
-    marksman:         { list: ["marksmanship", "firearms", "stealth", "athletics"],                      specialistSecondary: 1, generalistSecondary: 2 },
+    marksman:         { list: ["marksmanship", "perception", "firearms", "stealth"],                      specialistSecondary: 1, generalistSecondary: 2 },
     tank:             { list: ["intimidation", "melee", "firearms", "athletics", "heavyWeapons"],         specialistSecondary: 1, generalistSecondary: 3 },
     combatMedic:      { list: ["medicine", "firearms", "melee", "athletics", "stealth"],                  specialistSecondary: 1, generalistSecondary: 3 },
     streetDoc:        { list: ["medicine", "electronics", "leadership", "con"],                           specialistSecondary: 1, generalistSecondary: 2 },
     face:             { list: ["con", "leadership", "intimidation", "larceny"],                           specialistSecondary: 1, generalistSecondary: 2 },
     leader:           { list: ["leadership", "con", "intimidation", "firearms"],                          specialistSecondary: 1, generalistSecondary: 2 },
     decker:           { list: ["hacking", "computer", "electronics", "stealth", "larceny"],               specialistSecondary: 1, generalistSecondary: 3 },
-    rigger:           { list: ["rigging", "electronics", "computer", "firearms", "athletics"],            specialistSecondary: 1, generalistSecondary: 3 },
+    rigger:           { list: ["rigging", "electronics", "computer", "perception", "firearms"],            specialistSecondary: 1, generalistSecondary: 3 },
     combatMage:       { list: ["sorcery", "assensing", "athletics", "stealth", "firearms"],               specialistSecondary: 1, generalistSecondary: 3 },
-    detectionMage:    { list: ["assensing", "sorcery", "stealth", "athletics"],                           specialistSecondary: 1, generalistSecondary: 2 },
+    detectionMage:    { list: ["assensing", "perception", "sorcery", "stealth"],                           specialistSecondary: 1, generalistSecondary: 2 },
     healthMage:       { list: ["sorcery", "assensing", "enchanting", "leadership"],                       specialistSecondary: 1, generalistSecondary: 2 },
     illusionMage:     { list: ["sorcery", "con", "stealth", "intimidation"],                              specialistSecondary: 1, generalistSecondary: 2 },
     manipulationMage: { list: ["sorcery", "con", "leadership", "assensing"],                              specialistSecondary: 1, generalistSecondary: 2 },
@@ -468,6 +472,21 @@
     // Awakened able to perceive.
     if (isSkillEligible("assensing", focus.family) && skills.assensing === 0) {
       skills.assensing = rng.int(1, 3);
+    }
+
+    // ── Baseline Perception: everyone has eyes ──────────────────────
+    // Awareness is PASSIVE — it is not a verb you spend an action on,
+    // it is whether you clock the guard before he clocks you. The site
+    // has always rolled this against the crew (noticePool vs
+    // concealment); this is the missing half of a check that already
+    // existed, and a runner with none of it would be walking around
+    // with their eyes shut.
+    //
+    // So everyone gets some, and nobody gets much for free — the
+    // difference between noticing and noticing IN TIME is bought with
+    // karma like any other skill.
+    if (skills.perception === 0) {
+      skills.perception = rng.int(1, 3);
     }
 
     // ── Baseline Computer: a decker programs, by definition ─────────

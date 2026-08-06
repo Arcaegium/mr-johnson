@@ -472,13 +472,15 @@
   // day at a glance: where it is, what is guarding it, who is going,
   // and what that crew actually brings on each axis. Comparing those
   // last two against each other IS the decision.
-  function crewShape(runners) {
+  function crewShape(runners, site) {
     if (!runners.length) return '<span class="muted">nobody assigned</span>';
-    const cap = MJ.crewCapability(runners);
     return runners.map((r) => `${esc(r.identity.handle)} <span class="muted">${esc(r.classification.focusLabel)}</span>`).join("<br>") +
-      `<div style="margin-top:3px"><span class="muted">brings P:</span><b class="w-num">${cap.physical}d</b>` +
-      `<span class="muted"> A:</span><b class="w-num">${cap.astral}d</b>` +
-      `<span class="muted"> M:</span><b class="w-num">${cap.matrix}d</b></div>`;
+      // The same report card as the dispatch dialog, because it is
+      // the same question asked one step later: the crew is committed
+      // but the day has not been played, and this is the last look
+      // before it is. A P/A/M line here would have been the exact
+      // number the card exists to replace.
+      laneCard(runners, site);
   }
 
   function siteSecurityLine(site) {
@@ -500,7 +502,7 @@
           `</span></div>` +
         `<div class="qcard-body">` +
           `<div class="qrow"><span class="qk">guarding it</span>${siteSecurityLine(site)}</div>` +
-          `<div class="qrow"><span class="qk">going</span>${crewShape(q.runners)}</div>` +
+          `<div class="qrow"><span class="qk">going</span>${crewShape(q.runners, site)}</div>` +
         `</div></div>`;
     }).join("");
     $("planrail").innerHTML =
@@ -582,21 +584,45 @@
   // they have earned it, the estimate otherwise. Comparing what they
   // bring against anything else would be measuring it against a fact
   // they do not have.
-  function shownSecurity(site, axis) {
+  // The raw 1-10 the player HAS for each axis — confirmed if they
+  // earned it, the estimate otherwise. Never the truth. Everything
+  // the report card says about a site is derived from this, so the
+  // card can be wrong in exactly the ways the briefing was wrong.
+  function shownAxes(site) {
     if (!site) return null;
-    const v = MJ.siteIntelView(site, S.day)[axis];
-    // In DICE, so it compares directly against what the crew brings.
-    return MJ.diceForSecurity(v.confirmed ? v.confirmed.value : v.estimated);
+    const v = MJ.siteIntelView(site, S.day);
+    const out = {};
+    for (const axis of ["physical", "astral", "matrix"]) {
+      out[axis] = v[axis].confirmed ? v[axis].confirmed.value : v[axis].estimated;
+    }
+    return out;
   }
 
-  // Teal when the crew meets or beats what is waiting on that axis,
-  // grey when it falls short. Judged per axis and against the group
-  // total, so "strong here, blind there" is one glance rather than
-  // three subtractions.
-  function bringsAxis(label, dice, against) {
-    const enough = against === null || dice >= against;
-    return `<span class="muted"> ${label}:</span>` +
-      `<span class="${enough ? "w-num" : "short"}">${dice}d</span>`;
+  // ── The report card ─────────────────────────────────────────────
+  // P/A/M were budget categories the generator spends. They said
+  // nothing about a person, so "brings P:12d against est P:4" was two
+  // numbers in different units and no answer to "what do I need."
+  // This is the crew's sheet against the building's, lane by lane:
+  // what you have over what it takes, teal when covered, grey when
+  // short. Lanes the site has no use for are absent — a site with no
+  // people in it does not want a Face, and the silence says so.
+  //
+  // Deliberately no skill names and no verbs. A lane bundles several
+  // skills precisely so the number stays imprecise; spelling out
+  // which one would fix it hands the player the coding meta and
+  // deletes the reason to scout.
+  function laneCard(runners, site) {
+    const axes = shownAxes(site);
+    if (!axes) return "";
+    const rows = MJ.laneReport(runners, site, axes);
+    if (!rows.length) return "";
+    return `<div class="lanes">` + rows.map((r) =>
+      `<span class="lane${r.covered ? " ok" : " short"}" title="${r.unit === "armour"
+        ? "armour rating against the effective Power of the worst weapon here"
+        : "dice pool the crew fronts, against the pool this lane takes"}">` +
+        `<span class="ln">${r.label}</span>` +
+        `<span class="lv">${r.have}<span class="lsep">/</span>${r.need}${r.unit === "dice" ? "d" : ""}</span>` +
+      `</span>`).join("") + `</div>`;
   }
 
   function renderCrewDialog() {
@@ -610,7 +636,6 @@
     const picked = [...UI.crew].filter((r) => S.roster.indexOf(r) !== -1 && MJ.isDispatchable(r));
     const full = picked.length >= MAX_CREW;
     const site = UI.pending.mission && UI.pending.mission.site;
-    const cap = MJ.crewCapability(picked);
     const sections = { hired: splitRoster().crew, watchlist: splitRoster().watch, market: S.market };
     const rows = (sections[UI.crewTab] || []).map((r) => {
       const k = keyFor(r, "r");
@@ -651,14 +676,18 @@
             `<span class="muted">you hold ¥${S.save.johnson.money}</span></div>`
           : "") +
         `<div class="crew-body">${rows}</div>` +
+        // The card sits between the roster and the commit button
+        // because that is the order the decision is made in: pick
+        // people, read what they add up to, then go or go shopping.
+        (site
+          ? `<div class="crew-card">` +
+              `<span class="sk">what this crew covers</span>` +
+              (picked.length ? laneCard(picked, site)
+                : `<span class="muted">nobody assigned yet</span>`) +
+            `</div>`
+          : "") +
         `<div class="crew-foot">` +
           `<span class="slots${full ? " full" : ""}">${picked.length}/${MAX_CREW} slots</span>` +
-          (picked.length
-            ? `<span class="muted"> — brings</span>` +
-              bringsAxis("P", cap.physical, shownSecurity(site, "physical")) +
-              bringsAxis("A", cap.astral, shownSecurity(site, "astral")) +
-              bringsAxis("M", cap.matrix, shownSecurity(site, "matrix"))
-            : '<span class="muted"> — nobody assigned yet</span>') +
           `<span class="spacer"></span>` +
           `<button class="sm" data-act="crew-cancel">cancel</button>` +
           `<button class="sm" data-act="crew-confirm"${picked.length ? "" : " disabled"} style="border-color:var(--accent);color:var(--accent)">queue it</button>` +

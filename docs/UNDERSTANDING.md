@@ -361,7 +361,7 @@ Astral **reagents** → crafted gear with no nuyen middleman.
 |---|---|---|
 | Agility (5) | firearms, marksmanship, stealth, larceny, rigging | evasion, ½ Initiative |
 | Strength (3) | heavyWeapons, melee, athletics | melee Power, recoil compensation |
-| Intelligence (5) | demolitions, medicine, computer, hacking, electronics | ½ Initiative |
+| Intelligence (6) | demolitions, medicine, computer, hacking, electronics, perception | ½ Initiative |
 | Charisma (3) | con, leadership, intimidation | — |
 | Magic (4) | sorcery, conjuring, enchanting, assensing | capped by Essence |
 | **Body (0)** | — | physical damage track, soak |
@@ -408,6 +408,79 @@ focus table sets the floor on Awakened frequency before origin is consulted.
 ### 5.5 Skills cap too
 Both attributes and skills cap. What a finished runner is *for* is answered by
 §1: the roster scales horizontally, and a maxed runner is a completed tool.
+
+### 5.6 LANES — the character sheet, on both sides of the table
+P/A/M are **budget categories the generator spends**. They decide how much a site
+buys and how hard its worst thing can be. They were never a statement about a
+*person*, so "your crew brings P:12d against est P:4" was two numbers in
+different units and no answer at all to *what does a runner need to be?*
+
+Lanes are the answer. Seven of them, each a bag of skills that answer the same
+**kind** of problem:
+
+| lane | skills | unit |
+|---|---|---|
+| Sneak | stealth, larceny | dice |
+| Face | con, intimidation | dice |
+| Tech | hacking, electronics | dice |
+| Banish | conjuring, **sorcery** | dice |
+| Attack | firearms, marksmanship, melee, heavyWeapons, demolitions, **sorcery** | dice |
+| Defense | *none* — armour rating | armour |
+| Awareness | assensing, perception | dice |
+
+**Sorcery is in two lanes on purpose.** It is the one skill that acts on both
+astral beings and physical ones — it unwinds a ward and it throws mana at a
+guard. That is not double-counting; it is what makes a combat mage worth the
+Drain.
+
+**Off the card, each for its own reason:** `computer` and `enchanting` are bench
+skills and may never front a way past a thing; `medicine` and `leadership` are
+never a site's requirement; `athletics` is terrain, a visual-layer concern;
+`rigging` is a force multiplier — a drone carries the lane, it is not one.
+
+**LANES FORECAST. THEY DO NOT RESOLVE.** Nothing in the resolution path may
+consult a lane. Resolution stays exactly what §11.5 says it is: PRESENCE, then
+NATURE, then dice. A lane is what the player reads *before* committing a crew,
+and the moment it gates anything it has become a second, sloppier rules engine
+on top of the real one. A stress probe reads mission.js, verbs.js, site.js,
+combat.js and resolve.js as text to prove none of them mentions one.
+
+**THE IMPRECISION IS THE POINT.** Bundling six skills into one number is not a
+simplification for the player's benefit — it is deliberate blur. A lane says
+"you are roughly short here"; it will not say which of the six would fix it, or
+exactly what is waiting. **That gap is what makes recon worth a day.** A
+perfectly precise report card would delete scouting from the game.
+
+**Which** lanes a site demands is read off what it actually fields, crossed with
+the verb table: a lane appears only if some verb it fronts would genuinely land
+on something standing there. A building with cameras and locks and no people in
+it does not want a Face, and the silence says so. **How much** it demands comes
+from the number the player *has* — the estimate, or a confirmed reading if they
+earned one, never the true tier. So the card is confidently wrong in exactly the
+ways the briefing was wrong.
+
+**Crew stacking is the source's Teamwork test.** The best pool leads; every other
+runner adds `floor(their pool / 3)` — their expected hits — capped at the lead's
+own skill rating. Not a max (four people are not worth exactly one) and not a
+sum (four mediocre runners must not out-do a specialist). Two exceptions:
+
+- **Awareness is the sharpest pair of eyes, not a teamwork test.** You cannot
+  help someone else look at something; everyone rolls their own Perception and
+  whoever makes it is told what they see.
+- **Defense is the worst-dressed runner.** Nobody soaks a bullet on someone
+  else's behalf, and that runner is the one who comes home in pieces.
+
+**Attack asks the Penetrate gate before the pool.** A runner whose best Power
+cannot beat the toughest armour that fights back contributes *nothing* to the
+lane, however well they roll — because they genuinely cannot. That is the wipe
+that prompted all of this: holdouts at Power 4 against T4 guards at Armour 5, a
+fight that was arithmetically unwinnable and that nothing warned about.
+
+**Tier buys better guns.** §6's note that a rating purchases "more of them,
+better armed and better armoured" was true of armour and stats and never of the
+weapon, so incoming Power was 6 at every rating and armour was worth the same
+everywhere. Guards now ladder holdout → pistol → SMG → rifle → machine gun
+across tiers 1–10, which is what gives Defense something to be a read *about*.
 
 ---
 
@@ -1066,6 +1139,23 @@ glance is one thing, reading a construct or a signature properly buys more of
 the truth with every interval — and it causes **no Drain**, because perception
 is not spellcasting. Spellcasting, summoning and banishing bill the caster;
 looking at something does not.
+
+**There is no Matrix attack verb, and that is the ruling, not a gap.** Force is a
+currency between *bodies* — Power against Armour, damage against a structure that
+eventually gives — and nothing on the wire has any of that. Every real way past a
+system is to be taken for someone who belongs there (`sleaze`), to not be seen at
+all (`maskIcon`), or to talk to the device in its own protocol (`hackDevice`).
+An `attackIce` verb briefly sat alongside those and made all three optional.
+Black ICE is what makes the removal matter rather than tidy: `fights: true` is
+exactly what `hackDevice` cannot touch, so the decker who meets one has to go
+quiet or go legitimate. **Invariant 1 (brute force is always offered) is therefore
+claimed only against things with a physical or astral presence.**
+
+**Decking is ONE skill.** Every Matrix verb rolls `hacking`. `computer` survives
+on the crafting bench and may never front a way past a thing — same for
+`enchanting`. This is why the generator's "≥2 non-loud ways" floor counts
+**approaches, not distinct skills**: one skill can front several genuinely
+different acts, and on the Matrix all of them do.
 
 **Force reuses the three-gate chain** (§6): any damaging verb against a
 physically-present thing goes Hit → Penetrate (Power vs Armour) → Damage,

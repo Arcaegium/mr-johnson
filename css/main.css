@@ -593,6 +593,34 @@ body.railed .framebar { left: 300px; }
 .slots { font-size: 0.8rem; }
 .slots.full { color: var(--accent); }
 
+/* ── The report card ──────────────────────────────────────────────
+   A wrapping grid, not a table and not rows: the number of lanes a
+   site demands varies, and a fixed table would leave holes where the
+   building simply has nothing of that kind in it. Each chip is one
+   lane, have over need, and the colour is the whole read — teal is
+   covered, grey-amber is short. Nothing else is said, because
+   anything more specific would be telling the player which skill to
+   buy, and the vagueness is what makes recon worth a day. */
+.crew-card {
+  padding: 9px 14px; border-top: 1px solid var(--line); background: #0b1118;
+}
+.crew-card .sk {
+  font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--dim); display: block; margin-bottom: 5px;
+}
+.lanes { display: flex; flex-wrap: wrap; gap: 5px 6px; }
+.lane {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  border: 1px solid var(--line); border-radius: 2px; padding: 3px 7px;
+  font-size: 0.78rem; cursor: help;
+}
+.lane .ln { color: var(--dim); }
+.lane .lv { font-variant-numeric: tabular-nums; }
+.lane .lsep { color: var(--dim); margin: 0 1px; }
+.lane.ok { border-color: var(--accent-2); }
+.lane.ok .lv { color: var(--accent-2); }
+.lane.short .lv { color: #d4735e; }
+
 /* ── Mission results ─────────────────────────────────────────── */
 .res-verdict { font-size: 1.05rem; letter-spacing: 0.05em; margin-bottom: 4px; }
 .res-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }

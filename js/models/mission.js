@@ -129,38 +129,22 @@
     return !!runner.market.hired && runner.market.phase !== "kia";
   }
 
-  // ── Reading your own crew ──────────────────────────────────────
-  // The third leg of the triangle. A job card advertises a site's
-  // security as an ESTIMATE (est P:~3 A:~5) that only experience
-  // confirms — but a player cannot judge whether ~5 is a problem
-  // without knowing what their own crew brings against it.
+  // ── Reading your own crew — moved out, and why ─────────────────
+  // `crewCapability` and its AXIS_SKILLS bag lived here: the best
+  // pool any one runner could bring to physical / astral / matrix.
+  // It answered the wrong question. P/A/M are budget categories the
+  // GENERATOR spends — they decide how much a site buys and how hard
+  // its worst thing can be — and bundling nine unrelated skills under
+  // "physical" meant a crew's read went up because someone could pick
+  // a lock, against a building full of guards. "Brings P:12d" was a
+  // number about nobody.
   //
-  // This is legitimate to show in full, by the same rule that shows
-  // the dice pool in a mission prompt: it is their crew, they know
-  // what they hired and what they issued. The site's number stays an
-  // estimate; the gap between the two is the decision.
-  const AXIS_SKILLS = {
-    physical: ["stealth", "firearms", "marksmanship", "melee", "con", "intimidation", "larceny", "demolitions", "electronics"],
-    astral: ["assensing", "conjuring", "sorcery"],
-    matrix: ["hacking", "computer", "electronics"],
-  };
-
-  // Best pool any one crew member can bring to that axis — a team is
-  // as good as its specialist, not its average.
-  function crewCapability(runners) {
-    const out = {};
-    for (const axis of Object.keys(AXIS_SKILLS)) {
-      let best = 0;
-      for (const runner of runners || []) {
-        for (const skill of AXIS_SKILLS[axis]) {
-          const pool = MJ.dicePoolFor(runner, skill, MJ.gearBonusFor(runner, skill));
-          if (pool > best) best = pool;
-        }
-      }
-      out[axis] = best;
-    }
-    return out;
-  }
+  // models/lanes.js asks it properly: seven lanes, each a bag of
+  // skills that answer the same KIND of problem, crossed with what
+  // the site actually fields. That file is a forecast for the player
+  // and is deliberately not reachable from here — nothing in the
+  // resolution path may consult a lane (stress C25 reads this file's
+  // source to prove it).
 
   // ── Player-initiated mission records ────────────────────────────
   // Same record family as job.js's job-derived missions — `kind`
@@ -2452,8 +2436,6 @@
     return results;
   }
 
-  MJ.crewCapability = crewCapability;
-  MJ.AXIS_SKILLS = AXIS_SKILLS;
   MJ.RECON_LENSES = RECON_LENSES;
   MJ.isDispatchable = isDispatchable;
   MJ.createReconMission = createReconMission;

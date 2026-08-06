@@ -1949,6 +1949,152 @@
       "C24: Computer stays learnable by anyone, and guaranteed to nobody else");
   }
 
+  // ── Class 25: the lanes — a forecast, never a gate ──────────────
+  // The report card exists because P/A/M were budget categories the
+  // generator spends, and no amount of staring at "est P:4" told a
+  // player what a runner needed to be. Lanes answer that. What this
+  // class holds is the three rules that keep them from becoming a
+  // second rules engine:
+  //
+  //   1. THEY NEVER RESOLVE ANYTHING. Nothing in mission.js, verbs.js
+  //      or resolve.js may consult a lane. Resolution is PRESENCE
+  //      then NATURE then dice, and it stays there.
+  //   2. THEY NEVER LEAK THE TRUTH. Every number on the card is
+  //      derived from what the PLAYER has been told, so a card in
+  //      front of a bad estimate is confidently wrong in exactly the
+  //      way the briefing was.
+  //   3. THEY STAY IMPRECISE. Skills are bundled on purpose. A lane
+  //      says "roughly short here" and refuses to say which of six
+  //      skills would fix it, because that gap is the entire reason
+  //      to spend a day on recon.
+  function class25_lanes() {
+    // ── The card's own shape ─────────────────────────────────────
+    const onCard = new Set();
+    for (const id of MJ.LANE_ORDER) {
+      const def = MJ.LANE_DEFS[id];
+      check(!!def, "C25: every ordered lane must be defined (" + id + ")");
+      for (const s of def.skills) {
+        check(MJ.SKILLS.indexOf(s) !== -1, "C25: a lane may only bundle real skills (" + s + ")");
+        onCard.add(s);
+      }
+    }
+    check(MJ.lanesOfSkill("sorcery").length === 2,
+      "C25: sorcery fronts TWO lanes — it is the one skill that acts on the astral and the physical both");
+    check(MJ.lanesOfSkill("sorcery").indexOf("banish") !== -1 &&
+      MJ.lanesOfSkill("sorcery").indexOf("attack") !== -1,
+      "C25: and those two are Banish and Attack");
+    check(MJ.lanesOfSkill("hacking").length === 1 && MJ.lanesOfSkill("hacking")[0] === "tech",
+      "C25: hacking is Tech and ONLY Tech — a Matrix attack is not a physical attack");
+    // Deliberately off the card, each for its own reason.
+    for (const s of ["computer", "enchanting"]) {
+      check(!onCard.has(s), "C25: " + s + " is a bench skill and belongs on no lane");
+    }
+    for (const s of ["medicine", "leadership", "athletics", "rigging"]) {
+      check(!onCard.has(s), "C25: " + s + " is never a site's requirement (" + s + ")");
+    }
+    check(MJ.LANE_DEFS.defense.skills.length === 0,
+      "C25: Defense has no skill — there is no verb for not being shot");
+
+    // ── Rule 1: no resolver may know a lane exists ───────────────
+    // Read the shipped source rather than trusting the intent. If a
+    // lane ever gets consulted mid-run this fails on the day it is
+    // written, not on the day someone notices the game got easier.
+    const forbidden = /\b(laneReport|laneDemands|crewLane|runnerLane|LANE_DEFS|LANE_ORDER|lanesOfSkill|lanesOfVerb)\b/;
+    let checkedSource = 0;
+    for (const el of document.querySelectorAll("script[src]")) {
+      const src = el.getAttribute("src") || "";
+      if (!/models\/(mission|verbs|site|combat)\.js|core\/resolve\.js/.test(src)) continue;
+      const req = new XMLHttpRequest();
+      req.open("GET", src, false);
+      try { req.send(null); } catch (e) { continue; }
+      checkedSource += 1;
+      check(!forbidden.test(req.responseText),
+        "C25: LANES FORECAST, THEY DO NOT RESOLVE — " + src + " must never consult one");
+    }
+    check(checkedSource >= 4, "C25: the source probe must actually have read the resolvers");
+
+    // ── A crew read, and the shape of stacking ───────────────────
+    const rng = MJ.makeRNG("c25-crew");
+    const crew = [];
+    for (const fam of ["fighter", "decker", "mage", "rigger"]) {
+      const r = MJ.generateRunner(rng, { family: fam });
+      MJ.watchRunner(r, rng); MJ.hireRunner(r, "permanent");
+      crew.push(r);
+    }
+    for (const id of MJ.LANE_ORDER) {
+      if (id === "defense" || id === "awareness") continue;
+      const solo = Math.max(...crew.map((r) => MJ.runnerLane(r, id).pool));
+      const team = MJ.crewLane(crew, id);
+      check(team >= solo, "C25: a crew is never worse at a lane than its best member (" + id + ")");
+      check(team <= crew.reduce((s, r) => s + MJ.runnerLane(r, id).pool, 0),
+        "C25: and never as good as everyone's pools added together (" + id + ")");
+    }
+    check(MJ.crewLane(crew, "awareness") === Math.max(...crew.map((r) => MJ.runnerLane(r, "awareness").pool)),
+      "C25: Awareness is the sharpest pair of eyes — you cannot help someone else look");
+    const armours = crew.map((r) => MJ.armourRatingFor(r));
+    check(MJ.crewLane(crew, "defense") === Math.min(...armours),
+      "C25: Defense is the worst-dressed runner — nobody soaks a bullet for anyone else");
+    check(MJ.crewLane([], "sneak") === 0, "C25: an empty crew brings nothing");
+
+    // ── Rule 2: the card reads the ESTIMATE, never the truth ─────
+    const site = MJ.mintSite("c25-site", 3, { value: 7 });
+    MJ.initSecurityState(MJ.makeRNG("c25-init"), site);
+    const low = MJ.laneReport(crew, site, { physical: 1, astral: 1, matrix: 1 });
+    const high = MJ.laneReport(crew, site, { physical: 10, astral: 10, matrix: 10 });
+    check(low.length > 0 && low.length === high.length,
+      "C25: which lanes a site demands is a fact about what it fields, not about the estimate");
+    let moved = 0;
+    for (let i = 0; i < low.length; i++) {
+      check(low[i].lane === high[i].lane, "C25: and the card keeps a fixed order between reads");
+      check(high[i].need >= low[i].need, "C25: a worse estimate never demands less (" + low[i].lane + ")");
+      if (high[i].need > low[i].need) moved += 1;
+    }
+    check(moved === low.length,
+      "C25: EVERY need must move with the estimate — one that does not is reading the true tier");
+    // Same estimate, same answer, whatever the building is really like.
+    const again = MJ.laneReport(crew, site, { physical: 1, astral: 1, matrix: 1 });
+    check(JSON.stringify(again) === JSON.stringify(low), "C25: and the read is stable");
+
+    // ── A lane is demanded only if something there answers to it ──
+    const shown = { physical: 5, astral: 5, matrix: 5 };
+    const demanded = new Set(MJ.laneReport(crew, site, shown).map((r) => r.lane));
+    const answerable = new Set();
+    for (const thing of MJ.siteObstacles(site)) {
+      for (const act of MJ.actsFor(thing)) {
+        if (!act.effective) continue;
+        for (const id of MJ.lanesOfVerb(act.def)) answerable.add(id);
+      }
+    }
+    for (const id of answerable) {
+      check(demanded.has(id), "C25: a lane something here answers to must be on the card (" + id + ")");
+    }
+    for (const id of demanded) {
+      if (id === "defense" || id === "awareness") continue; // no verb behind either
+      check(answerable.has(id), "C25: and a lane nothing here answers to must NOT be (" + id + ")");
+    }
+
+    // ── The Penetrate gate, asked before the pool ────────────────
+    // A breaching charge is Power 14 and is placed against something
+    // standing still. It is not an answer to a guard, and counting it
+    // as one made every demolitions runner read as able to punch
+    // through any armour in the game.
+    const guard = MJ.generateObstacleInstance(MJ.makeRNG("c25-g"), "guard", 5, "physical");
+    const bomber = MJ.mintRunner("c25-bomber", 7);
+    bomber.skills.demolitions = 6;
+    check(MJ.attackPowerFor(bomber) >= 14, "C25: ungated, the charge is the biggest Power a runner has");
+    check(MJ.attackPowerFor(bomber, guard) < 14,
+      "C25: against something alive it must not count — you do not breach a man");
+
+    // ── Rule 3: the card names no skills and no verbs ────────────
+    for (const row of MJ.laneReport(crew, site, shown)) {
+      check(typeof row.have === "number" && typeof row.need === "number" && isFinite(row.have),
+        "C25: every row is two comparable numbers (" + row.lane + ")");
+      check(row.covered === (row.have >= row.need), "C25: and the colour is just that comparison");
+      check(!("skills" in row) && !("verbs" in row),
+        "C25: THE IMPRECISION IS THE POINT — a row may not name what would fix it");
+    }
+  }
+
   // ── Class 23: what the live read may claim ──────────────────────
   // A leg IS the sample — walk the route, meet what is on it, and by
   // the time you leave you have seen what there was to see. So leg-end
@@ -2063,7 +2209,9 @@
           "C22: a verb that does not land must say why (" + type + ")");
         // The generator invariants, now DERIVED rather than declared.
         check(MJ.hasBruteForceOption(ob),
-          "C22: brute force must always be available in some form (" + type + " T" + tier + ")");
+          "C22: brute force must always be available against a body (" + type + " T" + tier + ")");
+        check(MJ.canBeForced(ob) === (ob.presence || []).some((p) => p !== "matrix"),
+          "C22: force is a currency between bodies — a matrix-only thing has none (" + type + ")");
         check(MJ.usableNonLoudWays(ob) >= 2,
           "C22: no thing may be single-skill-locked (" + type + " T" + tier + " had " +
           MJ.usableNonLoudWays(ob) + ")");
@@ -2099,6 +2247,25 @@
     // and thereby getting around him. Reading auras lives in the
     // astral pillar's grammar, where what it buys is Lattice depth.
     check(!MJ.VERBS.assense, "C22: assensing must not be an obstacle-resolution verb");
+
+    // ── There is no Matrix attack, and no Matrix skill but hacking ─
+    // Both are the same ruling twice: the Matrix is not meatspace with
+    // different scenery. Nothing on the wire has a body to break, so
+    // no verb there may be damaging; and decking is ONE skill, so
+    // `computer` never fronts a live act (it survives on the crafting
+    // bench and nowhere else).
+    check(!MJ.VERBS.attackIce, "C22: the Matrix has no attack verb — nothing there has a body");
+    for (const id of Object.keys(MJ.VERBS)) {
+      const v = MJ.VERBS[id];
+      if (v.pillar !== "matrix") continue;
+      check(!v.damaging, "C22: no Matrix verb may be damaging (" + id + ")");
+      check(v.skill === "hacking", "C22: every Matrix verb rolls hacking (" + id + " rolled " + v.skill + ")");
+    }
+    for (const t of TYPES) {
+      const ob = MJ.generateObstacleInstance(MJ.makeRNG("c22-cm-" + t), t, 5, "physical");
+      check(!MJ.actsFor(ob).some((a) => a.def.skill === "computer"),
+        "C22: computer is a bench skill — it may never front a way past a thing (" + t + ")");
+    }
     for (const t of TYPES) {
       const ob = MJ.generateObstacleInstance(MJ.makeRNG("c22-as-" + t), t, 5, "physical");
       check(!MJ.actsFor(ob).some((a) => a.def.skill === "assensing"),
@@ -3003,6 +3170,7 @@
       ["22. Verbs x properties — the world decides, not the menu", class22_verbs],
       ["23. What a crew can honestly claim to know", class23_knowing],
       ["24. An archetype can always do its own job", class24_baselines],
+      ["25. The lanes — a forecast, never a gate", class25_lanes],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

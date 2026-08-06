@@ -20,16 +20,16 @@ wins and this file is stale — verify before trusting a line here.
 > If you catch yourself writing "the player has no input here," you are
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
-Last verified after the verbs × properties refactor. Suite: 22 classes,
-94,182 assertions, 0 failures, identical across three consecutive runs.
+Last verified after the lane model landed. Suite: 25 classes,
+89,195 assertions, 0 failures, identical across consecutive runs.
 
-**Baseline moved deliberately**, 92,873 → 94,182. Class 22 is new (415
-assertions, the refactor's own probes). The rest is content drift and not a
-change in coverage: `generateObstacleInstance` now rolls its immunities against
-the verb crossing rather than a hand-written list, so it consumes the RNG
-differently, so every site in every seed differs. Class 7 (the soak) and the
-content-guarded loops in classes 3 and 10 count in proportion to what got
-generated, and they moved with it.
+**Baseline moved deliberately**, 95,109 → 89,195. Class 25 is new (102
+assertions, the lane model's own probes). The drop is content drift, not lost
+coverage: `generateSkillSpread` now grants a Perception baseline and
+`generateObstacleInstance` picks a weapon off a tier ladder, so both consume the
+RNG differently, so every runner and every site in every seed differs. Class 7
+(the soak) and the content-guarded loops in classes 2, 3 and 10 count in
+proportion to what got generated, and they moved with it.
 
 ---
 
@@ -125,7 +125,7 @@ js/models/combat.js   713  WEAPONS FIRE_MODES weaponProfile
                            carriedDamage carryDamageHome restDay
                            -- physicalTrack/stunTrack read `.attributes`, so a
                               roster runner measures without being in a fight
-js/models/mission.js 2363  THE BIG ONE. crewCapability AXIS_SKILLS
+js/models/mission.js 2363  THE BIG ONE.
                            optionsFor actFor forceThrough resolveIneffective
                            remainingApproaches
                            create*Mission (recon/matrix/astral/crafting/medical/
@@ -167,6 +167,31 @@ js/models/verbs.js    371  VERBS x PROPERTIES -- THE AUTHORITY ON WHAT IS
                               `shoot`, so a rifle is marksmanship and a
                               shotgun is firearms.
                            -- plane = the verb's PILLAR, not a skill lookup.
+                           -- NO MATRIX ATTACK VERB. `attackIce` was removed:
+                              force is a currency between bodies and nothing
+                              on the wire has one. Every Matrix verb rolls
+                              hacking; `computer` is a bench skill only.
+js/models/lanes.js    340  THE REPORT CARD -- what a runner NEEDS TO BE.
+                           LANE_DEFS(7) LANE_ORDER lanesOfSkill lanesOfVerb
+                           runnerLane crewLane teamworkStack
+                           siteObstacles laneDemands attackPowerFor laneReport
+                           -- Sneak Face Tech Banish Attack Defense Awareness.
+                              Replaces crewCapability/AXIS_SKILLS, which
+                              bundled nine unrelated skills under "physical"
+                              and answered a question about nobody.
+                           -- LANES FORECAST, THEY DO NOT RESOLVE. No file in
+                              the resolution path may consult one; stress C25
+                              reads their SOURCE as text to prove it.
+                           -- every `need` derives from the ESTIMATE the
+                              player holds, never the true tier. C25 proves it
+                              by moving the estimate and requiring every need
+                              to move with it.
+                           -- sorcery sits in TWO lanes (Banish + Attack): the
+                              one skill that acts on both planes.
+                           -- stacking = SR5 Teamwork (lead + floor(pool/3)
+                              each, capped at the lead's rank). Awareness is
+                              max instead (you cannot help someone look);
+                              Defense is min (nobody soaks for you).
 js/models/lattice.js  330  THE ASTRAL PUZZLE. beginLattice latticePull
                            latticeAbandon latticeDone latticeRead latticeDrain
                            latticeMoveStrength latticeReadDepth
@@ -352,7 +377,7 @@ matrix→Patrol/Black ICE, meatspace→Guard/Camera).
   = Magic × 6 ticks, running out is a forced snap-back + wound.
 
 ### Runners / economy / gear
-- 7 attributes, 20 skills, metatype ceilings, weighted metatype + focus +
+- 7 attributes, 21 skills, metatype ceilings, weighted metatype + focus +
   origin draws, attribute-fund growth, half-step skill growth.
 - Personal kit at generation (capped T4), armoury issue overrides it.
 - Crafted quality 1–3 with a flavour mark, stacking onto effective tier.
