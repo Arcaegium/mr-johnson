@@ -241,15 +241,13 @@
   // beating, and that is the lesson: bring a few points more than the
   // card asks. It is meant to be learned by playing, which is why the
   // numbers are honest rather than padded.
-  // The upper quarter, HELD OFF THE TOP. `ceil(3r/4)` alone lands
-  // exactly on the maximum at rating 3 (ceil(2.25) = 3), which is the
-  // one thing this must never quote — so it is also capped at one
-  // below the rating. Only a rating-1 site reads its own ceiling, and
-  // there the spread is a single tier, so there is nothing else to
-  // read.
-  const midTier = (rating) => Math.max(1, Math.ceil(rating / 2));
-  const highTier = (rating) => Math.max(1,
-    Math.min(rating > 1 ? rating - 1 : rating, Math.ceil((rating * 3) / 4)));
+  // The bands themselves live in core/resolve.js, next to
+  // `diceForSecurity` — because reading a rating as a spread is not a
+  // lane idea, it is what every number quoted at the player has to do,
+  // including the security header. Keeping one definition is what
+  // stops the card and the header from disagreeing.
+  const midTier = MJ.tierBandMid;
+  const highTier = MJ.tierBandHigh;
 
   // `shown` is { physical, astral, matrix } as raw 1-10 values.
   // `confirmed` is the same keys as booleans: has the crew actually
@@ -474,8 +472,6 @@
 
   MJ.LANE_DEFS = LANE_DEFS;
   MJ.LANE_ORDER = LANE_ORDER;
-  MJ.laneMidTier = midTier;
-  MJ.laneHighTier = highTier;
   MJ.lanesOfSkill = lanesOfSkill;
   MJ.lanesOfVerb = lanesOfVerb;
   MJ.runnerLane = runnerLane;

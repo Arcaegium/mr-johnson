@@ -59,17 +59,52 @@
     return Math.max(1, Math.ceil(tier / 2));
   }
 
-  // ── A security rating, stated in DICE ───────────────────────────
-  // A site's 1-10 value is a budget: it decides how much gets bought
-  // and how hard the worst thing there can be. It is not a number a
-  // player can hold a runner up against, and that mismatch is the
-  // whole reason "your crew brings 12d" against "security P:4" told
-  // nobody anything. Twelve of what, against four of what?
+  // ── A RATING IS A SPREAD, AND THE PLAYER CANNOT SEE INTO IT ─────
+  // A site's 1-10 value is a budget, and the obstacles it buys have
+  // tiers drawn uniformly across 1..rating. A "4" building is not four
+  // identical guards — it is a 2, a 3, a 5 and a 6.
   //
-  // So the rating the PLAYER sees is the pool it takes to beat the
-  // worst thing that site can field. Same units as a dossier, same
+  // So every number quoted AT the player has to pick a point on that
+  // spread, and it may never be the maximum. Not because the maximum
+  // is not there — it often is — but because THE PLAYER HAS NO WAY TO
+  // KNOW WHERE IT IS. Quoting it hands them a fact they never earned,
+  // which is the same overclaim as printing the true tier on the job
+  // card. "You must clear every obstacle, so the hardest one sets the
+  // bar" is an argument about MECHANICS; it says nothing about what
+  // the crew standing outside the building has been told.
+  //
+  // Two bands, and which one a readout uses is a design decision:
+  //   mid   the median — for anything AVERAGED over an encounter
+  //         (soaking hits across a whole firefight).
+  //   high  the upper quarter — for anything PASS/FAIL, where being
+  //         under the bar once is not made up for by being over it
+  //         twice (clearing a lock, penetrating armour).
+  //
+  // `high` is capped one below the rating because ceil(3r/4) lands
+  // exactly ON the maximum at rating 3. Only a rating-1 site reads its
+  // own ceiling, and there the spread is a single tier wide.
+  function tierBandMid(rating) {
+    const r = Math.max(1, Math.min(10, Math.round(rating || 1)));
+    return Math.max(1, Math.ceil(r / 2));
+  }
+  function tierBandHigh(rating) {
+    const r = Math.max(1, Math.min(10, Math.round(rating || 1)));
+    return Math.max(1, Math.min(r > 1 ? r - 1 : r, Math.ceil((r * 3) / 4)));
+  }
+
+  // ── A security rating, stated in DICE ───────────────────────────
+  // The rating is not a number a player can hold a runner up against,
+  // and that mismatch is the whole reason "your crew brings 12d"
+  // against "security P:4" told nobody anything. Twelve of what,
+  // against four of what?
+  //
+  // So what the PLAYER sees is a POOL: same units as a dossier, same
   // units as a crew read, so the comparison is a glance instead of an
-  // essay: bring this many dice, or do not go.
+  // essay. It is the pool it takes to beat the HIGH END OF TYPICAL for
+  // that rating — a floor, honestly stated, not a guarantee. Bring
+  // exactly this and the top of the spread will still beat you
+  // sometimes; that is what makes scouting worth a day and what
+  // teaches a player to pack above the number.
   //
   // Exact, not sampled: hits are Binomial(n, 1/3), and this is the
   // smallest n whose chance of clearing the threshold reaches
@@ -93,7 +128,10 @@
   function diceForSecurity(value) {
     const v = Math.max(1, Math.min(10, Math.round(value || 0)));
     if (DICE_FOR_VALUE[v] === undefined) {
-      const need = thresholdForTier(v);
+      // Clearing an obstacle is pass/fail — being under the bar once
+      // is not made up for by being over it twice — so this reads the
+      // HIGH band, never the rating itself.
+      const need = thresholdForTier(tierBandHigh(v));
       let n = 1;
       while (n < 60 && atLeastHits(n, need) < CHALLENGE_CONFIDENCE) n += 1;
       DICE_FOR_VALUE[v] = n;
@@ -274,6 +312,8 @@
   MJ.rollDicePool = rollDicePool;
   MJ.countHits = countHits;
   MJ.thresholdForTier = thresholdForTier;
+  MJ.tierBandMid = tierBandMid;
+  MJ.tierBandHigh = tierBandHigh;
   MJ.diceForSecurity = diceForSecurity;
   MJ.dicePoolFor = dicePoolFor;
   MJ.resolveTask = resolveTask;

@@ -1344,8 +1344,26 @@
     check(MJ.gearBonusFor(decker, "hacking") === 1, "C11: T3 deck must grant +1");
     const deck2 = MJ.makeItem("deckMk2");
     save.armory.items.push(deck2);
-    MJ.issueItem(deck2, decker);
+    // ── ONE PER SLOT ────────────────────────────────────────────
+    // You jack in with one deck. Nothing in the armoury stacks, so a
+    // second one is nuyen spent on nothing, and letting it happen
+    // silently reads as a bug because it is one.
+    const twoDecks = MJ.issueItem(deck2, decker);
+    check(twoDecks.ok === false, "C11: a runner may not carry two decks");
+    check(decker.gear.indexOf(deck2) === -1 && deck2.issuedTo === null,
+      "C11: and the refusal must leave the second deck exactly where it was");
+    check(buy.item.issuedTo === decker,
+      "C11: a refused issue must not disturb what they are already carrying");
+    // Swap properly, and the better tool is what answers.
+    MJ.reclaimItem(buy.item);
+    check(MJ.issueItem(deck2, decker).ok, "C11: taking the old one off must free the slot");
+    check(MJ.gearBonusFor(decker, "hacking") === 2, "C11: T6 deck must grant +2");
+    // The no-stacking property itself still has to hold in the model,
+    // independently of the guard — build the state directly and prove
+    // gearBonusFor takes the max rather than the sum.
+    decker.gear.push(buy.item);
     check(MJ.gearBonusFor(decker, "hacking") === 2, "C11: best tool wins — never stacked (+2, not +3)");
+    decker.gear.pop();
     check(MJ.gearBonusFor(decker, "sorcery") === 0, "C11: no focus, no bonus");
 
     // Pool math through resolveTask; untrained never rescued.
@@ -1418,6 +1436,48 @@
     const vest = MJ.makeItem("riotCarapace");
     save.armory.items.push(vest);
     MJ.issueItem(vest, tank);
+
+    // ── The slot rule, in every direction it has to work ─────────
+    // One coat. One deck. One gun per skill — but a pistol AND a
+    // sniper rig is a real loadout, so the slot keys on skill rather
+    // than on category alone. Consumables are exempt or carrying
+    // spare patches stops working, which is what patches are for.
+    //
+    // On its OWN runner: loading a shared fixture up with kit to prove
+    // a rule quietly changed what every later probe was looking at.
+    // That is how this block first broke `findConsumable` two tests
+    // down, and a fixture that drifts is worse than no fixture.
+    {
+      const mule = MJ.generateRunner(rng.fork("slot-mule"), { family: "fighter" });
+      MJ.watchRunner(mule, rng); MJ.hireRunner(mule, "permanent");
+      const give = (id) => { const it = MJ.makeItem(id); save.armory.items.push(it); return it; };
+
+      check(MJ.issueItem(give("riotCarapace"), mule).ok, "C11: the coat slot starts empty");
+      check(MJ.issueItem(give("linedCoat"), mule).ok === false, "C11: you wear ONE coat");
+
+      check(MJ.issueItem(give("heavyPistol"), mule).ok, "C11: a firearm goes in the empty firearms slot");
+      check(MJ.issueItem(give("sniperRig"), mule).ok,
+        "C11: marksmanship is its OWN slot — a pistol and a sniper rig is a real loadout");
+      check(MJ.issueItem(give("smartgun"), mule).ok === false, "C11: but not two firearms");
+
+      check(MJ.issueItem(give("traumaPatch"), mule).ok && MJ.issueItem(give("traumaPatch"), mule).ok,
+        "C11: consumables are EXEMPT — carrying spares is the whole point of them");
+
+      // Personal kit never occupies a slot: it is theirs, it cannot be
+      // taken off them, and it cost the operation nothing. If it
+      // blocked, a runner who turned up with a pistol could never be
+      // issued a better one — which is the entire armoury loop.
+      const mule2 = MJ.generateRunner(rng.fork("slot-mule-2"), { family: "fighter" });
+      MJ.watchRunner(mule2, rng); MJ.hireRunner(mule2, "permanent");
+      const ownGun = (mule2.gear || []).find((g) => g.personal &&
+        (MJ.ITEM_TEMPLATES[g.templateId] || {}).category === "weapon");
+      check(!!ownGun, "C11: the probe needs a runner who brought their own gun");
+      if (ownGun) {
+        const skill = MJ.ITEM_TEMPLATES[ownGun.templateId].skill;
+        check(MJ.issueItem(give(skill === "marksmanship" ? "farsight" : "hornetSmg"), mule2).ok,
+          "C11: a runner's OWN kit must never block an upgrade to the same slot");
+      }
+    }
     check(MJ.woundGuardFor(tank) === 2, "C11: T6 armor must guard 2 wounds");
     const patch = MJ.makeItem("traumaPatch");
     save.armory.items.push(patch);
@@ -2124,8 +2184,8 @@
     // armour than their best gun, and quoting the outlier is the same
     // overclaim as reading the true tier.
     for (let rating = 1; rating <= 10; rating++) {
-      const mid = MJ.laneMidTier(rating);
-      const high = MJ.laneHighTier(rating);
+      const mid = MJ.tierBandMid(rating);
+      const high = MJ.tierBandHigh(rating);
       check(mid >= 1 && high >= 1, "C25: a tier band is never below 1 (rating " + rating + ")");
       check(high >= mid, "C25: Attack must never read BELOW Defense on the spread (rating " + rating + ")");
       check(high <= rating, "C25: and never above the rating itself (rating " + rating + ")");
@@ -2259,34 +2319,57 @@
     check(MJ.axisProven(run, "physical").proven,
       "C23: meeting everything of that kind on the route DOES confirm it");
 
-    // ── A RATING IS SAID IN DICE ─────────────────────────────────
-    // The raw 1-10 value is a generation budget; it decides how much
-    // a site buys and how hard its worst thing can be. It was never a
+    // ── A RATING IS SAID IN DICE, AND IT IS A FLOOR ──────────────
+    // The raw 1-10 value is a generation budget; it decides how much a
+    // site buys and how hard its worst thing CAN be. It was never a
     // number a player could hold a dossier against, which is why "the
     // crew brings 12d" against "security P:4" compared nothing to
     // nothing. What the player is shown is the POOL IT TAKES, so the
     // comparison is like against like.
+    //
+    // WHICH pool, though, is the whole question. Obstacle tiers roll
+    // uniformly across 1..rating, and the player cannot see into that
+    // spread — so quoting the pool for the site's HARDEST possible
+    // obstacle hands them a fact they never earned. It is the same
+    // overclaim as printing the true tier on the job card, and the
+    // fact that they must clear every obstacle does not change what
+    // they have been TOLD. So the number is the high end of typical:
+    // an honest floor that the top of the spread still beats
+    // sometimes.
     let lastNeed = 0;
     for (let v = 1; v <= 10; v++) {
       const dice = MJ.diceForSecurity(v);
       check(dice >= lastNeed, "C23: a harder site can never ask for FEWER dice (v=" + v + ")");
       lastNeed = dice;
-      // The stated pool must actually do the job, and one die fewer
-      // must not — otherwise the number is decoration.
-      const need = MJ.thresholdForTier(v);
-      const rate = (pool) => {
-        const rng = MJ.makeRNG("c23-dice-" + v + "-" + pool);
+      const rate = (pool, tier) => {
+        const need = MJ.thresholdForTier(tier);
+        const rng = MJ.makeRNG("c23-dice-" + v + "-" + pool + "-" + tier);
         let win = 0;
         for (let i = 0; i < 4000; i++) if (MJ.countHits(MJ.rollDicePool(rng, pool)) >= need) win++;
         return win / 4000;
       };
-      check(rate(dice) >= 0.75,
-        "C23: the stated pool must actually beat the site (v=" + v + ", " + dice + "d)");
-      check(rate(dice - 1) < rate(dice),
+      // It must genuinely do the job it claims: beat the high-end-of-
+      // typical obstacle, and one die fewer must not — otherwise the
+      // number is decoration.
+      const band = MJ.tierBandHigh(v);
+      check(rate(dice, band) >= 0.75,
+        "C23: the stated pool must beat the high end of typical (v=" + v + ", " + dice + "d)");
+      check(rate(dice - 1, band) < rate(dice, band),
         "C23: and it must be the LINE, not a number above it (v=" + v + ")");
+      // ...and it must NOT quietly cover the outlier as well, or the
+      // "floor" is a ceiling wearing a hat and nothing is being
+      // withheld from the player at all.
+      if (MJ.thresholdForTier(v) > MJ.thresholdForTier(band)) {
+        check(rate(dice, v) < 0.75,
+          "C23: the number is a FLOOR — it must not silently cover the site's worst (v=" + v + ")");
+      }
     }
     check(MJ.diceForSecurity(10) > MJ.diceForSecurity(1),
       "C23: the top of the scale must demand more than the bottom");
+    for (let v = 2; v <= 10; v++) {
+      check(MJ.tierBandHigh(v) < v,
+        "C23: no number quoted at the player may be read off the site's maximum (v=" + v + ")");
+    }
 
     // ── A RESPONSE SQUAD PROVES CAPABILITY ───────────────────────
     // Its tier is drawn from the alert level, which is bounded by the

@@ -507,13 +507,21 @@ hurt that thing **28%** of the time. That is the lesson — bring a few points m
 than the card asks — and it is why the numbers are honest rather than padded.
 Padding them would just move the floor and teach nothing.
 
-**The dice lanes are not on this spread and are deliberately worst-case.** Sneak,
-Face, Tech, Banish, the Attack *pool* and Awareness all read `diceForSecurity` at
-the full rating, matching the header's `P:~12d`. The reason is mechanical rather
-than informational: you have to clear *every* obstacle on the route, so the
-hardest lock sets the bar and there is nothing to average. The two fight reads
-are the exception because armour and Power are not pass/fail per route — they are
-per exchange.
+**EVERY number quoted at the player is on this spread — including the header.**
+`diceForSecurity` reads the high band too, so `P:~12d` is the pool for the high
+end of typical, not for the site's hardest possible obstacle.
+
+An earlier pass exempted the dice lanes on the grounds that you must clear
+*every* obstacle, so the hardest one sets the bar. **That argument is about
+mechanics and says nothing about information.** The player has no way to know
+where the maximum sits, so quoting the pool for it hands them a fact they never
+earned — the same overclaim as printing the true tier on the job card. The
+mechanical point is real, and the answer to it is that the number is a **floor**:
+bring exactly it and the top of the spread will still beat you sometimes. That is
+what recon is for.
+
+The scale moved: 3 → `4d` (was 8d), 5 → `8d` (was 12d), 7–8 → `12d` (was 16d),
+9–10 → `16d` (was 19d).
 
 **The armour ladder is contiguous, 1–8, and that is load-bearing.** Armour is one
 side of the Penetrate gate, so every rating a weapon can demand has to be

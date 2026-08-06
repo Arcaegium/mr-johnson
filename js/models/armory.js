@@ -340,6 +340,48 @@
     return item;
   }
 
+  // ── ONE PER HAND: what a runner can actually have on them ───────
+  // Nothing in this file stacks. `gearBonusFor` takes the MAX over a
+  // skill, `armourRatingFor` the max over armour, `combatLoadoutFor`
+  // picks a single weapon. So a second Padded Vest is not "more
+  // armour", it is nuyen the player spent on nothing — and the
+  // armoury let them, silently, which reads as a bug because it is
+  // one. You wear one coat. You jack in with one deck.
+  //
+  // The slot is (category, skill), which is exactly as fine-grained
+  // as the stacking rules are. Armour and decks carry no skill, so
+  // they collapse to one apiece. Weapons key on skill, so a pistol
+  // and a sniper rig is a real loadout — two pistols is not.
+  //
+  // CONSUMABLES ARE EXEMPT and must stay that way: they are one-shot,
+  // `findConsumable` burns them one at a time, and carrying four
+  // patches is the entire point of carrying patches.
+  function gearSlotOf(template) {
+    return template.category + "/" + (template.skill || "-");
+  }
+
+  // PERSONAL KIT DOES NOT OCCUPY THE SLOT. A runner's own holdout is
+  // theirs, cannot be taken off them, and cost the operation nothing —
+  // so if it blocked the slot, a runner who turned up with a pistol
+  // could never be issued a better one, which would break the entire
+  // reason the armoury exists. They carry both and `combatLoadoutFor`
+  // reaches for the better one. Nothing is wasted, because the free
+  // thing is the one going unused.
+  //
+  // What this refuses is a second thing THE OPERATION PAID FOR in a
+  // slot that already holds one.
+  function slotConflict(runner, item) {
+    const t = ITEM_TEMPLATES[item.templateId];
+    if (!t || t.category === "consumable") return null;
+    const slot = gearSlotOf(t);
+    for (const held of runner.gear || []) {
+      if (held === item || held.consumed || held.personal) continue;
+      const ht = ITEM_TEMPLATES[held.templateId];
+      if (ht && gearSlotOf(ht) === slot) return held;
+    }
+    return null;
+  }
+
   // ── Issue / reclaim: exclusive, always-consistent both ways ─────
   function issueItem(item, runner) {
     const t = ITEM_TEMPLATES[item.templateId];
@@ -349,6 +391,16 @@
     // the armoury to reassign, and pooling it would turn every hire
     // into a free equipment delivery.
     if (item.personal) return { ok: false, error: "that is their own kit, not the operation's" };
+    // Checked BEFORE anything moves. A refusal has to leave the world
+    // exactly as it found it, including the item's old carrier — so
+    // the conflict test cannot come after the reclaim.
+    const clash = slotConflict(runner, item);
+    if (clash) {
+      return {
+        ok: false, conflict: clash,
+        error: "already carrying " + clash.label + " — take that off first",
+      };
+    }
     reclaimItem(item); // off the old carrier first — one item, one holder
     item.issuedTo = runner;
     runner.gear = runner.gear || [];
@@ -540,6 +592,8 @@
   MJ.reclaimItem = reclaimItem;
   MJ.gearBonusFor = gearBonusFor;
   MJ.woundGuardFor = woundGuardFor;
+  MJ.gearSlotOf = gearSlotOf;
+  MJ.slotConflict = slotConflict;
   MJ.generatePersonalKit = generatePersonalKit;
   MJ.personalTierFor = personalTierFor;
   MJ.PERSONAL_TIER_CAP = PERSONAL_TIER_CAP;

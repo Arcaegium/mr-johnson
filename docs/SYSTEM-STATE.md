@@ -21,9 +21,9 @@ wins and this file is stale — verify before trusting a line here.
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
 Last verified after the lane model landed. Suite: 25 classes,
-89,362 assertions, 0 failures, identical across three consecutive runs.
+89,390 assertions, 0 failures, identical across three consecutive runs.
 
-**Baseline moved deliberately**, 95,109 → 89,362. Class 25 is new (352
+**Baseline moved deliberately**, 95,109 → 89,390. Class 25 is new (352
 assertions, the lane model's own probes). The drop is content drift, not lost
 coverage: `generateSkillSpread` now grants a Perception baseline and
 `generateObstacleInstance` picks a weapon off a tier ladder, so both consume the
@@ -52,7 +52,13 @@ js/core/tempo.js      140  THE SHARED FRAME. newTempo isTurnBased setMode
                               advanceWorld COUNTS ONLY and must stay inert
                               until the visual layer lands.
 js/core/resolve.js    243  THE DICE. rollDicePool countHits thresholdForTier
+                           tierBandMid tierBandHigh diceForSecurity
                            dicePoolFor resolveTask
+                           -- A RATING IS A SPREAD (tiers roll 1..rating) and
+                              NO number quoted at the player may be read off
+                              its maximum -- they cannot see where it is.
+                              tierBandHigh is capped at rating-1 because
+                              ceil(3r/4) lands ON the max at rating 3.
                            drainValueFor resistDrain maxForceFor
                            beginExtendedTest extendedTestStep resolveExtendedTest
 
@@ -97,6 +103,14 @@ js/models/market.js   191  kiaChance watchRunner CONTRACT_MISSIONS hireRunner
                            consumeContractMission releaseRunner isHireable
                            advanceMarketDay
 js/models/armory.js   520  ITEM_TEMPLATES makeItem issueItem reclaimItem
+                           gearSlotOf slotConflict
+                           -- ONE PER SLOT, slot = (category, skill). Nothing
+                              in this file stacks, so a second coat/deck was
+                              nuyen spent on nothing and the armoury allowed
+                              it silently. Consumables EXEMPT (spares are the
+                              point). Personal kit does NOT occupy a slot, or
+                              a runner who brought their own gun could never
+                              be issued a better one.
                            gearBonusFor woundGuardFor findConsumable consumeItem
                            generatePersonalKit PERSONAL_TIER_CAP
                            combatWeaponFor combatLoadoutFor armourRatingFor
@@ -204,10 +218,13 @@ js/models/lanes.js    340  THE REPORT CARD -- what a runner NEEDS TO BE.
                               300 sites: something harder than it was in the
                               building 33% of the time. That is the lesson,
                               not a bug -- pack above the card.
-                           -- the DICE lanes stay worst-case (diceForSecurity
-                              at the full rating, matching the header). You
-                              must clear every obstacle on a route, so the
-                              hardest sets the bar and nothing averages.
+                           -- EVERYTHING is on the band, header included.
+                              diceForSecurity reads tierBandHigh, so "P:~12d"
+                              is the high end of typical, not the site's
+                              worst. "You must clear every obstacle" is an
+                              argument about MECHANICS -- it says nothing
+                              about what the player has been told, and they
+                              cannot see where the maximum is.
                            -- NEITHER half of the fight read may see ICE. It
                               has fights:true and a weapon and no coat or gun
                               answers it. Left in, it demanded armour 8 at a
