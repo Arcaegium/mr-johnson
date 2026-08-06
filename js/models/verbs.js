@@ -182,7 +182,7 @@
     // direct physical touches anything (Powerbolt is the mage's
     // answer to a hardened maglock), and indirect throws something
     // real that armour resists, AP −Force.
-    castBolt: {
+    castDirectMana: {
       pillar: "physical", skill: "sorcery",
       label: (t, runner) => {
         const s = runner && MJ.bestSpellOfShape(runner, "directMana");
@@ -194,7 +194,7 @@
       damaging: true, loud: true, threat: "THREATENING", drains: true,
       describe: "raw mana, straight past armour — living things only",
     },
-    castSmash: {
+    castDirectPhysical: {
       pillar: "physical", skill: "sorcery",
       label: (t, runner) => {
         const s = runner && MJ.bestSpellOfShape(runner, "directPhys");
@@ -205,7 +205,7 @@
       damaging: true, loud: true, threat: "THREATENING", drains: true,
       describe: "kinetic force past the armour — the Powerbolt line opens doors",
     },
-    castBlast: {
+    castIndirect: {
       pillar: "physical", skill: "sorcery",
       label: (t, runner) => {
         const s = runner && MJ.bestSpellOfShape(runner, "indirect");
@@ -216,7 +216,7 @@
       damaging: true, loud: true, threat: "THREATENING", drains: true,
       describe: "thrown fire or lightning; armour resists it like anything else",
     },
-    magicFingers: {
+    castRemote: {
       pillar: "physical", skill: "sorcery", label: "magic fingers",
       requires: { living: false },
       carries: (runner) => MJ.knowsSpell(runner, "magicFingers"),
@@ -224,7 +224,7 @@
       loud: false, threat: "QUESTIONABLE", extended: true, disables: true, drains: true,
       describe: "telekinetic hands working the mechanism from across the room",
     },
-    levitate: {
+    castBypass: {
       pillar: "physical", skill: "sorcery", label: "levitate over it",
       // Over the wall, not through the door — but only where nothing
       // is WATCHING the ground you float across; floating past a
@@ -235,7 +235,7 @@
       loud: false, threat: "QUESTIONABLE", drains: true,
       describe: "over it instead of through it — passes, removes nothing",
     },
-    command: {
+    castCommand: {
       pillar: "physical", skill: "sorcery",
       label: (t, runner) => {
         const s = runner && MJ.bestCommandSpell && MJ.bestCommandSpell(runner);

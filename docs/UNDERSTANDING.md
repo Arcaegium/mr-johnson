@@ -376,6 +376,42 @@ weapon choice, body, and target armour all matter to the same swing.
 Body the physical track, Willpower the stun track plus Drain and Full Defense.
 This mirrors how the source uses them.
 
+### 5.2b BOTH DAMAGE TRACKS ARE PERSISTENT
+A runner carries `wounds` (physical, `8 + ⌈Body/2⌉`) **and** `stun`
+(`8 + ⌈Willpower/2⌉`) on the **dossier**, not merely inside a fight.
+
+This was the missing structure under the whole magic pillar. Drain is
+canonically stun damage; stun damage needs a stun track; outside combat there
+was nowhere to put it — so four callers invented four different workarounds and
+the same Force-6 Stunbolt cost three different things depending which door the
+mage cast through, and **nothing at all** on the astral. §16 lists "dual
+condition tracks" among the SR5 systems to keep; they were kept **in combat
+only**, and Drain was the first system that needed the other half.
+
+It persists because **a run is many missions long**. A mage who burned out at
+the second door is still burned out at the fifth; Drain ends when they *rest*,
+not when a mission does. Both tracks ride home from a fight and both seed a
+combatant walking into the next one.
+
+| | physical | stun |
+|---|---|---|
+| what it is | injury | exhaustion, Drain, a beating |
+| costs dice | −1 per 3 boxes | −1 per 3 boxes, **charged separately** |
+| full track | down, and a death roll | **unconscious** — nobody dies of being wrung out |
+| clears | days, or a medic | a few nights, Willpower-scaled |
+| overflow | — | past the track it becomes real damage |
+
+**Both charge dice separately** (canon): three wounds and three Drain is −2, not
+−1. **A medic treats injury only** — Drain is not a wound and no street doc
+makes a night's rest go faster. And stun clearing fast is load-bearing: at
+injury's rate one hard casting day would bench a mage for a week and nobody
+would ever push Force again.
+
+**ONE DRAIN LAW.** `applyDrain` owns it — meatspace verbs, utility casts, the
+astral's lattice and spirit binding all bill through the same function.
+`castSpell` rolls the Drain and hands it back rather than applying it, so an
+overcasting mage is not charged twice for one push.
+
 **Collapses from the source:** Reaction folds into Agility; Intuition and Logic
 fold into Intelligence. Both are fixed by the design's own "Initiative = Agility
 + Intelligence".
@@ -744,6 +780,15 @@ adding one later is a row, not a system.
 A mage generates knowing **Magic-rating spells**, focus-weighted with the
 signature guaranteed (a combatMage always has Manabolt; a healthMage, Heal).
 `spellsFor()` is **grimoire ∩ trained**, never the whole book.
+
+**Spell verbs are named for the SHAPE they front**, in canon's own combat
+vocabulary — `castDirectMana`, `castDirectPhysical`, `castIndirect`, plus
+`castRemote` / `castBypass` / `castCommand`. SR5 classifies combat spells
+exactly this way (Direct/Indirect × Mana/Physical), and a verb fronts a
+*family*, never one spell: `castCommand` covers Influence and the whole Control
+line. The table used to mix shape-names with spell-names, which implied
+`levitate` was a different kind of thing from `castBolt` when both are one verb
+over a bag of spells.
 
 **Learning is taught first, paid for after.** A formula (auto-generated into the
 armoury, one per spell, named for the spell) is consumed the day it is taught —

@@ -50,8 +50,7 @@
   const MAX_CREW = 4;
 
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const esc = MJ.text.esc; // shared with every other readout — js/ui-text.js
   const chev = (open) => `<span class="chev">${open ? "▾" : "▸"}</span>`;
   const ok = (res) => !res || res.ok !== false;
 

@@ -3081,19 +3081,30 @@
     // ── The verb bridge: spells cross like everything else ────────
     const lock = MJ.generateObstacleInstance(MJ.makeRNG("c17lock"), "maglock", 4, "physical");
     const acts = MJ.actsFor(lock);
-    const bolt = acts.find((a) => a.id === "castBolt");
-    const smash = acts.find((a) => a.id === "castSmash");
-    check(bolt && !bolt.lands, "C17: castBolt reaches a maglock and does not land — mana needs a life to touch");
-    check(smash && smash.lands, "C17: castSmash lands on it — the Powerbolt line opens doors");
+    const bolt = acts.find((a) => a.id === "castDirectMana");
+    const smash = acts.find((a) => a.id === "castDirectPhysical");
+    check(bolt && !bolt.lands, "C17: castDirectMana reaches a maglock and does not land — mana needs a life to touch");
+    check(smash && smash.lands, "C17: castDirectPhysical lands on it — the Powerbolt line opens doors");
     const guard = MJ.generateObstacleInstance(MJ.makeRNG("c17grd"), "guard", 4, "physical");
-    check((MJ.actsFor(guard).find((a) => a.id === "castBolt") || {}).lands === true,
+    check((MJ.actsFor(guard).find((a) => a.id === "castDirectMana") || {}).lands === true,
       "C17: and the same verb lands on the guard");
     // The grimoire gates the MENU: no known shape, no verb offered.
-    check(MJ.VERBS.castSmash.carries(mage) === false,
-      "C17: a mage without the Powerbolt line is never offered castSmash");
-    check(MJ.VERBS.castBolt.carries(mage) === true, "C17: one with Manabolt is offered castBolt");
-    check(MJ.VERBS.command.carries(mage) === true && MJ.bestCommandSpell(mage).id === "mobMind",
-      "C17: command fronts the best control spell on the dossier");
+    check(MJ.VERBS.castDirectPhysical.carries(mage) === false,
+      "C17: a mage without the Powerbolt line is never offered castDirectPhysical");
+    check(MJ.VERBS.castDirectMana.carries(mage) === true, "C17: one with Manabolt is offered castDirectMana");
+    check(MJ.VERBS.castCommand.carries(mage) === true && MJ.bestCommandSpell(mage).id === "mobMind",
+      "C17: castCommand fronts the best control spell on the dossier");
+    // ONE NAMING CONVENTION. Every spell verb is named for the SHAPE
+    // it fronts, using canon's own combat vocabulary (Direct/Indirect
+    // x Mana/Physical) — because a verb fronts a FAMILY, never one
+    // spell. The table used to mix shape-names and spell-names.
+    for (const id of Object.keys(MJ.VERBS)) {
+      const v = MJ.VERBS[id];
+      if (v.skill !== "sorcery" || id === "blast" || id === "unwind" || id === "banish") continue;
+      check(id.indexOf("cast") === 0,
+        "C17: a spell verb is named for its shape, not for a spell (" + id + ")");
+      check(!MJ.SPELLS[id], "C17: and never shares a name with a spell id (" + id + ")");
+    }
 
     // ── Sustaining costs you while you hold it ────────────────────
     const c2 = MJ.beginCombat(MJ.makeRNG("sus"), [MJ.makeCombatant(mage, { side: "crew" })], [tank()], {});

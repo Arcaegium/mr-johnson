@@ -252,7 +252,7 @@
     const magic = (caster && caster.attributes && caster.attributes.magic) || 0;
     return {
       force: force,
-      value: Math.max(2, force + ((def && def.drain) || 0)),
+      value: drainValueOf(def, force), // the SAME number the roll uses
       overcast: force > magic,
       physical: force > magic,
       resistPool: ((caster && caster.attributes && caster.attributes.willpower) || 0) + magic,
@@ -329,11 +329,25 @@
   // with Willpower + Magic; what gets through lands on the STUN
   // track, or PHYSICAL when overcasting. resistDrain owns the roll;
   // this owns the canon value.
+  // ── ONE definition of what a spell costs ───────────────────────
+  // Force plus the printed modifier, floored at 2. Everything that
+  // needs to KNOW a spell's Drain reads this — the roll, the Force
+  // dial's preview, the mission loop's billing — so the number the
+  // player is shown on the dial is the number they are charged.
+  // It lived in three places and they were free to disagree.
+  function drainValueOf(def, force) {
+    return Math.max(2, force + ((def && def.drain) || 0));
+  }
+
   function spellDrain(rng, caster, def, force) {
-    const drain = MJ.resistDrain(rng, caster, force, {
-      drainValue: Math.max(2, force + (def.drain || 0)),
-    });
-    return drain;
+    return MJ.resistDrain(rng, caster, force, { drainValue: drainValueOf(def, force) });
+  }
+
+  // How many stacks a Force-scaled effect lands. Armor at Force 5 is
+  // five armour; the registry's own maxStacks still caps it.
+  function effectStacksFor(def, force) {
+    if (!def) return 1;
+    return def.stacksFromForce ? force : (def.effectStacks || 1);
   }
 
   // ── Casting: the meatspace quick cast ──────────────────────────
@@ -513,7 +527,7 @@
     // Sustained non-attack spells go UP rather than being thrown.
     if (def.sustained && !def.combat) {
       const holder = def.onTarget ? target : caster;
-      const stacks = def.stacksFromForce ? force : (def.effectStacks || 1);
+      const stacks = effectStacksFor(def, force);
       if (def.effect) MJ.applyEffect(holder, def.effect, { stacks: stacks, source: spellId });
       if (def.dominates) MJ.applyEffect(target, "dominated", { source: spellId });
       MJ.applyEffect(caster, "sustaining", { source: spellId });
@@ -623,6 +637,8 @@
   MJ.bestCombatSpell = bestCombatSpell;
   MJ.bestCommandSpell = bestCommandSpell;
   MJ.spellDrain = spellDrain;
+  MJ.drainValueOf = drainValueOf;
+  MJ.effectStacksFor = effectStacksFor;
   MJ.castSpell = castSpell;
   MJ.finishCast = finishCast;
   MJ.applySpellToRun = applySpellToRun;

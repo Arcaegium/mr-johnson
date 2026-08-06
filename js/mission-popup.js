@@ -34,10 +34,9 @@
 (function () {
   window.MJ = window.MJ || {};
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  // The four word types, one helper each.
-  const nm = (s) => '<span class="w-name">' + esc(s) + "</span>";
-  const num = (s) => '<span class="w-num">' + esc(s) + "</span>";
+  // The console's shared vocabulary — see js/ui-text.js.
+  const esc = MJ.text.esc, nm = MJ.text.nm, num = MJ.text.num;
+  // Two more that only a transcript needs: the verdict words.
   const ok = (s) => '<span class="w-ok">' + esc(s) + "</span>";
   const no = (s) => '<span class="w-no">' + esc(s) + "</span>";
 
@@ -283,7 +282,12 @@
     // density says so on its own. Standing in the building and
     // watching your guess get confirmed is the payoff for going.
     if (run.site && run.state) {
-      const axes = ["physical", "astral", "matrix"].map((a) => {
+      // ONLY THE PLANES THIS RUN WALKS. An astral projection has no
+      // opinion about the corridor's cameras and no way to learn one,
+      // so reciting a Matrix rating at it is quoting a number the
+      // crew can neither use nor confirm — the same fault the
+      // dispatch header had.
+      const axes = (MJ.missionPlanes(run) || ["physical", "astral", "matrix"]).map((a) => {
         const p = MJ.axisProven(run, a);
         const est = run.site.estimatedSecurity ? run.site.estimatedSecurity[a] : null;
         const letter = a[0].toUpperCase();

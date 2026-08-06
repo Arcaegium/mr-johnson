@@ -20,17 +20,15 @@ wins and this file is stale — verify before trusting a line here.
 > If you catch yourself writing "the player has no input here," you are
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
-Last verified after the canon grimoire landed. Suite: 25 classes,
-98,906 assertions, 0 failures, identical across three consecutive runs.
+Last verified after the persistent stun track and the mission.js split.
+Suite: 25 classes, 92,717 assertions, 0 failures, identical across three
+consecutive runs.
 
-**Baseline moved deliberately**, 89,390 → 98,899. Class 17 was rewritten
-against the canon spell system (512 assertions — grimoire gating, canon Drain
-codes, the 2×Magic ceiling, direct-vs-indirect against armour, the verb
-bridge, generation, the Attack lane reading the dossier). C11 grew formula
-probes (canon names, ids, the 5-karma price). The rest is content drift:
-`generateGrimoire` consumes the RNG during mage generation, so every runner
-and site in every seed differs, and the soak plus the content-guarded loops
-count in proportion to what got generated.
+**Baseline moved deliberately**, 98,906 -> 92,717. Nothing was removed from
+coverage: C12 was rewritten for two persistent tracks and C17 gained the
+one-drain-law probes, but `runner.stun` changes what every generated runner
+carries, so the soak and the content-guarded loops count in proportion to a
+different world. Class counts by name are the thing to compare, not the total.
 
 ---
 
@@ -45,14 +43,14 @@ js/core/rng.js        115  makeRNG — xmur3 + mulberry32. float/int/range/chanc
                            fork(label) derives purely from (seed+label): fork a
                            UNIQUE label per slot to get independent sub-streams.
 js/core/clock.js       20  advanceDay
-js/core/save.js        88  SCHEMA_VERSION defaultSave saveGame loadGame deleteSave (IndexedDB)
-js/core/tempo.js      140  THE SHARED FRAME. newTempo isTurnBased setMode
+js/core/save.js        91  SCHEMA_VERSION defaultSave saveGame loadGame deleteSave (IndexedDB)
+js/core/tempo.js      136  THE SHARED FRAME. newTempo isTurnBased setMode
                            toggleMode enterCombat exitCombat advanceWorld
                            describeTempo
                            -- free <-> turnBased; combat FORCES turnBased.
                               advanceWorld COUNTS ONLY and must stay inert
                               until the visual layer lands.
-js/core/resolve.js    243  THE DICE. rollDicePool countHits thresholdForTier
+js/core/resolve.js    344  THE DICE. rollDicePool countHits thresholdForTier
                            tierBandMid tierBandHigh diceForSecurity
                            dicePoolFor resolveTask
                            -- A RATING IS A SPREAD (tiers roll 1..rating) and
@@ -63,14 +61,14 @@ js/core/resolve.js    243  THE DICE. rollDicePool countHits thresholdForTier
                            drainValueFor resistDrain maxForceFor
                            beginExtendedTest extendedTestStep resolveExtendedTest
 
-js/models/runner.js   901  SKILLS(21) SKILL_ATTRIBUTE attributeFor attributeCeiling
+js/models/runner.js  1057  SKILLS(21) SKILL_ATTRIBUTE attributeFor attributeCeiling
                            attributeCost attributePriority ATTRIBUTE_SHARE
                            METATYPES FOCUSES(19) ARCHETYPE_SKILLS buildSkillTiers
                            generateRunner mintRunner getEffectiveSkills
                            computePrice describeDiscipline karmaCost trueValue
                            growRunner marginalSkillCost halfStepCost
                            SKILL_GATES isSkillEligible HANDLES handleBaseFromIndex
-js/models/site.js    1286  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
+js/models/site.js    1342  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
                            generateHost NODE_TYPES weaponForTier canBeForced
                            deriveSecurity generateSite mintSite mintSiteByName
                            encodeSiteName decodeSiteName siteIdentityFromIndex
@@ -94,7 +92,7 @@ js/models/site.js    1286  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
                               Orthogonal to theme -- every theme under every
                               condition.
                            allObstacles findPaths usableNonLoudWays
-js/models/alert.js    274  THE THREAT READ. initSecurityState threatBand witnessAct
+js/models/alert.js    316  THE THREAT READ. initSecurityState threatBand witnessAct
                            grantHeadroom engageAlert alertLevel alertEngaged
                            allAxesPinned addAlertPoints addAlertPointsAll
                            settleIncident advanceSiteDay
@@ -103,7 +101,7 @@ js/models/job.js      339  OBJECTIVE_VERBS PAYLOAD_DOMAINS JOB_FAMILIES TIER_BAN
 js/models/market.js   191  kiaChance watchRunner CONTRACT_MISSIONS hireRunner
                            consumeContractMission releaseRunner isHireable
                            advanceMarketDay
-js/models/armory.js   520  ITEM_TEMPLATES makeItem issueItem reclaimItem
+js/models/armory.js   631  ITEM_TEMPLATES makeItem issueItem reclaimItem
                            gearSlotOf slotConflict
                            -- ONE PER SLOT, slot = (category, skill). Nothing
                               in this file stacks, so a second coat/deck was
@@ -121,7 +119,7 @@ js/models/economy.js  280  canAfford spend earn collectJobPay
                            dailyUpkeep payUpkeep hireCost hireRunnerWithCost
                            upgradeContractWithCost itemCost buyItem sellItem
                            sellMaterials expandBoardCapacity
-js/models/combat.js   713  WEAPONS FIRE_MODES weaponProfile
+js/models/combat.js   808  WEAPONS FIRE_MODES weaponProfile
                            COMBAT_EFFECTS COMBAT_CHANNELS COMBAT_POSTURES
                            effectDef applyEffect clearEffect hasEffect
                            effectModifier tickEffects describeEffects
@@ -140,7 +138,48 @@ js/models/combat.js   713  WEAPONS FIRE_MODES weaponProfile
                            carriedDamage carryDamageHome restDay
                            -- physicalTrack/stunTrack read `.attributes`, so a
                               roster runner measures without being in a fight
-js/models/mission.js 2363  THE BIG ONE.
+js/ui-text.js          38  esc / nm / num / dim -- the console's shared
+                           vocabulary, declared ONCE. Three renderers each
+                           had their own copy; one of them learning to
+                           handle a null differently is how two screens
+                           start describing the same runner in two voices.
+js/models/mission-routes.js
+                          221  THE GROUND A RUN WALKS, three pillars.
+                           routeObstacles hostPaths hostRoute astralRoute
+                           -- pure shape: site in, {path, obstacles} out. No
+                              dice, no runners, no resolution. All three
+                              share one shape so anything that can draw a
+                              run can draw any of them, and WALK ORDER IS
+                              THE CONTRACT with every renderer.
+js/models/mission-witness.js
+                          292  WHO SAW IT, AND WHAT IT LOOKED LIKE.
+                           perceiversNear noticePool concealmentPool caughtBy
+                           noticedBy castNoticedBy actSilenced wasWitnessed
+                           threatClassFor triesOn countTry knownUseless
+                           markUseless
+                           -- reads a run, returns verdicts. Never resolves,
+                              never rolls a skill, never touches alert state:
+                              the caller carries the verdict to alert.js.
+                           -- a CAST asks a wider question than an act.
+                              wasWitnessed excludes the obstacle acted ON;
+                              castNoticedBy includes it, because a mage
+                              armouring up has not HANDLED the guard.
+                           -- ONE notice contest (caughtBy); the callers
+                              differ only in who is watching.
+js/models/mission-intel.js
+                          149  WHAT THE CREW KNOWS, AND WHAT THEY SOFTENED.
+                           axisTally axisProven reconObstacles isStanding
+                           suppressionAxisFor suppressionBonus applySuppression
+                           hasFreshIntel
+                           -- a LEG IS THE SAMPLE; nothing accumulates across
+                              visits. A responder raises what an axis can be
+                              PROVEN to reach but never joins the census of
+                              what was faced.
+js/models/mission.js 2424  THE STEPPER + LIFECYCLE. Was 2,914 lines
+                           owning three pillars' routes, witnessing and intel
+                           as well; those are now their own files above and
+                           this keeps resolution, combat orchestration, drain
+                           and the dispatch lifecycle.
                            optionsFor actFor forceThrough resolveIneffective
                            remainingApproaches
                            create*Mission (recon/matrix/astral/crafting/medical/
@@ -164,7 +203,7 @@ js/models/mission.js 2363  THE BIG ONE.
                               MISSIONS: missionPrompt/missionChoose is the seat
                               they sit in.
 js/models/sitelist.js 156  addKnownSite watchSite siteListView compressSite reviveSite
-js/models/verbs.js    371  VERBS x PROPERTIES -- THE AUTHORITY ON WHAT IS
+js/models/verbs.js    488  VERBS x PROPERTIES -- THE AUTHORITY ON WHAT IS
                            POSSIBLE. VERBS(18) verbDef verbsFor actsFor
                            verbLabel verbSkill verbPlane
                            verbReaches verbLands verbWhyNot verbThreat
@@ -186,7 +225,7 @@ js/models/verbs.js    371  VERBS x PROPERTIES -- THE AUTHORITY ON WHAT IS
                               force is a currency between bodies and nothing
                               on the wire has one. Every Matrix verb rolls
                               hacking; `computer` is a bench skill only.
-js/models/lanes.js    340  THE REPORT CARD -- what a runner NEEDS TO BE.
+js/models/lanes.js    549  THE REPORT CARD -- what a runner NEEDS TO BE.
                            LANE_DEFS(7) LANE_ORDER lanesOfSkill lanesOfVerb
                            runnerLane crewLane teamworkStack
                            siteObstacles laneDemands attackPowerFor laneReport
@@ -237,12 +276,12 @@ js/models/armory.js        -- ARMOUR LADDER IS CONTIGUOUS 1-8. Every rating a
                               Penetrate gate has bands nobody can stand in.
                               Was 1,2,3,6,8; the 4-5 hole left the best
                               affordable coat one short of the softest site.
-js/models/lattice.js  330  THE ASTRAL PUZZLE. beginLattice latticePull
+js/models/lattice.js  390  THE ASTRAL PUZZLE. beginLattice latticePull
                            latticeAbandon latticeDone latticeRead latticeDrain
                            latticeMoveStrength latticeReadDepth
                            -- modes unwind / unravel / assemble. NEVER hand a
                               renderer the raw lattice; latticeRead only.
-js/models/spells.js   560  THE CANON GRIMOIRE. SPELLS(57 of SR5 core's 93)
+js/models/spells.js   650  THE CANON GRIMOIRE. SPELLS(57 of SR5 core's 93)
                            spellDef spellsFor knowsSpell knowsSpellOfShape
                            bestSpellOfShape bestCombatSpell bestCommandSpell
                            spellDrain castSpell finishCast applySpellToRun
@@ -297,7 +336,7 @@ js/models/spells.js   560  THE CANON GRIMOIRE. SPELLS(57 of SR5 core's 93)
                               AWKWARD. Only lands if something SEES it, which
                               is why you cast before you walk up.
                            -- forceLadder/drainPreview: the §14 Force dial.
-js/grimoire.js        230  THE GRIMOIRE, ANYWHERE IN MEATSPACE. entriesFor
+js/grimoire.js        264  THE GRIMOIRE, ANYWHERE IN MEATSPACE. entriesFor
                            forceRows open castersIn SPELL_VERB_IDS
                            -- KNOWS NOTHING ABOUT OBSTACLES. ctx.obstacle is
                               OPTIONAL; without one the spells needing a
@@ -339,28 +378,28 @@ js/models/mission.js       castUtilitySpell(run, runner, spellId, opts)
                               the corridor in AR, no jack-in), so Tech stays
                               on a street card; a projection has no body, so
                               no Sneak/Face/Tech/Defense rows.
-js/models/helpers.js  270  makeHelper bindSpirit finishBind loadAgent
+js/models/helpers.js  291  makeHelper bindSpirit finishBind loadAgent
                            unloadAgent agentSlotsFor helperAct instructHelper
                            dismissHelper describeHelper
                            -- N tasks, each a SEPARATE action. No sprites.
-js/models/astral.js   250  ASTRAL_VERBS astralPrompt astralAct astralEngage
+js/models/astral.js   262  ASTRAL_VERBS astralPrompt astralAct astralEngage
                            astralResolve astralStudied
                            -- clock: the tether. assensing raises Lattice depth.
-js/models/matrix.js   270  MATRIX_VERBS matrixPrompt matrixAct overwatchOf
+js/models/matrix.js   276  MATRIX_VERBS matrixPrompt matrixAct overwatchOf
                            raiseOverwatch matrixAdjacent
                            -- clock: Overwatch, converging at 40.
-js/models/street.js   180  STREET_VERBS streetPrompt streetAct streetWatchers
+js/models/street.js   196  STREET_VERBS streetPrompt streetAct streetWatchers
                            -- clock: the alert bands. Position is the point.
 
-js/game.js            895  MJ.game — THE INTEGRATION LAYER. DOM-free.
+js/game.js           1054  MJ.game — THE INTEGRATION LAYER. DOM-free.
                            newGame refreshBoard refreshMarket acceptJob
                            watchFromMarket hire upgrade release
                            queueDispatch unqueue moveQueued
                            beginDay resolveEntry settleDay endDay logResult
                            serializeSession deserializeSession saveSession loadSession
-js/game-ui.js         583  MJ.ui — the v0 text shell renderer. ONLY reads session +
+js/game-ui.js         979  MJ.ui — the v0 text shell renderer. ONLY reads session +
                            calls MJ.game commands. MJ.ui.session() is a dev handle.
-js/mission-popup.js   315  MJ.decide (generic decision prompt, reusable)
+js/mission-popup.js   745  MJ.decide (generic decision prompt, reusable)
                            MJ.missionPopup (drives the mission stepper through it)
 
 js/harness.js         ~1k  dev inspector benches (buttons on inspector.html)

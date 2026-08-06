@@ -35,18 +35,16 @@
 (function () {
   window.MJ = window.MJ || {};
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const nm = (s) => '<span class="w-name">' + esc(s) + "</span>";
-  const num = (s) => '<span class="w-num">' + esc(s) + "</span>";
-  const dim = (s) => '<span class="dimmed">' + esc(s) + "</span>";
+  // Shared with every other readout — see js/ui-text.js.
+  const esc = MJ.text.esc, nm = MJ.text.nm, num = MJ.text.num, dim = MJ.text.dim;
 
   // Which verb a thrown spell resolves through. The verb table still
   // owns whether it LANDS — this is only the routing.
-  const SHAPE_VERB = { directMana: "castBolt", directPhys: "castSmash", indirect: "castBlast" };
-  const HOME_VERB = { remote: "magicFingers", bypass: "levitate", command: "command" };
+  const SHAPE_VERB = { directMana: "castDirectMana", directPhys: "castDirectPhysical", indirect: "castIndirect" };
+  const HOME_VERB = { remote: "castRemote", bypass: "castBypass", command: "castCommand" };
   // Every verb the obstacle menu funnels into "cast a spell".
-  const SPELL_VERB_IDS = ["castBolt", "castSmash", "castBlast", "magicFingers", "levitate", "command", "blast"];
+  const SPELL_VERB_IDS = ["castDirectMana", "castDirectPhysical", "castIndirect",
+    "castRemote", "castBypass", "castCommand", "blast"];
 
   // ── Every spell they know, against this moment ─────────────────
   // ctx: { run, crew, obstacle?, options? }

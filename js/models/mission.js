@@ -347,192 +347,13 @@
     return ["physical", "astral"]; // the street: bodies on real ground
   }
 
-  // ── Route + recon obstacle selection ────────────────────────────
-  // The shortest entry->objective path, WALKED: the crew comes in
-  // through the entry point, clears the room it lands in, crosses to
-  // the next room, and so on to the objective. Physical and astral
-  // obstacles interleave in the order the ground presents them,
-  // because both projections cover the same route.
-  //
-  // Walk order is the contract with every renderer. A list can print
-  // obstacles in any order and still read; a map cannot — the crew
-  // occupies one room at a time and has to get to the next one. So
-  // the sequence IS the movement, and `leg` is how far along it the
-  // crew has come.
-  function routeObstacles(site) {
-    const paths = MJ.findPaths(site);
-    if (paths.length === 0) return { path: [], obstacles: [] };
-    const path = paths.reduce((a, b) => (a.length <= b.length ? a : b));
-    const roomById = {};
-    for (const room of site.layout.rooms) roomById[room.id] = room;
-    // Edges are undirected; index both ways so a step can find its
-    // door whichever end the walk approaches from.
-    const edgeBetween = {};
-    for (const edge of site.layout.edges) {
-      edgeBetween[edge.from + "->" + edge.to] = edge;
-      edgeBetween[edge.to + "->" + edge.from] = edge;
-    }
-    const obstacles = [];
-    // Each obstacle carries WHERE it is, because witnessing is about
-    // what else can see you from the same ground (§07), and WHEN the
-    // crew reaches it, because a renderer has to move them there.
-    // Both derive straight from the layout, so stamping the shared
-    // instance is idempotent — the same obstacle is always in the
-    // same place, at the same point in the same walk.
-    const at = (rooms, leg, where, list) => {
-      for (const o of list) {
-        o.rooms = rooms; o.leg = leg; o.where = where;
-        obstacles.push(o);
-      }
-    };
-    const entry = site.layout.entryPoints.find((e) => e.roomId === path[0]);
-    if (entry) at([entry.roomId], 0, { kind: "entry", type: entry.type, roomId: entry.roomId }, entry.physicalObstacles);
-
-    // A patrol or a spirit zone covers a BEAT of rooms rather than
-    // sitting in one, so the crew meets it at the FIRST room of its
-    // circuit they set foot in — and it can witness them anywhere
-    // along that circuit, which is why `rooms` stays the whole beat.
-    const firstLegOn = (ids) => {
-      for (let i = 0; i < path.length; i++) {
-        if ((ids || []).includes(path[i])) return i;
-      }
-      return -1;
-    };
-    const mobile = [];
-    for (const patrol of site.layout.patrols || []) {
-      const leg = firstLegOn(patrol.roomIds);
-      if (leg >= 0) mobile.push({ leg, rooms: patrol.roomIds, kind: "patrol", list: patrol.physicalObstacles });
-    }
-    for (const zone of site.layout.spiritZones || []) {
-      const leg = firstLegOn(zone.roomIds);
-      if (leg >= 0) mobile.push({ leg, rooms: zone.roomIds, kind: "zone", list: zone.astralObstacles });
-    }
-
-    for (let leg = 0; leg < path.length; leg++) {
-      const room = roomById[path[leg]];
-      if (!room) continue;
-      const here = { kind: "room", roomId: room.id, label: room.label, size: room.size };
-      // What is posted in this room, then what is passing through it.
-      for (const slot of room.postSlots) at([room.id], leg, here, slot.physicalObstacles);
-      at([room.id], leg, here, room.astralObstacles);
-      for (const m of mobile) {
-        if (m.leg !== leg) continue;
-        at(m.rooms, leg, { kind: m.kind, roomIds: m.rooms, roomId: room.id }, m.list);
-      }
-      // Then the door out, which belongs to the crossing rather than
-      // to either room — met on the way out of this one.
-      const next = path[leg + 1];
-      if (next === undefined) continue;
-      const edge = edgeBetween[room.id + "->" + next];
-      if (edge) at([room.id, next], leg, { kind: "edge", from: room.id, to: next }, edge.physicalObstacles);
-    }
-    return { path: path, obstacles: obstacles };
-  }
-
-  // ── The host crawl ─────────────────────────────────────────────
-  // A Matrix run is not the building. Walls mean nothing; what
-  // constrains a decker is the system's own topology, so this walks
-  // the host graph rather than the room graph — the third pillar
-  // finally having its own space to be a pillar of.
-  //
-  // §05's Route layer is the trade this implements: the long way
-  // passes more nodes, which means more ice AND more datastores, so
-  // greed and exposure are the same decision. The short way skips
-  // both. `wantData` is what a data-hungry run picks.
-  function hostPaths(host) {
-    const out = [];
-    const walk = (at, seen) => {
-      if (at === host.objectiveNode) { out.push(seen.concat([at])); return; }
-      if (seen.length > 12) return;
-      for (const e of host.edges) {
-        if (e.from !== at || seen.indexOf(e.to) !== -1) continue;
-        walk(e.to, seen.concat([at]));
-      }
-    };
-    walk(host.entryNode, []);
-    return out;
-  }
-
-  function hostRoute(site, opts) {
-    opts = opts || {};
-    const host = site.host;
-    if (!host) return { path: [], obstacles: [], dataNodes: [] };
-    const paths = hostPaths(host);
-    if (!paths.length) return { path: [], obstacles: [], dataNodes: [] };
-
-    // Greedy route wants datastores; a quiet run wants the fewest
-    // nodes it can get away with. Same graph, opposite priorities.
-    const score = (p) => {
-      const dataCount = p.filter((id) => host.nodes[id].holdsData).length;
-      return opts.wantData ? (dataCount * 10 - p.length) : -p.length;
-    };
-    const path = paths.reduce((a, b) => (score(a) >= score(b) ? a : b));
-
-    const obstacles = [];
-    const dataNodes = [];
-    for (const id of path) {
-      const node = host.nodes[id];
-      if (node.holdsData) dataNodes.push(node);
-      for (const ice of node.ice) {
-        // Co-location inside the host, so witnessing works exactly
-        // as it does in meatspace: two pieces of ice on one node see
-        // each other's business.
-        ice.rooms = ["node" + id];
-        ice.hostNode = id;
-        obstacles.push(ice);
-      }
-    }
-    return { path: path, obstacles: obstacles, dataNodes: dataNodes, host: host };
-  }
-
-  // ── The astral run ─────────────────────────────────────────────
-  // The inverse of a break-in. §08: "movement is free, vision is
-  // constrained" — an astral form passes through walls, so the whole
-  // room graph the meatspace crew has to solve is simply irrelevant.
-  // A corridor of guards is nothing to a projecting mage.
-  //
-  // Two things constrain them instead, and they are the level design:
-  //   1. WARDS. "The one wall that works both ways." A ward seals an
-  //      area; nothing else stops astral movement at all.
-  //   2. WHAT LIVES THERE. Spirits, in their zones.
-  //
-  // Which yields the pillar's nastiest situation for free, straight
-  // from §08: "a ward between you and your body blocks the way home."
-  // Every ward crossed on the way in has to be crossed again on the
-  // way out — going in is only half the budget, and a mage who
-  // spends everything reaching the objective is stranded inside it.
-  function astralRoute(site) {
-    const objective = site.layout.rooms[0]; // room 0 is always the objective
-    const inbound = [];
-    for (const ward of objective.astralObstacles || []) {
-      ward.rooms = ["astral-objective"];
-      inbound.push(ward);
-    }
-    for (const zone of site.layout.spiritZones || []) {
-      if ((zone.roomIds || []).indexOf(objective.id) === -1) continue;
-      for (const spirit of zone.astralObstacles || []) {
-        spirit.rooms = ["astral-objective"];
-        inbound.push(spirit);
-      }
-    }
-    // The way home. Only WARDS gate the exit — a spirit you slipped
-    // past is not standing between you and your body, but a wall of
-    // light is.
-    const outbound = inbound
-      .filter((o) => o.type === "ward")
-      .map((ward) => Object.assign({}, ward, {
-        label: ward.label + " (the way back)",
-        // Its own copy of everything a run WRITES to. The way back is
-        // a second crossing of the same wall: the immunities are the
-        // same facts about the same weave, but damage done on the way
-        // in is not damage done on the way out, and per-obstacle
-        // memory is keyed by object so these must be two objects.
-        immune: Object.assign({}, ward.immune),
-        rooms: ["astral-objective"],
-        isExitWard: true,
-      }));
-    return { inbound: inbound, outbound: outbound, obstacles: inbound.concat(outbound) };
-  }
+  // -- The three pillars' route builders ---------------------------
+  // Lifted into models/mission-routes.js: pure shape, no dice, no
+  // runners. Aliased so the call sites below read unchanged.
+  const routeObstacles = MJ.routeObstacles;
+  const hostPaths = MJ.hostPaths;
+  const hostRoute = MJ.hostRoute;
+  const astralRoute = MJ.astralRoute;
 
   // ── The tether ─────────────────────────────────────────────────
   // §08's second pressure: "a budget of astral turns, sized by the
@@ -593,111 +414,22 @@
     return casualty;
   }
 
-  // ── The live read, during a run ─────────────────────────────────
-  // Everything at a site resets nightly, and the ratchet is what
-  // carries change forward — so there is nothing to accumulate across
-  // visits. A leg IS the sample: the crew walks the route, meets what
-  // is on it, and by the time they leave they have seen what there
-  // was to see. Confirmation at the end of a leg is not in question.
-  //
-  // What this is for is the READOUT WHILE THEY ARE IN THERE. Ticking
-  // an axis over on first contact was the thing worth fixing: one
-  // camera cannot tell level 1 from level 5. So the tick waits until
-  // they have met everything of that kind the route holds.
-  //
-  // RESPONDERS PROVE CAPABILITY, BUT ARE NOT PART OF THE CENSUS.
-  // A response team's tier is drawn from the alert level, which is
-  // bounded by the site's own [Current, Max] — so a building that
-  // fields a tier-8 squad is DEMONSTRABLY a place with tier-8 in it.
-  // Noise only calls out what it was already capable of; it does not
-  // manufacture a threat the site did not have. So a responder raises
-  // the FLOOR: the estimate corrects upward the moment one turns up.
-  //
-  // It does not count toward the CENSUS, though. "Have I met
-  // everything of this kind on this route" is a question about the
-  // standing security the crew walked in on, and a squad that arrived
-  // because of them is not part of that route — counting it would
-  // move the goalposts every time somebody made a noise.
-  const isStanding = (o) => !o.responder;
-
-  function axisTally(run, axis) {
-    let faced = 0, total = 0, maxTier = 0;
-    run.obstacles.forEach((o, i) => {
-      if (o.projection !== axis) return;
-      const standing = isStanding(o);
-      if (standing) total += 1;
-      if (i >= run.index) return;
-      if (standing) faced += 1;
-      // Met is met, whoever sent them.
-      if (o.tier > maxTier) maxTier = o.tier;
-    });
-    return { faced: faced, total: total, maxTier: maxTier };
-  }
-
-  function axisProven(run, axis) {
-    const t = axisTally(run, axis);
-    return {
-      axis: axis, faced: t.faced, total: t.total, maxTier: t.maxTier,
-      // Everything of that kind on this route has been met.
-      proven: t.total > 0 && t.faced >= t.total,
-    };
-  }
-
-  function reconObstacles(site, lens) {
-    const all = MJ.allObstacles(site);
-    // A Matrix scout reports on whatever is ON THE GRID, which is a
-    // question about presence rather than about which skills somebody
-    // once wrote into a list. A maglock and a camera are devices on
-    // the host wherever they happen to be bolted.
-    const pool = lens === "matrix"
-      ? all.filter((o) => (o.presence || []).indexOf("matrix") !== -1)
-      : all.filter((o) => o.projection === lens);
-    return pool.slice(0, RECON_SAMPLE);
-  }
-
-  // ── Suppression: tenderizing that lasts the rest of the day ─────
-  // Every successful site mission leaves its mark on the defenses
-  // it beat — a looped camera, a cracked ward — as per-axis
-  // suppression granting bonus dice against MATCHING-projection
-  // obstacles for later missions at that site the SAME DAY. Stacks
-  // to a cap, vanishes overnight (alert.js clears it). Earned axis:
-  // recon suppresses its lens (a MATRIX sweep suppresses the
-  // PHYSICAL grid — it's the cameras and maglocks it looped);
-  // astral work cracks astral; physical strikes and data payloads
-  // degrade the physical grid. Applied AFTER a mission resolves, so
-  // nothing self-benefits. Karma stays keyed to the unsuppressed
-  // posture — softening lowers the risk, never the books.
-  const SUPPRESSION_PER_SUCCESS = 1;
-  const SUPPRESSION_CAP = 3;
+  // -- The live read, recon sampling and suppression --------------
+  // Lifted into models/mission-intel.js: everything about what the
+  // crew KNOWS, as opposed to what is true. Local aliases so the
+  // call sites below read as they did when it lived here.
+  const axisTally = MJ.axisTally;
+  const axisProven = MJ.axisProven;
+  const reconObstacles = MJ.reconObstacles;
+  const suppressionAxisFor = MJ.suppressionAxisFor;
+  const suppressionBonus = MJ.suppressionBonus;
+  const applySuppression = MJ.applySuppression;
+  const hasFreshIntel = MJ.hasFreshIntel;
+  // A responder is something the site SENT, not something it had
+  // standing there — the census of what was faced excludes them.
+  const isStanding = MJ.isStanding;
   const EXCEPTIONAL_MARGIN = 3;      // hits beyond threshold that read as "thoroughly bamboozled"
   const ALERT_POINTS_PER_BEAT = 3;   // ~3-4 beats buys them one escalation step
-
-  function suppressionAxisFor(kind, mission) {
-    if (kind === "recon") return mission.lens === "matrix" ? "physical" : mission.lens;
-    if (mission.payloadDomain === "astral") return "astral";
-    return "physical";
-  }
-
-  function suppressionBonus(site, projection, day) {
-    const s = site.securityState && site.securityState.suppression;
-    if (!s || s.day !== day) return 0;
-    return s[projection] || 0;
-  }
-
-  function applySuppression(site, axis, day) {
-    const st = site.securityState;
-    if (!st.suppression || st.suppression.day !== day) {
-      st.suppression = { physical: 0, astral: 0, day: day };
-    }
-    st.suppression[axis] = Math.min(SUPPRESSION_CAP, (st.suppression[axis] || 0) + SUPPRESSION_PER_SUCCESS);
-    return st.suppression[axis];
-  }
-
-  function hasFreshIntel(site, day) {
-    return Object.values(site.intel || {}).some(
-      (x) => day >= x.dayTaken && day - x.dayTaken <= INTEL_FRESH_DAYS
-    );
-  }
 
   // ── The mission stepper ─────────────────────────────────────────
   // Resolution is a state machine so a human can stand in the middle
@@ -787,244 +519,22 @@
     return run;
   }
 
-  // ── Witnessing (§09) ────────────────────────────────────────────
-  // An act only reveals anything if something perceived it. The
-  // obstacle you are touching decides that below questionable; once
-  // the site reads you as questionable it is watching you generally,
-  // which is how a camera catches you working a lock it isn't part
-  // of. Loud is always witnessed — not because loud means dangerous
-  // (a taunt is neither), but because it is heard.
-  // A quiet action only registers if it FAILED. Switch a camera off
-  // properly and it has nothing left to report; read a spirit
-  // correctly and it never knew you were there. Security reacts to
-  // the fumble, not the deed — so a clean quiet approach is silence,
-  // and an affordance's threat class is the price of getting it
-  // WRONG, not the cost of doing it.
-  //
-  // Loud is the exception, and the only one: a gunshot is a gunshot
-  // whether or not it hits.
-  // Anything else on this ground that still has eyes. A guard you
-  // already put down is not one; a camera you looped is not one; a
-  // maglock never was. Patrols and spirit zones count anywhere along
-  // their circuit, which is what makes a wide patrol route genuinely
-  // worse to work under than a stationary post.
-  const sensesPlane = (o, plane) => (o.senses || []).indexOf(plane) !== -1;
-
-  function perceiversNear(run, target, plane) {
-    const here = target.rooms;
-    if (!here) return [];
-    return run.obstacles.filter((o) =>
-      o !== target && sensesPlane(o, plane) && !run.neutralized.has(o) &&
-      o.rooms && o.rooms.some((r) => here.indexOf(r) !== -1));
-  }
-
-  // ── Being present is not the same as being aware ───────────────
-  // A guard ten feet away CAN respond, but only if he actually
-  // noticed. Working a lock under an invisibility spell, or in the
-  // dark, or while he is looking the other way, is exactly the
-  // fiction where a crew picks it three times over and he never
-  // turns round. So a nearby watcher gets a CHANCE to notice, not an
-  // automatic one.
-  //
-  // Opposed: the watcher's attention against how well the act was
-  // covered. `run.concealment` is the hook everything that hides a
-  // crew plugs into — a spell, darkness, a distraction, and later the
-  // simple fact of standing outside a camera's arc.
-  // A watcher's attention is built the same way its competence is in
-  // a fight — skill plus the attribute behind it — so the same tier
-  // means the same calibre of opposition whether it is shooting at
-  // the crew or just looking at them. Anything less made a posted
-  // guard easier to fool than the man he is modelled on.
-  function noticePool(watcher) {
-    const t = watcher.tier || 1;
-    const skill = 1 + Math.ceil(t / 2);      // T1 -> 2, T10 -> 6
-    const attribute = 2 + Math.floor(t / 3); // T1 -> 2, T10 -> 5
-    return skill + attribute;
-  }
-
-  // Per WATCHER, because who a spell fools is the spell's own M/P
-  // split doing real work: mana Invisibility fools MINDS, so a
-  // camera — which has none — stares straight through it and only
-  // Improved Invisibility (bent light) beats the lens. And nothing
-  // cast on the physical plane hides an AURA: a watcher with astral
-  // senses sees the crew blazing whatever the light is doing.
-  function concealmentPool(run, runner, watcher) {
-    const own = runner ? MJ.dicePoolFor(runner, "stealth", MJ.gearBonusFor(runner, "stealth")) : 0;
-    let bonus = run.concealment || 0; // the generic hook, watcher-blind
-    const astralEyes = watcher && (watcher.senses || []).indexOf("astral") !== -1;
-    if (!astralEyes) {
-      for (const c of run.spellConcealment || []) {
-        if (c.vsTech || !watcher || watcher.living) bonus += c.amount;
-      }
-    }
-    return Math.max(0, own + bonus);
-  }
-
-  // ── One notice contest, two guest lists ────────────────────────
-  // Roll the crew's concealment against each watcher's attention and
-  // return the first that catches them. WHO is watching is the only
-  // thing that varies, so it is the only thing the callers differ on
-  // — the dice live here once, or the two lists drift apart.
-  function caughtBy(run, watchers, runner) {
-    for (const w of watchers) {
-      const hidden = MJ.countHits(MJ.rollDicePool(run.rng, concealmentPool(run, runner, w)));
-      const saw = MJ.countHits(MJ.rollDicePool(run.rng, noticePool(w)));
-      if (saw > hidden) return w;
-    }
-    return null;
-  }
-
-  // Did anything ELSE on this ground both perceive this plane AND
-  // actually catch it? Returns the watcher that did, or null.
-  function noticedBy(run, target, plane, runner) {
-    return caughtBy(run, perceiversNear(run, target, plane), runner);
-  }
-
-  // ── Who sees a cast — INCLUDING the thing standing in front of you
-  // `wasWitnessed` deliberately excludes the obstacle being acted ON:
-  // take down the one guard in the room and there is nobody left to
-  // have an opinion about it. That rule is right for an act AGAINST
-  // the thing, and wrong for a spell that is not aimed at it at all.
-  // A mage who armours up six feet from a guard has not handled the
-  // guard — the guard is a bystander with eyes, and he is looking
-  // straight at them.
-  //
-  // So a cast asks the wider question: does ANYTHING here perceive
-  // this plane, the thing in front of the crew included.
-  function castNoticedBy(run, here, runner) {
-    const watchers = perceiversNear(run, here, "physical").slice();
-    if (here && sensesPlane(here, "physical") && !run.neutralized.has(here)) watchers.push(here);
-    return caughtBy(run, watchers, runner);
-  }
-
-  // Is this act's SOUND covered? Hush and Silence blanket the crew's
-  // ground; Stealth quiets one runner. A silenced gunshot is not
-  // automatically heard — but it still has to survive being SEEN,
-  // which is why the check falls through to the normal witness rules
-  // rather than returning quiet.
-  function actSilenced(run, runner) {
-    if (run.silenced) return true;
-    return !!(runner && run.silencedRunners && run.silencedRunners.has(runner));
-  }
-
-  function wasWitnessed(run, obstacle, act, succeeded, runner) {
-    // Gunfire carries regardless — unless a silence spell is holding
-    // the sound down, in which case the shot still has to be SEEN.
-    if (act && act.loud && !actSilenced(run, runner)) return true;
-
-    // WHICH WORLD did this happen in? Only things that perceive on
-    // that plane can have seen it. A guard has eyes in meatspace
-    // only, so a decker working a host from a terminal out of his
-    // sight is invisible to him — and the camera he kills does not
-    // phone anyone about it. A materialised spirit is dual-natured
-    // and catches both.
-    //
-    // The plane is the VERB'S PILLAR, not a lookup on the skill.
-    // Reading it off the skill filed spoofed credentials (`computer`)
-    // as a physical act, so a guard in the corridor got a vote on
-    // something that happened inside a host.
-    const plane = (act && act.plane) || runPlane(run);
-
-    // A clean quiet act is seen only by something OTHER than what you
-    // just handled. Take down the one guard in the room and there is
-    // nobody left to have an opinion; do it in front of a camera, or
-    // his partner, and "silent" was never on the table.
-    if (succeeded) return !!noticedBy(run, obstacle, plane, runner);
-    // It failed. The thing you fumbled registers it if it has eyes ON
-    // THIS PLANE — fumbling a hack is witnessed by the host's
-    // watchers, not by the guard leaning on the door outside. It
-    // gets no notice roll: you fumbled it, in its face.
-    if (sensesPlane(obstacle, plane)) return true;
-    // The obstacle itself perceives nothing — a lock forms no
-    // opinions. So this only registers if something ELSE here both
-    // can respond AND actually caught it.
-    if (noticedBy(run, obstacle, plane, runner)) return true;
-    // Nothing here perceives — but if they are already suspicious
-    // they are sweeping the place, not watching the equipment.
-    const band = MJ.threatBand(run.state, run.day);
-    return band === "questionable" || band === "threatening";
-  }
-
-  // Repetition is what costs you, and it costs you in what the act
-  // REVEALS rather than in a budget running out. A ward keeps you out
-  // on its own, so a first press is merely offputting; leaning on it
-  // a fourth time is a person with a purpose. Same for a lock, a
-  // credential, a story told to a guard.
-  //
-  // This is the whole replacement for attempt limits. An approach
-  // never becomes unavailable through use — you can always try again
-  // — but each repeat reads one band worse, so persistence is priced
-  // in exposure. What removes an option is discovering it cannot work
-  // here (a Watsonian immunity), which is a fact about the obstacle,
-  // not a counter about you.
-  const THREAT_LADDER = [MJ.THREAT.NORMAL, MJ.THREAT.AWKWARD, MJ.THREAT.QUESTIONABLE, MJ.THREAT.THREATENING];
-  const REPEATS_PER_STEP = 2; // tries at one approach before it reads a band worse
-
-  function threatClassFor(verb, tries) {
-    if (!verb) return MJ.THREAT.NORMAL;
-    const declared = MJ.verbThreat(verb);
-    const base = THREAT_LADDER.indexOf(declared);
-    if (base < 0) return declared;
-    // `escalates` marks approaches whose own safeguard handled the
-    // first try, so they step up immediately rather than on the
-    // usual cadence.
-    const repeats = Math.max(0, (tries || 1) - 1);
-    const steps = verb.escalates
-      ? repeats
-      : Math.floor(repeats / REPEATS_PER_STEP);
-    return THREAT_LADDER[Math.min(THREAT_LADDER.length - 1, base + steps)];
-  }
-
-  // ── Tries ───────────────────────────────────────────────────────
-  // Counted per VERB, not per skill: a guard can be slipped past or
-  // put down quietly, and though both are stealth they are not the
-  // same swing. The count no longer spends a budget; it drives
-  // escalation, so trying the same thing over and over is what makes
-  // you look like someone with a purpose. The key is the verb's own
-  // id — stable across a route that shifts under the crew, and
-  // readable in a save.
-  // ── Keyed by the OBSTACLE, never by its position ───────────────
-  // Responders splice into the route ahead of the crew, which shifts
-  // the index of everything after them. Anything filed under a route
-  // index therefore ends up describing a different obstacle the
-  // moment a guard turns up — a freshly-spawned responder inheriting
-  // the tries and discoveries its predecessor earned, so its very
-  // first attempt reads as a fourth and an approach it never blocked
-  // shows as useless. `run.neutralized` already avoided this by
-  // holding obstacle objects; these now do the same.
-  function triesOn(run, obstacle, approach) {
-    const perObstacle = run.attempts.get(obstacle);
-    return (perObstacle && perObstacle[approach]) || 0;
-  }
-
-  function countTry(run, obstacle, approach) {
-    let perObstacle = run.attempts.get(obstacle);
-    if (!perObstacle) { perObstacle = {}; run.attempts.set(obstacle, perObstacle); }
-    perObstacle[approach] = (perObstacle[approach] || 0) + 1;
-    return perObstacle[approach];
-  }
-
-  function knownUseless(run, obstacle, skill) {
-    const perObstacle = run.discovered.get(obstacle);
-    return (perObstacle && perObstacle[skill]) || null;
-  }
-
-  function markUseless(run, obstacle, skill, reason) {
-    let perObstacle = run.discovered.get(obstacle);
-    if (!perObstacle) { perObstacle = {}; run.discovered.set(obstacle, perObstacle); }
-    perObstacle[skill] = reason;
-  }
-
-  // What you LEARNED is about the obstacle and the SKILL: finding out
-  // he is sensor-equipped rules out sneaking generally, however you
-  // found it out — so discoveries are per skill, per obstacle.
-
-  // NOTHING RUNS OUT THROUGH USE. A crew can always try again; what
-  // changes is what trying again says about them (threatClassFor) and
-  // what the delay costs them while something else closes in. The one
-  // thing that genuinely removes an approach is learning it cannot
-  // work here — a fact about the obstacle, discovered by trying, not
-  // a counter about the crew.
+  // ── Witnessing, threat classes and repeat counters ──────────────
+  // Lifted wholesale into models/mission-witness.js — see that file's
+  // header. Local aliases so every call site below reads exactly as
+  // it did when the functions lived here.
+  const sensesPlane = MJ.sensesPlane;
+  const perceiversNear = MJ.perceiversNear;
+  const noticePool = MJ.noticePool;
+  const concealmentPool = MJ.concealmentPool;
+  const noticedBy = MJ.noticedBy;
+  const castNoticedBy = MJ.castNoticedBy;
+  const wasWitnessed = MJ.wasWitnessed;
+  const threatClassFor = MJ.threatClassFor;
+  const triesOn = MJ.triesOn;
+  const countTry = MJ.countTry;
+  const knownUseless = MJ.knownUseless;
+  const markUseless = MJ.markUseless;
 
   // ── Responders: what an engaged axis actually sends ─────────────
   // Each axis fields a challenge at its own alert level, in its own
@@ -1411,7 +921,7 @@
     for (const held of run.sustaining || []) {
       const byC = crew.find((c) => c.source === held.caster);
       const def = MJ.spellDef(held.spell) || {};
-      const stacks = def.stacksFromForce ? held.force : (def.effectStacks || 1);
+      const stacks = MJ.effectStacksFor(def, held.force);
       if (held.effect) {
         // A barrier covers the GROUND the crew is standing on, so
         // everyone gets it; everything else sits on whoever it was
@@ -2119,11 +1629,11 @@
       const chosen = choice.spellId && MJ.knowsSpell(runner, choice.spellId) ? choice.spellId : null;
       const spellId = chosen || act.def.spellId ||
         (act.def.spellShape && (MJ.bestSpellOfShape(runner, act.def.spellShape) || {}).id) ||
-        ((act.verbId === "command" || act.verbId === "blast") &&
-          ((act.verbId === "command" ? MJ.bestCommandSpell(runner) : MJ.bestCombatSpell(runner)) || {}).id) || null;
+        ((act.verbId === "castCommand" || act.verbId === "blast") &&
+          ((act.verbId === "castCommand" ? MJ.bestCommandSpell(runner) : MJ.bestCombatSpell(runner)) || {}).id) || null;
       const spellDef = spellId && MJ.spellDef(spellId);
       drain = MJ.resistDrain(run.rng, runner, force,
-        spellDef ? { drainValue: Math.max(2, force + (spellDef.drain || 0)) } : undefined);
+        spellDef ? { drainValue: MJ.drainValueOf(spellDef, force) } : undefined);
       run.castForce = force;
       run.castSpellId = spellId; // so forceThrough throws THIS spell
       applyDrain(run, runner, drain);
