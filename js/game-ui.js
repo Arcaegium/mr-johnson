@@ -145,6 +145,13 @@
         `${a.magic ? " M" + a.magic : ""} <span class="muted">· essence ${r.essence.current}/${r.essence.max} · tracks ${MJ.physicalTrack(r)}P/${MJ.stunTrack(r)}S</span></div>` +
       `<div class="det"><span class="dk">skills</span><div class="skillgrid">${skills}</div></div>` +
       `<div class="det"><span class="dk">condition</span>karma ${r.karma}${r.wounds ? " · " + woundRead(r) : ' · <span class="muted">unhurt</span>'} · ${fmtContract(r)}</div>` +
+      // SPELLS ARE WHAT YOU HIRED (§8) — so the dossier says which.
+      // Two mages at the same price knowing different spells are
+      // different hires, and this line is where that becomes visible.
+      (c.spellsKnown && c.spellsKnown.length
+        ? `<div class="det"><span class="dk">grimoire</span>${c.spellsKnown
+            .map((id) => { const s = MJ.spellDef(id); return s ? esc(s.label) : esc(id); }).join(", ")}</div>`
+        : "") +
       `<div class="det"><span class="dk">kit</span>${kit.length ? kit.join(", ") : '<span class="muted">nothing issued</span>'}</div>`;
   }
 

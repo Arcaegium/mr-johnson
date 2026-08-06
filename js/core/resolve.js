@@ -209,14 +209,29 @@
   // it is deliberately available: a desperate mage can reach past
   // what they safely hold, and pay for it in a way rest will not fix.
   function drainValueFor(force, overcast) {
-    // Half Force, floor 2, and overcasting hurts more.
+    // The GENERIC cost of pushing mana — what the lattice and the
+    // astral verbs bill when no spell is naming its own price. Half
+    // Force, floor 2, and overcasting hurts more.
+    //
+    // SPELLCASTING does not use this: a spell's Drain is canon —
+    // Force plus its printed modifier, min 2 — and spells.js passes
+    // it in via opts.drainValue below. Punch at F−6 being nearly
+    // free and Mob Mind at F+1 being brutal IS the spell economy,
+    // and one flat curve erased it.
     return Math.max(2, Math.ceil(force / 2) + (overcast ? 2 : 0));
   }
 
-  function resistDrain(rng, runner, force) {
+  // opts.drainValue: a caller that knows the canon cost of THIS act
+  // (a spell's printed Drain) supplies it; otherwise the generic
+  // curve applies. Overcast still turns the damage physical either
+  // way — that line is about the caster, not the spell.
+  function resistDrain(rng, runner, force, opts) {
+    opts = opts || {};
     const magic = (runner.attributes && runner.attributes.magic) || 0;
     const overcast = force > magic;
-    const dv = drainValueFor(force, overcast);
+    const dv = opts.drainValue !== undefined
+      ? Math.max(2, opts.drainValue)
+      : drainValueFor(force, overcast);
     const pool = ((runner.attributes && runner.attributes.willpower) || 0) + magic;
     const dice = rollDicePool(rng, pool);
     const hits = countHits(dice);
@@ -229,10 +244,13 @@
     };
   }
 
-  // The most a caster can reach. Overcasting is allowed up to Magic
-  // + 2 — past that a mage simply cannot hold the form at all.
+  // The most a caster can reach: TWICE Magic, per canon. Everything
+  // above Magic itself is overcasting — the Drain turns physical —
+  // so the top half of the range is always an act of self-harm the
+  // mage chooses. The old house cap of Magic+2 quietly denied a
+  // desperate adept the big reach the source deliberately allows.
   function maxForceFor(runner) {
-    return ((runner.attributes && runner.attributes.magic) || 0) + 2;
+    return Math.max(1, ((runner.attributes && runner.attributes.magic) || 0) * 2);
   }
 
   // ── Extended tests: work that takes as long as it takes ────────

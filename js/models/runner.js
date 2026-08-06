@@ -844,6 +844,54 @@
     };
   }
 
+  // ── The starting grimoire ──────────────────────────────────────
+  // SPELLS LIVE ON THE DOSSIER — they are what you hired (§8). A
+  // mage generates knowing `Magic rating` spells, drawn from their
+  // focus's own list with the signature spell guaranteed first, then
+  // padded from the street-mage staples. Two mages at the same price
+  // knowing different spells are DIFFERENT HIRES, which is the same
+  // texture the skill spread gives everyone else.
+  //
+  // Ids reference MJ.SPELLS (models/spells.js — canon SR5 spells).
+  // spells.js loads after this file, but grimoires are drawn at
+  // GENERATION time, never at load, so the order is safe.
+  const FOCUS_SPELLS = {
+    combatMage:       ["manabolt", "stunbolt", "powerbolt", "fireball", "flamethrower", "manaball", "stunball", "lightningBolt", "clout", "armor"],
+    detectionMage:    ["clairvoyance", "detectLife", "analyzeDevice", "combatSense", "detectMagic", "mindProbe", "detectEnemies", "analyzeTruth", "clairaudience"],
+    healthMage:       ["heal", "stabilize", "increaseReflexes", "resistPain", "increaseAttribute", "decreaseAttribute", "stunbolt"],
+    illusionMage:     ["invisibility", "improvedInvisibility", "confusion", "hush", "silence", "stealth", "mask", "physicalMask", "massConfusion", "agony", "chaos"],
+    manipulationMage: ["magicFingers", "levitate", "influence", "armor", "controlThoughts", "controlActions", "physicalBarrier", "manaBarrier", "fling", "mobMind"],
+    // Conjurers and enchanters lean on their own systems — spirits
+    // and the bench — so they carry a small practical kit rather
+    // than a specialty grimoire.
+    conjuringMage:    ["armor", "detectMagic", "stunbolt", "combatSense", "manaBarrier", "heal"],
+    enchantingMage:   ["detectMagic", "analyzeDevice", "magicFingers", "armor", "heal", "analyzeTruth"],
+  };
+  // What any street mage might have picked up along the way.
+  const STAPLE_SPELLS = ["stunbolt", "heal", "invisibility", "armor", "detectLife", "clairvoyance", "manabolt", "levitate"];
+
+  function generateGrimoire(rng, focus, attrs) {
+    if (focus.family !== "mage") return null;
+    const count = Math.max(1, attrs.magic || 1);
+    const list = FOCUS_SPELLS[focus.id] || STAPLE_SPELLS;
+    // The signature is certain; the rest of their training is not.
+    const known = [list[0]];
+    const own = rng.shuffle(list.slice(1));
+    const wantOwn = Math.min(own.length, Math.max(0, Math.ceil((count * 2) / 3) - 1));
+    for (let i = 0; i < wantOwn && known.length < count; i++) {
+      if (known.indexOf(own[i]) === -1) known.push(own[i]);
+    }
+    for (const id of rng.shuffle(STAPLE_SPELLS.slice())) {
+      if (known.length >= count) break;
+      if (known.indexOf(id) === -1) known.push(id);
+    }
+    for (const id of own) {
+      if (known.length >= count) break;
+      if (known.indexOf(id) === -1) known.push(id);
+    }
+    return known.slice(0, count);
+  }
+
   // ── Top-level generator ────────────────────────────────────────
   // options: { focusId?: string, family?: string, origin?: string }
   // If focusId isn't given, one is picked (optionally filtered by
@@ -889,7 +937,8 @@
         focusKeySkill: focus.keySkill,
         origin: origin,
         deckerAffinity: focus.family === "decker" ? generateDeckerAffinity(r) : null,
-        spellFormulasKnown: focus.family === "mage" ? [] : null, // populated once spell content exists
+        // Spell IDS into MJ.SPELLS — the grimoire is what you hired.
+        spellsKnown: generateGrimoire(r, focus, attrs),
         disciplineLabel: disciplineLabel,     // visible claim: "specialist" | "generalist"
         trueArchetype: trueArchetype,          // hidden truth: "specialist" | "generalist"
         skillTiers: skillTiers,                // { primary, secondary[], tertiary[], overflow[] } — growth priority order

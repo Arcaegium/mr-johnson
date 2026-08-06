@@ -564,7 +564,13 @@
     const quality = act.quality || 0;
     const atkDice = MJ.rollDicePool(rng, Math.max(0, act.pool || 0));
     const atkHits = MJ.countHits(atkDice);
-    const armour = Math.max(0, (thing.armour || 0) + (weapon.ap || 0));
+    // A DIRECT spell does not negotiate with armour at all — that is
+    // the canon line between Powerbolt and Fireball, and the whole
+    // reason a mage answers a hardened door differently from a gun.
+    // Armour 0 also zeroes the soak roll below, correctly: what a
+    // structure soaks with is what it is made of, and direct force
+    // is already inside it.
+    const armour = weapon.direct ? 0 : Math.max(0, (thing.armour || 0) + (weapon.ap || 0));
     const power = (weapon.power || 0) + quality +
       (weapon.useStrength ? (act.strength || 0) : 0);
     const carried = act.carried || 0;
@@ -703,6 +709,7 @@
   MJ.beginCombat = beginCombat;
   MJ.combatActor = combatActor;
   MJ.combatAct = combatAct;
+  MJ.applyDamage = applyDamage; // spells land damage through the same door as bullets
   MJ.forceAgainstThing = forceAgainstThing;
   MJ.combatOver = combatOver;
   MJ.physicalTrack = physicalTrack;

@@ -167,6 +167,86 @@
       damaging: true, loud: true, threat: "THREATENING",
       describe: "the right tool, and the training to use it",
     },
+    // ── Spellcasting from a body standing in the world ───────────
+    // These are PHYSICAL-pillar acts: a spell is cast INTO meatspace
+    // from a mage standing in it, witnessed by whatever has eyes on
+    // that ground — the astral is where you PROJECT, not the only
+    // place you cast. Every one is gated on the GRIMOIRE (`carries`,
+    // same mechanism as `shoot` needing a gun): a mage who does not
+    // know a spell of the shape is not offered the verb, and the
+    // label names the actual spell that would resolve, so the menu
+    // never promises magic the dossier cannot pay for.
+    //
+    // The three attack shapes are the canon axes doing the work:
+    // mana touches only the living (a Manabolt cannot open a door),
+    // direct physical touches anything (Powerbolt is the mage's
+    // answer to a hardened maglock), and indirect throws something
+    // real that armour resists, AP −Force.
+    castBolt: {
+      pillar: "physical", skill: "sorcery",
+      label: (t, runner) => {
+        const s = runner && MJ.bestSpellOfShape(runner, "directMana");
+        return s ? s.def.label.toLowerCase() + " it" : "mana, directly";
+      },
+      requires: { living: true },
+      carries: (runner) => MJ.knowsSpellOfShape(runner, "directMana"),
+      spellShape: "directMana",
+      damaging: true, loud: true, threat: "THREATENING", drains: true,
+      describe: "raw mana, straight past armour — living things only",
+    },
+    castSmash: {
+      pillar: "physical", skill: "sorcery",
+      label: (t, runner) => {
+        const s = runner && MJ.bestSpellOfShape(runner, "directPhys");
+        return s ? s.def.label.toLowerCase() + " it" : "force, directly";
+      },
+      carries: (runner) => MJ.knowsSpellOfShape(runner, "directPhys"),
+      spellShape: "directPhys",
+      damaging: true, loud: true, threat: "THREATENING", drains: true,
+      describe: "kinetic force past the armour — the Powerbolt line opens doors",
+    },
+    castBlast: {
+      pillar: "physical", skill: "sorcery",
+      label: (t, runner) => {
+        const s = runner && MJ.bestSpellOfShape(runner, "indirect");
+        return s ? s.def.label.toLowerCase() + " it" : "something elemental";
+      },
+      carries: (runner) => MJ.knowsSpellOfShape(runner, "indirect"),
+      spellShape: "indirect",
+      damaging: true, loud: true, threat: "THREATENING", drains: true,
+      describe: "thrown fire or lightning; armour resists it like anything else",
+    },
+    magicFingers: {
+      pillar: "physical", skill: "sorcery", label: "magic fingers",
+      requires: { living: false },
+      carries: (runner) => MJ.knowsSpell(runner, "magicFingers"),
+      spellId: "magicFingers",
+      loud: false, threat: "QUESTIONABLE", extended: true, disables: true, drains: true,
+      describe: "telekinetic hands working the mechanism from across the room",
+    },
+    levitate: {
+      pillar: "physical", skill: "sorcery", label: "levitate over it",
+      // Over the wall, not through the door — but only where nothing
+      // is WATCHING the ground you float across; floating past a
+      // camera is not a way past a camera.
+      requires: { living: false, perceives: false },
+      carries: (runner) => MJ.knowsSpell(runner, "levitate"),
+      spellId: "levitate",
+      loud: false, threat: "QUESTIONABLE", drains: true,
+      describe: "over it instead of through it — passes, removes nothing",
+    },
+    command: {
+      pillar: "physical", skill: "sorcery",
+      label: (t, runner) => {
+        const s = runner && MJ.bestCommandSpell && MJ.bestCommandSpell(runner);
+        return s ? s.def.label.toLowerCase() + " them" : "bend their will";
+      },
+      requires: { sapient: true },
+      carries: (runner) => !!(MJ.bestCommandSpell && MJ.bestCommandSpell(runner)),
+      loud: false, threat: "AWKWARD", escalates: true, drains: true,
+      describe: "a mind told to let you through — con, by force",
+    },
+
     // Not an act against the thing at all — which is why it belongs
     // to no pillar and always reaches. What decides it is whether
     // the thing is something there is a way around: a roaming
@@ -254,7 +334,19 @@
       describe: "open a window in it and go through before it closes",
     },
     blast: {
-      pillar: "astral", label: "blast it down", skill: "sorcery",
+      pillar: "astral", skill: "sorcery",
+      label: (t, runner) => {
+        const s = runner && MJ.bestCombatSpell && MJ.bestCombatSpell(runner);
+        return s ? s.def.label.toLowerCase() + " it down" : "blast it down";
+      },
+      // NO LONGER ANONYMOUS. Throwing mana at a ward is casting a
+      // combat spell at an astral construct, and the grimoire is the
+      // authority on what a mage can throw — a conjurer who never
+      // learned an attack spell has nothing to throw, exactly like a
+      // runner without a gun cannot shoot. (Canon backs the mana
+      // side: direct mana touches the living AND the magical, which
+      // is why a Manabolt lands on a ward.)
+      carries: (runner) => !!(MJ.bestCombatSpell && MJ.bestCombatSpell(runner)),
       damaging: true, loud: true, threat: "THREATENING", drains: true,
       describe: "mana, thrown hard",
     },

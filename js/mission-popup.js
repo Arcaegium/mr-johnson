@@ -144,6 +144,16 @@
       const at = '<span class="dimmed">r' + e.round + "p" + e.pass + "</span> ";
       if (e.event === "hold") return at + nm(e.actor) + '<span class="dimmed"> holds (' + esc(e.stance || "") + ")</span>";
       if (e.event === "dry") return at + nm(e.actor) + " " + no("out of ammo") + '<span class="dimmed"> (' + esc(e.weapon) + ")</span>";
+      // A cast is its own kind of line: the spell, the Force behind
+      // it, the Drain it cost, and what landed — with "straight
+      // through armour" said out loud when direct, because that is
+      // the entire reason the mage did it.
+      if (e.event === "spell") {
+        return at + nm(e.actor) + '<span class="dimmed"> casts </span>' + nm(e.spell) +
+          '<span class="dimmed"> (Force ' + e.force + ') → </span>' + nm(e.target) +
+          " — " + (e.casterDown ? no("DRAIN DROPS THE CASTER") : esc(e.result || "cast")) +
+          (e.drainTaken ? '<span class="dimmed"> · drain ' + e.drainTaken + "</span>" : "");
+      }
       if (e.event !== "attack") return "";
       const head = at + nm(e.actor) + '<span class="dimmed"> → </span>' + nm(e.target) +
         '<span class="dimmed"> · ' + esc(e.weapon) + " " + esc(e.mode) + "</span> " +
@@ -162,6 +172,19 @@
   }
 
   function describeTask(t) {
+    // A utility cast: the spell, the Force, what it bought, and what
+    // the Drain cost — the mage's whole transaction on one line.
+    if (t.cast) {
+      return nm(t.runner) + '<span class="dimmed"> casts </span>' + nm(t.verb) +
+        '<span class="dimmed"> at Force </span>' + num(t.force) +
+        " (" + num(t.pool + "d") + '<span class="dimmed"> → </span>' + num(t.hits) + " hits) — " +
+        (t.success ? ok(esc(t.result)) : no(esc(t.result))) +
+        (t.drain && t.drain.damage > 0
+          ? '<span class="dimmed"> · drain ' + t.drain.damage + (t.drain.physical ? " PHYSICAL" : "") + "</span>" : "") +
+        readNote(t.read) +
+        (t.responders && t.responders.length
+          ? "<br>&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
+    }
     if (!t.runner) return '<span class="dimmed">' + esc(t.obstacle) + " " + num("T" + t.tier) + " — " + esc(t.result) + "</span>";
     if (t.rejected) return nm(t.runner) + " tried " + esc(t.skill) + " on " + nm(t.obstacle) + " — " + no(t.rejected);
     if (t.combat) {
@@ -170,7 +193,9 @@
         '<span class="dimmed"> round' + (t.rounds === 1 ? "" : "s") + "</span>: " +
         (t.success ? ok("crew held the ground") : t.stalemate ? no("broke off — could not finish them") : no("THE CREW WENT DOWN")) + readNote(t.read);
       const fallen = (t.casualties || []).map((c) => "<br>&nbsp;&nbsp;" + nm(c.runner) +
-        (c.died ? " " + no("was KILLED") : " went down — carried out with " + num(c.wounds) + " box" + (c.wounds === 1 ? "" : "es"))).join("");
+        (c.died ? " " + no("was KILLED")
+          : " went down — carried out with " + num(c.wounds) + " box" + (c.wounds === 1 ? "" : "es") +
+            (c.stabilized ? ' <span class="w-ok">— stabilized by ' + esc(c.by) + "</span>" : ""))).join("");
       return head + combatLog(t.log) + fallen +
         (t.responders && t.responders.length
           ? "<br>" + "&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
@@ -549,6 +574,57 @@
       });
     }
 
+    // ── The grimoire row ────────────────────────────────────────
+    // Utility spells the crew's mages could put up RIGHT NOW —
+    // Invisibility before the corridor, Hush before the shot,
+    // Analyze Device at the box in front of you. Casting costs the
+    // beat and the Drain but does not spend the obstacle: the prompt
+    // comes straight back with the spell now standing.
+    //
+    // Only what changes something from here is offered: no re-casting
+    // a blanket already up, no analyzing a thing with the wrong kind
+    // of truth, and a caster already holding spells sees their own
+    // −2s in the listed pool.
+    function grimoireCasts(prompt) {
+      const casts = [];
+      const upright = run.runners.filter((r) => !run.downed || !run.downed.has(r));
+      for (const mage of upright) {
+        for (const id of MJ.spellsFor(mage)) {
+          const def = MJ.spellDef(id);
+          if (!def || def.combat) continue; // thrown spells live on the obstacle menu
+          if (def.home === "bypass" || def.home === "remote" || def.home === "command") continue; // verbs already
+          if (def.home === "silence" && !def.single && run.silenced) continue;
+          if (def.home === "conceal" && (run.spellConcealment || []).some((c) => c.vsTech === !!def.vsTech)) continue;
+          if (def.home === "heal" && !upright.some((r) => (r.wounds || 0) > 0)) continue;
+          if (def.home === "stabilize") continue; // auto-cast at the moment it matters
+          if (def.home === "analyze") {
+            const ob = prompt.obstacle;
+            const rightKind = def.analyzes === "sapient" ? !!ob.sapient : !ob.living;
+            if (!rightKind) continue;
+          }
+          // Debuffs are thrown at somebody, so they live in combat.
+          // BUFFS are put up here — Armor before the corridor is the
+          // entire point of Armor, and crewCombatants carries every
+          // sustained effect into the fight when one starts.
+          if (def.home === "debuff") continue;
+          if (def.home === "buff" && (run.sustaining || []).some((s) => s.spell === id)) continue;
+          const held = (run.sustaining || []).filter((s) => s.caster === mage).length;
+          const pool = Math.max(0, MJ.dicePoolFor(mage, "sorcery", MJ.gearBonusFor(mage, "sorcery") - 2 * held));
+          casts.push({
+            mage: mage, spellId: id, def: def,
+            target: def.home === "heal"
+              ? upright.reduce((a, b) => ((a.wounds || 0) >= (b.wounds || 0) ? a : b))
+              : null,
+            html: nm(mage.identity.handle) + '<span class="dimmed"> casts </span>' + nm(def.label),
+            meta: "sorcery " + num(pool + "d") +
+              '<span class="dimmed"> · drain F' + (def.drain >= 0 ? "+" + def.drain : def.drain) + "</span>" +
+              (held ? '<span class="dimmed"> · holding ' + held + "</span>" : ""),
+          });
+        }
+      }
+      return casts;
+    }
+
     function step() {
       absorb();
       const prompt = MJ.missionPrompt(run);
@@ -560,8 +636,15 @@
       // nobody has — is not information, it is nine lines of noise
       // between the player and the transcript.
       const shown = prompt.options.filter((o) => o.available || o.discovered);
-      const options = shown.map(optionFor);
+      const casts = grimoireCasts(prompt);
+      const options = shown.map(optionFor).concat(casts.map((c) => ({ html: c.html, meta: c.meta })));
       const stalled = !shown.some((o) => o.available);
+      // What detection magic already bought about the ground ahead —
+      // paid for in Drain, so it belongs on the screen every beat.
+      const revealedLine = prompt.revealed
+        ? Object.keys(prompt.revealed).map((k) =>
+            '<div class="dimmed">✦ ' + esc(prompt.revealed[k]) + "</div>").join("")
+        : "";
       MJ.decide.open({
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">obstacle </span>' + num(prompt.index + 1) +
@@ -570,6 +653,7 @@
         transcript: transcript,
         heading: nm(prompt.label) + " " + num("T" + prompt.tier) +
           (prompt.projection ? ' <span class="dimmed">(' + esc(prompt.projection) + ")</span>" : "") +
+          revealedLine +
           '<div class="ask">' + (stalled
             ? no("Nothing left to try here.")
             : "How do you want to handle this?") + "</div>",
@@ -579,6 +663,12 @@
           { id: "withdraw", label: "withdraw the crew", tone: "warn-btn" },
         ].filter(Boolean),
         onChoose: (opt, i) => {
+          if (i >= shown.length) {
+            const c = casts[i - shown.length];
+            MJ.castUtilitySpell(run, c.mage, c.spellId,
+              { obstacle: prompt.obstacle, target: c.target });
+            return step();
+          }
           const c = shown[i];
           MJ.missionChoose(run, { skill: c.skill, runner: c.runner, approach: c.approach });
           step();

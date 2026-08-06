@@ -814,9 +814,22 @@
     return skill + attribute;
   }
 
-  function concealmentPool(run, runner) {
+  // Per WATCHER, because who a spell fools is the spell's own M/P
+  // split doing real work: mana Invisibility fools MINDS, so a
+  // camera — which has none — stares straight through it and only
+  // Improved Invisibility (bent light) beats the lens. And nothing
+  // cast on the physical plane hides an AURA: a watcher with astral
+  // senses sees the crew blazing whatever the light is doing.
+  function concealmentPool(run, runner, watcher) {
     const own = runner ? MJ.dicePoolFor(runner, "stealth", MJ.gearBonusFor(runner, "stealth")) : 0;
-    return Math.max(0, own + (run.concealment || 0));
+    let bonus = run.concealment || 0; // the generic hook, watcher-blind
+    const astralEyes = watcher && (watcher.senses || []).indexOf("astral") !== -1;
+    if (!astralEyes) {
+      for (const c of run.spellConcealment || []) {
+        if (c.vsTech || !watcher || watcher.living) bonus += c.amount;
+      }
+    }
+    return Math.max(0, own + bonus);
   }
 
   // Did anything ELSE on this ground both perceive this plane AND
@@ -824,16 +837,28 @@
   function noticedBy(run, target, plane, runner) {
     const watchers = perceiversNear(run, target, plane);
     if (!watchers.length) return null;
-    const hidden = MJ.countHits(MJ.rollDicePool(run.rng, concealmentPool(run, runner)));
     for (const w of watchers) {
+      const hidden = MJ.countHits(MJ.rollDicePool(run.rng, concealmentPool(run, runner, w)));
       const saw = MJ.countHits(MJ.rollDicePool(run.rng, noticePool(w)));
       if (saw > hidden) return w;
     }
     return null;
   }
 
+  // Is this act's SOUND covered? Hush and Silence blanket the crew's
+  // ground; Stealth quiets one runner. A silenced gunshot is not
+  // automatically heard — but it still has to survive being SEEN,
+  // which is why the check falls through to the normal witness rules
+  // rather than returning quiet.
+  function actSilenced(run, runner) {
+    if (run.silenced) return true;
+    return !!(runner && run.silencedRunners && run.silencedRunners.has(runner));
+  }
+
   function wasWitnessed(run, obstacle, act, succeeded, runner) {
-    if (act && act.loud) return true; // gunfire carries regardless
+    // Gunfire carries regardless — unless a silence spell is holding
+    // the sound down, in which case the shot still has to be SEEN.
+    if (act && act.loud && !actSilenced(run, runner)) return true;
 
     // WHICH WORLD did this happen in? Only things that perceive on
     // that plane can have seen it. A guard has eyes in meatspace
@@ -1065,8 +1090,40 @@
     opts = opts || {};
     let profile;
     let quality = 0;
-    if (verb.skill === "sorcery") {
-      profile = manaProfile(Math.max(1, opts.force || (runner.attributes.magic || 0)));
+    if (verb.spellShape) {
+      // A REAL SPELL from the grimoire, not an anonymous blast. The
+      // shape decides the gate: direct skips armour entirely (and the
+      // mana/physical split already decided reach at the verb layer);
+      // indirect throws something real — Power = Force, AP = −Force,
+      // per canon.
+      const best = MJ.bestSpellOfShape(runner, verb.spellShape);
+      const force = Math.max(1, opts.force || (runner.attributes.magic || 0));
+      const direct = verb.spellShape !== "indirect";
+      profile = {
+        label: (best ? best.def.label : "spell") + " at Force " + force,
+        skill: "sorcery", spellId: best ? best.id : null,
+        direct: direct, stun: !!(best && best.def.stun),
+        power: force, dv: force, ap: direct ? 0 : -force, modes: ["melee"],
+      };
+    } else if (verb.skill === "sorcery") {
+      // The astral pillar's `blast`: fronts the best combat spell on
+      // the dossier, so the ward is hit with what the mage actually
+      // knows. The anonymous manaProfile survives only as the
+      // fallback for a caller that somehow got here without a
+      // grimoire — the verb's own `carries` gate should prevent it.
+      const best = MJ.bestCombatSpell ? MJ.bestCombatSpell(runner) : null;
+      const force = Math.max(1, opts.force || (runner.attributes.magic || 0));
+      if (best) {
+        const direct = best.def.shape !== "indirect";
+        profile = {
+          label: best.def.label + " at Force " + force,
+          skill: "sorcery", spellId: best.id,
+          direct: direct, stun: !!best.def.stun,
+          power: force, dv: force, ap: direct ? 0 : -force, modes: ["melee"],
+        };
+      } else {
+        profile = manaProfile(force);
+      }
     } else if (verb.weaponFor) {
       // Whatever they are holding — a crafted edge is genuinely better
       // than the shop's, so its quality rides along.
@@ -1088,7 +1145,21 @@
   }
 
   function penetrates(force, obstacle) {
+    if (force.profile.direct) return true; // direct force does not ask armour
     return force.power > Math.max(0, (obstacle.armour || 0) + (force.profile.ap || 0));
+  }
+
+  // ── What magic is doing to this runner's OTHER work ────────────
+  // Sustaining costs −2 dice per held spell (canon), and a disguise
+  // spell lends dice to the skill it fronts. One helper, read by
+  // every pool the mission computes — the number shown is the number
+  // rolled, spells included.
+  function spellPoolMods(run, runner, skill) {
+    let mod = MJ.sustainPenaltyFor ? MJ.sustainPenaltyFor(run, runner) : 0;
+    if (run.spellBoosts && runner && run.spellBoosts.has(runner)) {
+      mod += (run.spellBoosts.get(runner)[skill] || 0);
+    }
+    return mod;
   }
 
   // ── Every way this crew could take this thing ──────────────────
@@ -1160,7 +1231,8 @@
         // better linked attribute wins against an equally-trained
         // one. Computing this separately is what let the popup show
         // a number a whole attribute short of the real roll.
-        const pool = MJ.dicePoolFor(runner, skill, MJ.gearBonusFor(runner, skill));
+        const pool = MJ.dicePoolFor(runner, skill,
+          MJ.gearBonusFor(runner, skill) + spellPoolMods(run, runner, skill));
         const cand = { runner: runner, skill: skill, pool: pool, through: true };
         // Against something that does not fight back, dice are the
         // wrong ranking: the crack shot with a holdout cannot hurt an
@@ -1208,6 +1280,9 @@
       index: run.index,
       total: run.obstacles.length,
       options: optionsFor(run, obstacle),
+      // What detection magic has already bought about the ground
+      // ahead — null until somebody paid Drain for it.
+      revealed: revealedRead(run),
     };
   }
 
@@ -1269,8 +1344,20 @@
   }
 
   function crewCombatants(run) {
-    return run.runners.filter((r) => !run.downed || !run.downed.has(r)).map((r) =>
+    const crew = run.runners.filter((r) => !run.downed || !run.downed.has(r)).map((r) =>
       MJ.makeCombatant(r, Object.assign({ side: "crew", ammo: 30 }, MJ.combatLoadoutFor(r))));
+    // Spells held open WALK INTO THE FIGHT with the crew: the Armor
+    // on the tank and the sustaining weight on the mage both arrive
+    // as the ordinary effects they are. Cast before the shooting
+    // starts is exactly what a preparation spell is FOR.
+    if (MJ.registerSpellEffects) MJ.registerSpellEffects();
+    for (const held of run.sustaining || []) {
+      const onC = crew.find((c) => c.source === (held.target || held.caster));
+      const byC = crew.find((c) => c.source === held.caster);
+      if (onC && held.effect) MJ.applyEffect(onC, held.effect, { source: held.spell });
+      if (byC) MJ.applyEffect(byC, "sustaining", { source: held.spell });
+    }
+    return crew;
   }
 
   // Going down is where mission risk has teeth. The player watches
@@ -1287,6 +1374,34 @@
     const overflow = Math.max(0,
       (combatant.physical - combatant.physicalMax) + (combatant.stun - combatant.stunMax));
     if (run.rng.chance(DEATH_ON_TAKEDOWN)) {
+      // ── Stabilize: the spell between the wound and the grave ────
+      // Canon: it stops dying, nothing more — the runner is exactly
+      // as down and exactly as hurt, they just get to BE hurt
+      // tomorrow. A standing crew mage who knows it gets one cast,
+      // pays the Drain either way, and a failed cast is a failed
+      // cast. This is what makes a healthMage worth a crew slot at
+      // the exact moment the 1-in-20 lands.
+      const healer = (run.runners || []).find((r) =>
+        r !== runner && (!run.downed || !run.downed.has(r)) &&
+        MJ.knowsSpell && MJ.knowsSpell(r, "stabilize") &&
+        ((r.attributes && r.attributes.magic) || 0) > 0 &&
+        (MJ.getEffectiveSkills(r).sorcery || 0) > 0);
+      let stabilized = false;
+      if (healer) {
+        const cast = MJ.castSpell(run.rng, healer, "stabilize", { force: healer.attributes.magic });
+        if (cast.ok) {
+          applyDrain(run, healer, cast.drain);
+          stabilized = !!cast.success;
+        }
+      }
+      if (stabilized) {
+        const severity = combatant.physicalMax + Math.floor(overflow / 4);
+        runner.wounds = Math.max(runner.wounds, severity);
+        return {
+          runner: runner.identity.handle, died: false, wounds: severity,
+          stabilized: true, by: healer.identity.handle,
+        };
+      }
       // `dead` is its own flag, deliberately NOT market.phase="kia".
       // The phase machine describes runners on the WATCH LIST and
       // hiring suppresses it, so a corpse with a market phase would
@@ -1304,6 +1419,31 @@
     const severity = combatant.physicalMax + Math.floor(overflow / 4);
     runner.wounds = Math.max(runner.wounds, severity);
     return { runner: runner.identity.handle, died: false, wounds: severity };
+  }
+
+  // Which spell — if any — this combatant would throw at this target
+  // instead of pulling a trigger. Null means shoot. Mana never
+  // touches the unliving, nothing physical reaches a thing that
+  // lives only on the wire, and the whole question only exists for
+  // someone with a combat spell on their dossier.
+  function combatSpellPick(actor, target) {
+    const src = actor.source;
+    if (!src || !MJ.bestSpellOfShape) return null;
+    const ob = target.sourceObstacle;
+    if (ob && (ob.presence || []).every((p) => p === "matrix")) return null; // no spell reaches the wire
+    const living = ob ? !!ob.living : true;
+    const pick = (living && MJ.bestSpellOfShape(src, "directMana")) ||
+      MJ.bestSpellOfShape(src, "directPhys") ||
+      MJ.bestSpellOfShape(src, "indirect");
+    if (!pick) return null;
+    const weapon = MJ.weaponProfile(actor.weaponId);
+    const weaponPower = (weapon.power || 0) + (actor.weaponQuality || 0) +
+      (weapon.useStrength ? (actor.attributes.strength || 0) : 0);
+    const gunUseless = weaponPower <= Math.max(0, target.armour + (weapon.ap || 0));
+    if (gunUseless) return pick;
+    const weaponPool = MJ.dicePoolFor(src, weapon.skill, 0);
+    const spellPool = MJ.dicePoolFor(src, "sorcery", 0);
+    return spellPool > weaponPool ? pick : null;
   }
 
   // ── AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME ──────────────────
@@ -1345,6 +1485,35 @@
       // shortens instead of spreading damage evenly.
       const target = targets.reduce((a, b) =>
         (a.physical + a.stun) >= (b.physical + b.stun) ? a : b);
+
+      // A crew mage CASTS when the grimoire beats the gun — when the
+      // gun cannot penetrate at all (the wipe scenario: holdouts on
+      // hardsuits, where a direct spell is the only thing in the
+      // room that works), or when their sorcery simply out-rolls
+      // their marksmanship. House policy, same as every choice here.
+      if (actor.side === "crew") {
+        const pick = combatSpellPick(actor, target);
+        if (pick) {
+          MJ.applyEffect(actor, "cover");
+          actor.stance = "cover";
+          combat.cursor += 1; // the cast IS the action
+          const res = MJ.spellCombatAction(combat, actor, pick.id, target,
+            { force: (actor.source.attributes || {}).magic || 1 });
+          combat.log.push({
+            event: "spell", round: combat.round, pass: slot.pass,
+            actor: actor.name, target: target.name,
+            spell: res.label || pick.def.label, force: res.force,
+            drainTaken: res.drainTaken || 0, casterDown: !!res.casterDown,
+            hits: res.hits || null, sustained: !!res.sustained,
+            result: res.casterDown ? "the Drain drops the caster"
+              : res.sustained ? "held up on " + res.on
+              : (res.hits || []).map((h) => h.target + ": " +
+                  (h.result === "hit" ? h.damage + (h.stun ? "S" : "P") + (h.direct ? " straight through armour" : "") : h.result)
+                ).join("; ") || res.result || "cast",
+          });
+          continue;
+        }
+      }
       const weapon = MJ.weaponProfile(actor.weaponId);
       const mode = weapon.modes.indexOf("BF") !== -1 ? "BF" : weapon.modes[0];
       MJ.combatAct(combat, { target: target, mode: mode, stance: actor.side === "crew" ? "cover" : "open" });
@@ -1415,6 +1584,103 @@
       }
     }
     return drain;
+  }
+
+  // ── Casting a utility spell mid-run ─────────────────────────────
+  // The meatspace quick cast: one action, one beat. Invisibility
+  // before the corridor, Hush before the shot, Clairvoyance before
+  // the corner, Analyze Device at the box in front of you. This is
+  // the mage's version of the decker hacking the maglock from the
+  // hallway — the deep thread-by-thread cast lives on the astral
+  // (the lattice), same rules, different rendering.
+  //
+  // `opts.obstacle` targets the CURRENT thing for the analyze home;
+  // `opts.target` names a crew member for touch spells (Heal, Mask).
+  function castUtilitySpell(run, runner, spellId, opts) {
+    opts = opts || {};
+    const def = MJ.spellDef(spellId);
+    if (!def) return { ok: false, error: "no such spell" };
+    if (def.combat) return { ok: false, error: "that is thrown at something, not put up" };
+    if (run.downed && run.downed.has(runner)) return { ok: false, error: "they are down" };
+
+    const sustainedCount = (run.sustaining || []).filter((s) => s.caster === runner).length;
+    const cast = MJ.castSpell(run.rng, runner, spellId, {
+      force: opts.force,
+      sustainedCount: sustainedCount,
+      bonusDice: run.intelBonus + MJ.gearBonusFor(runner, "sorcery"),
+    });
+    if (!cast.ok) return cast;
+    cast.target = opts.target || null;
+    applyDrain(run, runner, cast.drain);
+    tickTether(run);
+
+    const applied = cast.success ? MJ.applySpellToRun(run, runner, cast) : null;
+
+    // The analyze home: read ONE thing's truth. What it buys is the
+    // exact knowledge an attempt normally pays for — the immunities —
+    // without the attempt. Recon in a bottle, priced in Drain.
+    let learned = null;
+    if (cast.success && def.home === "analyze" && opts.obstacle) {
+      const ob = opts.obstacle;
+      const rightKind = def.analyzes === "sapient" ? !!ob.sapient : !ob.living;
+      if (rightKind) {
+        learned = [];
+        for (const skill of Object.keys(ob.immune || {})) {
+          markUseless(run, ob, skill, ob.immune[skill]);
+          learned.push(skill);
+        }
+      }
+    }
+
+    const task = {
+      cast: true, spell: spellId, verb: def.label,
+      runner: runner.identity.handle,
+      force: cast.force, pool: cast.pool, hits: cast.hits,
+      success: cast.success, drain: cast.drain,
+      applied: applied, learned: learned,
+      result: !cast.success ? def.label + " — the circuit would not hold"
+        : learned ? def.label + " — " + (learned.length ? "it will not answer to: " + learned.join(", ") : "nothing is hidden about it")
+        : def.label + (applied && applied.sustained ? " — holding it" : ""),
+    };
+
+    // Casting is a real act on real ground. Quiet, but a camera that
+    // catches a runner mid-gesture with mana bending around them has
+    // seen something QUESTIONABLE — magic in the open alarms people.
+    const here = run.obstacles[run.index];
+    if (here && wasWitnessed(run, here, { loud: false, plane: "physical" }, cast.success, runner)) {
+      const appliedRead = MJ.witnessAct(run.state, run.day, MJ.THREAT.QUESTIONABLE);
+      task.read = { threatClass: MJ.THREAT.QUESTIONABLE, band: appliedRead.band };
+      if (appliedRead.tipped) {
+        run.engagedAlert = true;
+        task.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);
+      }
+    }
+    if (MJ.alertEngaged(run.state)) MJ.addAlertPointsAll(run.state, ALERT_POINTS_PER_BEAT);
+    run.tasks.push(task);
+    return task;
+  }
+
+  // What detection magic has bought the crew, said against what is
+  // actually ahead — read live off the route, never cached, so it
+  // stays true as obstacles fall.
+  function revealedRead(run) {
+    if (!run.revealed) return null;
+    const ahead = run.obstacles.slice(run.index + 1);
+    const out = {};
+    if (run.revealed.ground) {
+      out.ground = !ahead.length ? "clear ground to the objective"
+        : ahead[0].label + " T" + ahead[0].tier +
+          (ahead.length > 1 ? ", then " + (ahead.length - 1) + " more" : ", then clear");
+    }
+    if (run.revealed.life) {
+      const living = ahead.filter((o) => o.living);
+      out.life = living.length ? living.map((o) => o.label).join(", ") + " breathing ahead" : "nothing breathing ahead";
+    }
+    if (run.revealed.magic) {
+      const astral = ahead.filter((o) => o.projection === "astral");
+      out.magic = astral.length ? astral.map((o) => o.label).join(", ") + " on the astral ahead" : "nothing magical ahead";
+    }
+    return out;
   }
 
   // A critical glitch lands the same way whoever caused it and
@@ -1619,7 +1885,8 @@
     const runner = act.runner;
     const force = forceProfileFor(runner, act.def, { force: run.castForce });
     const pool = MJ.dicePoolFor(runner, act.skill, run.intelBonus +
-      MJ.gearBonusFor(runner, act.skill) + suppressionBonus(run.site, obstacle.projection, run.day));
+      MJ.gearBonusFor(runner, act.skill) + suppressionBonus(run.site, obstacle.projection, run.day) +
+      spellPoolMods(run, runner, act.skill));
     // How much this thing has taken THIS RUN — held here, keyed by
     // the object, exactly like tries and discoveries. The site's own
     // walls are never written to.
@@ -1728,7 +1995,17 @@
     if (runner && act.def.drains && (runner.attributes.magic || 0) > 0) {
       const force = Math.max(1, Math.min(MJ.maxForceFor(runner),
         choice.force || runner.attributes.magic));
-      drain = MJ.resistDrain(run.rng, runner, force);
+      // A verb fronting a REAL SPELL bills that spell's printed
+      // Drain — Force plus its modifier, min 2 — which is the canon
+      // pricing that makes Punch nearly free and area spells brutal.
+      // The astral's own verbs (unwind, banish, blast) keep the
+      // generic curve; they are not spellcasting.
+      const spellId = act.def.spellId ||
+        (act.def.spellShape && (MJ.bestSpellOfShape(runner, act.def.spellShape) || {}).id) ||
+        (act.verbId === "command" && (MJ.bestCommandSpell(runner) || {}).id) || null;
+      const spellDef = spellId && MJ.spellDef(spellId);
+      drain = MJ.resistDrain(run.rng, runner, force,
+        spellDef ? { drainValue: Math.max(2, force + (spellDef.drain || 0)) } : undefined);
       run.castForce = force;
       applyDrain(run, runner, drain);
     }
@@ -1814,7 +2091,8 @@
     // interval, or cut losses?
     if (act.def.extended) {
       const startPool = MJ.dicePoolFor(runner, skill, run.intelBonus +
-        MJ.gearBonusFor(runner, skill) + suppressionBonus(run.site, obstacle.projection, run.day));
+        MJ.gearBonusFor(runner, skill) + suppressionBonus(run.site, obstacle.projection, run.day) +
+        spellPoolMods(run, runner, skill));
       run.extended = {
         runner: runner, verb: act.verb, act: act,
         approach: act.verbId, startPool: startPool,
@@ -1863,7 +2141,8 @@
     const outcome = MJ.resolveTask(run.rng, runner, obstacle, skill, {
       verb: act.verb, loud: act.loud,
       bonusDice: run.intelBonus + MJ.gearBonusFor(runner, skill) + boostDice +
-        suppressionBonus(run.site, obstacle.projection, run.day),
+        suppressionBonus(run.site, obstacle.projection, run.day) +
+        spellPoolMods(run, runner, skill),
     });
     if (act.loud) run.anyLoud = true;
     if (outcome.glitch) run.anyGlitch = true;
@@ -2478,6 +2757,9 @@
   MJ.axisProven = axisProven;
   MJ.missionExtendedStep = missionExtendedStep;
   MJ.extendedThreshold = extendedThreshold;
+  // The mage's mid-run actions: put a spell up, read the ground.
+  MJ.castUtilitySpell = castUtilitySpell;
+  MJ.revealedRead = revealedRead;
   MJ.missionAbort = missionAbort;
   MJ.missionDone = missionDone;
   MJ.finishMission = finishMission;

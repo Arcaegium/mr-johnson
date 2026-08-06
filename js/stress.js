@@ -1495,19 +1495,41 @@
     check(MJ.findConsumable(tank, "boost", "firearms") === null, "C11: boost must not match other skills");
     check(MJ.gearBonusFor(tank, "stealth") === 0, "C11: consumables must not count as passive gear");
 
-    // Formulas: mages only, recorded on the dossier, copy consumed.
-    const formula = MJ.makeItem("fmlManabolt");
+    // Formulas: mages only, spell IDS on the dossier, copy consumed,
+    // and 5 KARMA — canon learning cost, the gate that stops a rich
+    // Johnson mass-producing archmages with money alone.
+    check(!!MJ.ITEM_TEMPLATES.fml_manabolt && MJ.ITEM_TEMPLATES.fml_manabolt.label === "Formula: Manabolt",
+      "C11: every implemented spell has a formula named for the CANON spell");
+    check(Object.keys(MJ.SPELLS).every((id) => !!MJ.ITEM_TEMPLATES["fml_" + id]),
+      "C11: no spell without a learnable formula");
+    const formula = MJ.makeItem("fml_manabolt");
     save.armory.items.push(formula);
     check(MJ.issueItem(formula, tank).ok === false, "C11: formulas must refuse issue");
     check(MJ.teachFormula(tank, formula, save.armory.items).ok === false, "C11: non-mage must refuse formulas");
-    const mage = MJ.generateRunner(rng.fork("mage"), { family: "mage" });
+    // A mage who does NOT already know Manabolt — the healers and
+    // illusionists qualify; keep drawing until one turns up.
+    let mage = null;
+    for (let i = 0; i < 40 && !mage; i++) {
+      const m = MJ.generateRunner(rng.fork("mage" + i), { family: "mage" });
+      if ((m.classification.spellsKnown || []).indexOf("manabolt") === -1) mage = m;
+    }
+    check(!!mage, "C11: the probe needs a mage without Manabolt");
     MJ.watchRunner(mage, rng);
     MJ.hireRunner(mage, "permanent");
+    mage.karma = 3;
+    check(MJ.teachFormula(mage, formula, save.armory.items).ok === false,
+      "C11: 3 karma is not 5 — learning must refuse the broke");
+    check(save.armory.items.indexOf(formula) !== -1, "C11: a refused lesson must not eat the formula");
+    mage.karma = 7;
     check(MJ.teachFormula(mage, formula, save.armory.items).ok === true, "C11: mage must learn the formula");
-    check(mage.classification.spellFormulasKnown.indexOf("Formula: Manabolt") !== -1, "C11: formula must land on the dossier");
+    check(mage.karma === 2, "C11: and pay exactly 5 karma for it");
+    check(mage.classification.spellsKnown.indexOf("manabolt") !== -1,
+      "C11: the dossier records the SPELL ID, readable by the caster");
     check(save.armory.items.indexOf(formula) === -1, "C11: taught formula must be consumed");
-    const formula2 = MJ.makeItem("fmlManabolt");
+    check(MJ.knowsSpell(mage, "manabolt"), "C11: and the grimoire can cast from it");
+    const formula2 = MJ.makeItem("fml_manabolt");
     save.armory.items.push(formula2);
+    mage.karma = 10;
     check(MJ.teachFormula(mage, formula2, save.armory.items).ok === false, "C11: re-learning the same formula must refuse");
 
     // Contract upgrades: pro-rata credit against today's price.
@@ -2773,23 +2795,63 @@
   // than a parallel system.
   function class17_spells() {
     const rng = MJ.makeRNG("stress-spells");
-    const mage = MJ.generateRunner(rng.fork("m"), {});
+    const mage = MJ.generateRunner(rng.fork("m"), { family: "mage" });
     mage.attributes.magic = 5; mage.attributes.willpower = 5;
     mage.skills.sorcery = 5; mage.skills.assensing = 6; mage.wounds = 0;
+    // The probe's own grimoire — fixed, so every check below casts
+    // from a known book rather than whatever generation dealt.
+    mage.classification.spellsKnown = ["manabolt", "fireball", "invisibility", "heal",
+      "detectLife", "increaseReflexes", "hush", "punch", "stunball", "mobMind"];
 
     // A mundane cannot cast, whatever their skills say.
     const mundane = MJ.generateRunner(rng.fork("mun"), {});
     mundane.attributes.magic = 0; mundane.skills.sorcery = 6;
+    mundane.classification.spellsKnown = ["manabolt"];
     check(MJ.spellsFor(mundane).length === 0, "C17: no Magic means no spells, whatever the skill sheet says");
-    check(MJ.spellsFor(mage).length > 0, "C17: a mage with sorcery has a spell list");
+    check(MJ.spellsFor(mage).length === mage.classification.spellsKnown.length,
+      "C17: the spell list IS the grimoire — never the whole book");
 
-    // The table itself must be coherent.
+    // ── THE GRIMOIRE IS THE AUTHORITY (§8: spells live on the dossier)
+    check(MJ.castSpell(rng.fork("ng"), mage, "powerbolt", {}).ok === false,
+      "C17: a spell not on the dossier cannot be cast, whatever the training");
+    check(MJ.knowsSpell(mage, "manabolt") && !MJ.knowsSpell(mage, "powerbolt"),
+      "C17: knowsSpell reads the dossier and nothing else");
+
+    // ── The table is CANON: names, types, drain codes ─────────────
+    let combatCount = 0;
     for (const id of Object.keys(MJ.SPELLS)) {
       const def = MJ.SPELLS[id];
       check(MJ.SPELL_CATEGORIES.indexOf(def.category) !== -1, "C17: " + id + " has an unknown category");
-      check(!!def.label && !!def.skill, "C17: " + id + " needs a label and a governing skill");
-      if (def.direct) check(def.combat, "C17: " + id + " is direct but not usable in combat");
+      check(!!def.label, "C17: " + id + " needs its canon name");
+      check(def.type === "M" || def.type === "P", "C17: " + id + " needs a canon mana/physical type");
+      check(typeof def.drain === "number", "C17: " + id + " needs its printed Drain modifier");
+      check(!!def.combat === !def.home, "C17: " + id + " is thrown OR put up, never both and never neither");
+      if (def.combat) {
+        combatCount += 1;
+        check(["directMana", "directPhys", "indirect"].indexOf(def.shape) !== -1,
+          "C17: " + id + " needs an attack shape");
+        // Canon consistency: every direct mana spell IS type M, and
+        // every indirect spell throws something real (type P).
+        if (def.shape === "directMana") check(def.type === "M", "C17: " + id + " — direct mana is type M");
+        if (def.shape === "indirect") check(def.type === "P", "C17: " + id + " — indirect throws something physical");
+      }
     }
+    check(combatCount === 19, "C17: the complete canon combat set (18) plus Fling (saw " + combatCount + ")");
+
+    // ── Drain is canon: max(2, Force + printed modifier) ──────────
+    const dv = (id, force) => MJ.spellDrain(MJ.makeRNG("dv" + id + force), mage, MJ.SPELLS[id], force).drainValue;
+    check(dv("punch", 4) === 2, "C17: Punch at F4 drains F-6 -> floor 2 (saw " + dv("punch", 4) + ")");
+    check(dv("manabolt", 4) === 2 && dv("manabolt", 6) === 3, "C17: Manabolt drains F-3");
+    check(dv("stunball", 4) === 4, "C17: Stunball drains a full F");
+    check(dv("mobMind", 4) === 5, "C17: Mob Mind drains F+1 — the big reaches cost real blood");
+
+    // ── The Force ceiling is canon: 2x Magic, overcast past Magic ──
+    check(MJ.maxForceFor(mage) === 10, "C17: max Force is TWICE Magic (saw " + MJ.maxForceFor(mage) + ")");
+    const over = MJ.castSpell(rng.fork("ov"), mage, "fireball", { force: 10 });
+    check(over.overcast === true, "C17: pushing past Magic must register as overcasting");
+    check(over.drain.physical === true, "C17: overcast Drain must be PHYSICAL, not stun");
+    const safe = MJ.castSpell(rng.fork("sf"), mage, "fireball", { force: 5 });
+    check(safe.drain.physical === false, "C17: Drain within Magic stays stun");
 
     // ── Direct vs indirect: the distinction that earns its keep ───
     const tank = () => MJ.makeCombatant(
@@ -2803,14 +2865,39 @@
     let directArmour = null, indirectArmour = null, directDmg = 0, indirectDmg = 0;
     for (let i = 0; i < 120; i++) {
       const d = cast("manabolt", i), f = cast("fireball", i);
-      if (d.armourApplied !== undefined) directArmour = d.armourApplied;
-      if (f.armourApplied !== undefined) indirectArmour = f.armourApplied;
-      directDmg += d.damage || 0; indirectDmg += f.damage || 0;
+      for (const h of d.hits || []) { if (h.armourApplied !== undefined) directArmour = h.armourApplied; directDmg += h.damage || 0; }
+      for (const h of f.hits || []) { if (h.armourApplied !== undefined) indirectArmour = h.armourApplied; indirectDmg += h.damage || 0; }
     }
     check(directArmour === 0, "C17: a DIRECT spell must ignore armour entirely (saw " + directArmour + ")");
-    check(indirectArmour === 12, "C17: an INDIRECT spell must face armour normally (saw " + indirectArmour + ")");
+    check(indirectArmour === 7, "C17: an INDIRECT spell faces armour minus Force — AP −F, canon (saw " + indirectArmour + ")");
     check(directDmg > indirectDmg,
       "C17: against heavy armour, direct magic must outperform indirect (" + directDmg + " vs " + indirectDmg + ")");
+
+    // Mana does not touch the unliving; the Drain is owed anyway.
+    const camera = MJ.generateObstacleInstance(MJ.makeRNG("c17cam"), "camera", 3, "physical");
+    {
+      const t = tank(); t.sourceObstacle = camera;
+      const c = MJ.beginCombat(MJ.makeRNG("c17mana"), [MJ.makeCombatant(mage, { side: "crew" })], [t], {});
+      const res = MJ.spellCombatAction(c, c.combatants[0], "manabolt", t, { force: 4 });
+      check(res.result === "ineffective", "C17: mana thrown at a machine does nothing");
+    }
+
+    // ── The verb bridge: spells cross like everything else ────────
+    const lock = MJ.generateObstacleInstance(MJ.makeRNG("c17lock"), "maglock", 4, "physical");
+    const acts = MJ.actsFor(lock);
+    const bolt = acts.find((a) => a.id === "castBolt");
+    const smash = acts.find((a) => a.id === "castSmash");
+    check(bolt && !bolt.lands, "C17: castBolt reaches a maglock and does not land — mana needs a life to touch");
+    check(smash && smash.lands, "C17: castSmash lands on it — the Powerbolt line opens doors");
+    const guard = MJ.generateObstacleInstance(MJ.makeRNG("c17grd"), "guard", 4, "physical");
+    check((MJ.actsFor(guard).find((a) => a.id === "castBolt") || {}).lands === true,
+      "C17: and the same verb lands on the guard");
+    // The grimoire gates the MENU: no known shape, no verb offered.
+    check(MJ.VERBS.castSmash.carries(mage) === false,
+      "C17: a mage without the Powerbolt line is never offered castSmash");
+    check(MJ.VERBS.castBolt.carries(mage) === true, "C17: one with Manabolt is offered castBolt");
+    check(MJ.VERBS.command.carries(mage) === true && MJ.bestCommandSpell(mage).id === "mobMind",
+      "C17: command fronts the best control spell on the dossier");
 
     // ── Sustaining costs you while you hold it ────────────────────
     const c2 = MJ.beginCombat(MJ.makeRNG("sus"), [MJ.makeCombatant(mage, { side: "crew" })], [tank()], {});
@@ -2824,51 +2911,84 @@
     check(MJ.actionsFor(me) === actionsBefore && MJ.effectModifier(me, "accuracy") === accBefore,
       "C17: dropping a sustained spell must return both the benefit and the cost");
 
-    // ── Out of combat: every effect lands on an existing hook ─────
+    // ── Out of combat: the quick cast, on the run's own hooks ─────
     const site = MJ.mintSite("stress-spell-u", 4);
     const crew = makeRoster(rng.fork("crew"), 2);
     for (const r of crew) { MJ.watchRunner(r, rng); MJ.hireRunner(r, "permanent"); }
     MJ.watchRunner(mage, rng); MJ.hireRunner(mage, "permanent");
     const run = MJ.beginMission(rng.fork("run"), { site: site, kind: "jobObjective", objective: {} }, [mage].concat(crew), 1);
 
+    // Drive until a cast succeeds — hits are dice, the HOOKS are not.
+    const driven = {};
     const drive = (spellId, force) => {
-      const c = MJ.castSpell(rng.fork("c" + spellId), mage, spellId, { force: force });
-      let g = 0;
-      while (!MJ.latticeDone(c.lattice) && g++ < 20) {
-        const v = MJ.latticeRead(c.lattice);
-        const open = v.threads.filter((t) => !t.cut);
-        if (!open.length) break;
-        const want = v.shape[(v.built || []).length];
-        MJ.latticePull(c.lattice, ((want && open.find((t) => t.resonance === want)) || open[0]).id);
+      for (let i = 0; i < 30; i++) {
+        const t = MJ.castUtilitySpell(run, mage, spellId, { force: force, obstacle: run.obstacles[run.index] });
+        if (t.success) return t;
       }
-      MJ.finishCast(rng.fork("f" + spellId), c);
-      return { cast: c, applied: MJ.applySpellToRun(run, mage, c) };
+      return null;
     };
-
-    const conceal = (run.concealment || 0);
-    const inv = drive("invisibility", 4);
-    if (inv.cast.success) {
-      check((run.concealment || 0) > conceal,
-        "C17: Invisibility must feed run.concealment — the hook built for exactly this");
-      check((run.sustaining || []).some((s) => s.spell === "invisibility"),
-        "C17: a sustained spell must be recorded on the run");
-    }
+    driven.inv = drive("invisibility", 4);
+    check(!!driven.inv, "C17: thirty tries at Force 4 must land an Invisibility");
+    check((run.spellConcealment || []).some((c) => !c.vsTech),
+      "C17: mana Invisibility must feed concealment AND admit it cannot fool a lens");
+    check((run.sustaining || []).some((s) => s.spell === "invisibility"),
+      "C17: a sustained spell must be recorded on the run");
+    driven.hush = drive("hush", 4);
+    check(!!driven.hush && run.silenced === true, "C17: Hush must blanket the crew's sound");
     mage.wounds = 4;
-    const healed = drive("heal", 5);
-    if (healed.cast.success) check(mage.wounds < 4, "C17: Heal must close boxes on the physical track");
-    const det = drive("detectLife", 3);
-    if (det.cast.success) check(!!(run.revealed && run.revealed.life), "C17: Detection must buy knowledge on the run");
+    driven.heal = drive("heal", 5);
+    check(!!driven.heal && mage.wounds < 4, "C17: Heal must close boxes on the physical track");
+    driven.det = drive("detectLife", 3);
+    check(!!driven.det && !!(run.revealed && run.revealed.life), "C17: Detection must buy knowledge on the run");
+    check(!!MJ.missionPrompt(run) === false || MJ.missionPrompt(run).revealed !== undefined,
+      "C17: and the prompt carries what was bought");
+    // Holding three spells: −2 each on everything else the mage does.
+    check(MJ.sustainPenaltyFor(run, mage) <= -4,
+      "C17: sustaining must weigh on the caster's other pools (saw " + MJ.sustainPenaltyFor(run, mage) + ")");
+    check(MJ.sustainPenaltyFor(run, crew[0]) === 0, "C17: and on NOBODY else's");
 
-    // ── Overcasting bites, through the existing SR5 path ──────────
-    const over = MJ.castSpell(rng.fork("ov"), mage, "fireball", { force: MJ.maxForceFor(mage) });
-    MJ.latticeAbandon(over.lattice);
-    MJ.finishCast(rng.fork("ovf"), over);
-    check(over.drain.overcast === true, "C17: pushing past Magic must register as overcasting");
-    check(over.drain.physical === true, "C17: overcast Drain must be PHYSICAL, not stun");
+    // ── The astral deep path still exists: same spell, via lattice ─
+    const viaLattice = MJ.castSpell(rng.fork("lat"), mage, "manabolt", { force: 4, viaLattice: true });
+    check(viaLattice.ok && !viaLattice.done && !!viaLattice.lattice,
+      "C17: the lattice path is the same cast, one rung deeper — not a different spell");
 
     // Unknown and untrained cast nothing.
     check(MJ.castSpell(rng, mage, "nonesuch", {}).ok === false, "C17: an unknown spell cannot be cast");
     check(MJ.castSpell(rng, mundane, "manabolt", {}).ok === false, "C17: an untrained caster cannot cast");
+
+    // ── Generation: the dossier arrives stocked ───────────────────
+    const tally = { mage: 0, sized: 0, sig: 0, other: 0 };
+    for (let i = 0; i < 600; i++) {
+      const r = MJ.generateRunner(MJ.makeRNG("c17gen" + i), {});
+      if (r.classification.family !== "mage") {
+        if (r.classification.spellsKnown === null) tally.other += 1;
+        continue;
+      }
+      tally.mage += 1;
+      const known = r.classification.spellsKnown || [];
+      if (known.length === Math.max(1, r.attributes.magic)) tally.sized += 1;
+      const focusList = { combatMage: "manabolt", detectionMage: "clairvoyance", healthMage: "heal",
+        illusionMage: "invisibility", manipulationMage: "magicFingers" }[r.classification.focusId];
+      if (!focusList || known.indexOf(focusList) !== -1) tally.sig += 1;
+      check(known.every((id) => !!MJ.SPELLS[id]), "C17: a generated grimoire holds only real spells");
+    }
+    check(tally.mage > 30, "C17: the sample needs mages in it");
+    check(tally.sized === tally.mage, "C17: a grimoire is sized by Magic — one spell per point");
+    check(tally.sig === tally.mage, "C17: the focus's signature spell is always known");
+    check(tally.other > 0, "C17: the unawakened carry no grimoire at all");
+
+    // ── The Attack lane reads the grimoire, not the rank ──────────
+    const healbot = MJ.generateRunner(MJ.makeRNG("c17hb"), { family: "mage" });
+    healbot.attributes.magic = 5; healbot.skills.sorcery = 6;
+    healbot.skills.melee = 0; healbot.skills.firearms = 0; healbot.skills.marksmanship = 0;
+    healbot.skills.heavyWeapons = 0; healbot.skills.demolitions = 0;
+    healbot.gear = [];
+    healbot.classification.spellsKnown = ["heal", "increaseAttribute"];
+    check(MJ.attackPowerFor(healbot) === 0,
+      "C17: six ranks of sorcery with no combat spell contribute NOTHING to Attack");
+    healbot.classification.spellsKnown = ["manabolt"];
+    check(MJ.attackPowerFor(healbot) > 20,
+      "C17: one direct spell and the same mage ignores every armour rating in the game");
   }
 
   // ── Class 16: the Lattice — the astral's own grammar ────────────

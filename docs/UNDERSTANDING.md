@@ -720,6 +720,68 @@ Adding a new modifier is adding a row, never editing the resolver.
 
 ---
 
+## 7b. SPELLS — THE CANON GRIMOIRE
+
+**These are Shadowrun's spells, not invented ones.** Names, categories, types,
+ranges, damage codes and Drain modifiers come from the SR5 core rulebook
+(verified against the Chummer5a data set: 93 core spells). The rules content IS
+the homage — gear brands are original, the magic is Shadowrun's. **57 of the 93
+are implemented**; the other 36 are deferred *by name* in `models/spells.js`,
+each with its reason (no poison model, range geometry, no distraction hook), so
+adding one later is a row, not a system.
+
+### The canon axes, and where each lands
+| axis | rule | lands on |
+|---|---|---|
+| **Direct vs Indirect** | direct touches mind/body, **armour does not apply**; indirect throws something real, armour resists, **AP −Force** | the Penetrate gate |
+| **Mana vs Physical** | type M touches only the living and the magical; type P also touches objects | verbs × properties' `living` gate |
+| **Touch / LOS / Area** | touch is cheap Drain priced against adjacency; area hits everything sharing the ground | `enemiesFor` |
+| **Force** | chosen per cast, **up to 2× Magic** (canon; was Magic+2). Above Magic is overcasting — Drain turns PHYSICAL | `maxForceFor` |
+| **Drain** | **max(2, Force + printed modifier)**: Punch F−6, Stunball F, Mob Mind F+1. This pricing is the spell economy | `resistDrain` w/ override |
+| **Sustaining** | −2 dice on everything else the caster does while held | the effects layer + `sustainPenaltyFor` |
+
+### Spells live on the dossier — finally true
+A mage generates knowing **Magic-rating spells**, focus-weighted with the
+signature guaranteed (a combatMage always has Manabolt; a healthMage, Heal).
+`spellsFor()` is **grimoire ∩ trained**, never the whole book. Growth is canon:
+a formula (auto-generated into the armoury, one per spell, named for the spell)
+plus **5 karma**. The dossier renders the grimoire — two mages at the same
+price knowing different spells are different hires, which is the point.
+
+### Meatspace casting: a spell is a verb only its caster has
+Grimoire-gated verbs (`carries`, the same mechanism as `shoot` needing a gun):
+three attack shapes (`castBolt` direct mana / `castSmash` direct physical /
+`castBlast` indirect), plus Magic Fingers (pick at range), Levitate (bypass
+where nothing watches), and `command` (Influence/Control — con by force). The
+crossing does the canon work unauthored: **Manabolt reaches a maglock and does
+not land; Powerbolt opens it.** The astral pillar's `blast` is no longer
+anonymous — it fronts the best combat spell on the dossier, and a mage without
+one has nothing to throw.
+
+Utility spells cast mid-run through `castUtilitySpell`: Invisibility feeds
+per-watcher concealment (**mana fools minds, so cameras see through it — only
+Improved Invisibility beats a lens; nothing physical hides an aura from astral
+eyes**), Hush/Silence suppress `loud` (the shot still has to survive being
+*seen*), Heal closes boxes, detection buys route knowledge onto the prompt,
+Analyze reads one thing's immunities without paying an attempt for them,
+Stabilize auto-casts between the wound and the grave. In combat a mage casts
+when the grimoire beats the gun; the blow-by-blow prints casts, Force, Drain
+and "straight through armour."
+
+**The lattice is the SAME cast, one rung deeper** — `viaLattice` builds the
+circuit thread by thread on the astral, exactly the fidelity-ladder abstraction
+the decker gets: hack the maglock from the corridor, or jack in and do it
+properly. The shallow/deep choice as a *mid-run* decision is designed but
+deferred; its home is §3.3's clocks plus the initiative ratio — **meat 1 die,
+astral 2, cold-sim 3, hot-sim 4** — and `buildRound`'s pass structure already
+runs faster consciousnesses more often in one shared scene, with the slumped
+body a defenceless combatant the crew defends (§9's "real, protectable body").
+
+**Known gap:** the popup casts at full Magic; the Force dial (§14: the player
+picks Force) is a flagged follow-up. A Magic-6 mage who defaults through three
+casts can drain-drop before the fight — the risk is real, the *choice* isn't
+surfaced yet.
+
 ## 8. THE ASTRAL REALM
 
 Played solo by whichever mage is assigned — turn-exchange encounters over a

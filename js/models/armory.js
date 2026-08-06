@@ -66,9 +66,9 @@
   //                  skill; effect "absorbWound" eats a wound.
   //   program     -> boosts its skill only while the carrier also
   //                  holds a deck (requires: "deck").
-  //   formula     -> taught to a mage (consumed), recorded in
-  //                  spellFormulasKnown — real casting mechanics
-  //                  arrive with the Phase 2 magic pillar, flagged.
+  //   formula     -> taught to a mage (consumed, 5 karma), recorded
+  //                  as a spell id in classification.spellsKnown —
+  //                  the grimoire models/spells.js casts from.
   const ITEM_TEMPLATES = {
     // ── Weapons ──────────────────────────────────────────────────
     holdout:      { label: "Vesper Holdout Pistol",  category: "weapon", tier: 1, skill: "firearms",     craftSkill: "electronics", combat: "holdout" },
@@ -157,12 +157,11 @@
     focusDraught: { label: "Focus Draught",      category: "consumable", tier: 3, effect: "boost", skill: "sorcery",     craftSkill: "enchanting" },
     overclockChip:{ label: "Overclock Chip",     category: "consumable", tier: 3, effect: "boost", skill: "hacking",     craftSkill: "computer" },
     // ── Spell formulas (taught, not issued — §04's mage content) ─
-    fmlManabolt:  { label: "Formula: Manabolt",     category: "formula", tier: 3, spellCategory: "combat",       craftSkill: "enchanting" },
-    fmlHeal:      { label: "Formula: Mend",         category: "formula", tier: 3, spellCategory: "health",       craftSkill: "enchanting" },
-    fmlVeil:      { label: "Formula: Veil",         category: "formula", tier: 4, spellCategory: "illusion",     craftSkill: "enchanting" },
-    fmlSeeker:    { label: "Formula: Seeker's Eye", category: "formula", tier: 3, spellCategory: "detection",    craftSkill: "enchanting" },
-    fmlLevitate:  { label: "Formula: Levitate",     category: "formula", tier: 4, spellCategory: "manipulation", craftSkill: "enchanting" },
-    fmlBarrier:   { label: "Formula: Aegis",        category: "formula", tier: 5, spellCategory: "health",       craftSkill: "enchanting" },
+    // NOT LISTED HERE: one formula exists per implemented canon
+    // spell, generated into this registry by models/spells.js at
+    // load (it owns the spell table and loads after this file). The
+    // invented names an earlier pass used — "Mend", "Veil", "Aegis"
+    // — are gone; a formula is named for the SR5 spell it teaches.
     // ── Cyberware — implanted, not issued; surgery consumes ──────
     datajack:        { label: "Datajack",             category: "cyberware", tier: 2, essenceCost: 0.3, skillMods: { hacking: 1, computer: 1 } },
     smartlink:       { label: "Smartlink",            category: "cyberware", tier: 3, essenceCost: 0.6, skillMods: { firearms: 2 } },
@@ -537,21 +536,32 @@
   }
 
   // ── Spell formulas: taught to a mage, consumed on learning ──────
-  // Recorded on the dossier (spellFormulasKnown — the §09 field,
-  // finally fed); real casting mechanics arrive with the Phase 2
-  // magic pillar, flagged.
+  // Canon learning: the formula plus 5 KARMA plus study. The karma
+  // price is what stops a rich Johnson mass-producing archmages —
+  // money buys the paper, but the learning is the runner's own, paid
+  // in the same currency their growth runs on. The grimoire records
+  // SPELL IDS (models/spells.js), never display labels — labels are
+  // for the player, ids are for the machine, and an earlier pass
+  // storing labels made the dossier unreadable by the caster.
+  const FORMULA_KARMA_COST = 5;
+
   function teachFormula(runner, item, armoryItems) {
     const t = ITEM_TEMPLATES[item.templateId];
     if (!t || t.category !== "formula") return { ok: false, error: "not a spell formula" };
     if (runner.classification.family !== "mage") return { ok: false, error: "only a mage can learn a formula" };
-    runner.classification.spellFormulasKnown = runner.classification.spellFormulasKnown || [];
-    if (runner.classification.spellFormulasKnown.indexOf(t.label) !== -1) {
-      return { ok: false, error: "already knows it" };
+    if (!t.spellId || !(MJ.SPELLS && MJ.SPELLS[t.spellId])) {
+      return { ok: false, error: "the formula describes nothing castable" };
     }
-    runner.classification.spellFormulasKnown.push(t.label);
+    const known = runner.classification.spellsKnown = runner.classification.spellsKnown || [];
+    if (known.indexOf(t.spellId) !== -1) return { ok: false, error: "already knows it" };
+    if ((runner.karma || 0) < FORMULA_KARMA_COST) {
+      return { ok: false, error: "needs " + FORMULA_KARMA_COST + " karma to internalise it" };
+    }
+    runner.karma -= FORMULA_KARMA_COST;
+    known.push(t.spellId);
     const i = armoryItems.indexOf(item);
     if (i !== -1) armoryItems.splice(i, 1); // the copy is consumed in study
-    return { ok: true };
+    return { ok: true, spellId: t.spellId, karmaSpent: FORMULA_KARMA_COST };
   }
 
   // ── Cyberware surgery: consume, spend Essence, mark the dossier ─

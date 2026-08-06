@@ -407,9 +407,30 @@
       if (v.carries && !v.carries(runner)) continue;
       let power = 0;
       if (skill === "sorcery") {
-        // mission.js's manaProfile: Force + 3, and a caster reaches
-        // as far as their Magic without overcasting.
-        power = (runner.attributes.magic || 0) + 3;
+        // THE GRIMOIRE DECIDES, not the sorcery rank. A Heal-and-
+        // Bolster mage contributes nothing to Attack however good
+        // their casting — they own no verb that hurts anything. The
+        // spell-shape verbs already carry the `carries` gate above,
+        // so an unknown shape never reaches here; what this decides
+        // is the POWER a known shape brings:
+        //   direct — does not negotiate with armour at all. Quoted as
+        //     a power no armour in the game reaches, because that is
+        //     what "skips the gate" means to a comparison.
+        //   indirect — Power = Force with AP −Force, so it beats
+        //     armour below 2× the caster's safe Force.
+        // The astral pillar's own `blast` (astral combat, not a
+        // spell) keeps the old generic read.
+        const magic = runner.attributes.magic || 0;
+        if (v.spellShape) {
+          power = v.spellShape === "indirect" ? magic * 2 : 99;
+        } else {
+          // The astral `blast`: fronts the best combat spell known,
+          // so it reads exactly like the shape it would throw — and
+          // a mage with none was already filtered by `carries`.
+          const best = MJ.bestCombatSpell ? MJ.bestCombatSpell(runner) : null;
+          if (!best) continue;
+          power = best.def.shape === "indirect" ? magic * 2 : 99;
+        }
       } else if (v.weaponFor) {
         const pick = MJ.meleeProfileFor(runner);
         const w = MJ.weaponProfile(pick.id);

@@ -20,16 +20,17 @@ wins and this file is stale — verify before trusting a line here.
 > If you catch yourself writing "the player has no input here," you are
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
-Last verified after the lane model landed. Suite: 25 classes,
-89,390 assertions, 0 failures, identical across three consecutive runs.
+Last verified after the canon grimoire landed. Suite: 25 classes,
+98,868 assertions, 0 failures, identical across three consecutive runs.
 
-**Baseline moved deliberately**, 95,109 → 89,390. Class 25 is new (352
-assertions, the lane model's own probes). The drop is content drift, not lost
-coverage: `generateSkillSpread` now grants a Perception baseline and
-`generateObstacleInstance` picks a weapon off a tier ladder, so both consume the
-RNG differently, so every runner and every site in every seed differs. Class 7
-(the soak) and the content-guarded loops in classes 2, 3 and 10 count in
-proportion to what got generated, and they moved with it.
+**Baseline moved deliberately**, 89,390 → 98,868. Class 17 was rewritten
+against the canon spell system (512 assertions — grimoire gating, canon Drain
+codes, the 2×Magic ceiling, direct-vs-indirect against armour, the verb
+bridge, generation, the Attack lane reading the dossier). C11 grew formula
+probes (canon names, ids, the 5-karma price). The rest is content drift:
+`generateGrimoire` consumes the RNG during mage generation, so every runner
+and site in every seed differs, and the soak plus the content-guarded loops
+count in proportion to what got generated.
 
 ---
 
@@ -241,9 +242,45 @@ js/models/lattice.js  330  THE ASTRAL PUZZLE. beginLattice latticePull
                            latticeMoveStrength latticeReadDepth
                            -- modes unwind / unravel / assemble. NEVER hand a
                               renderer the raw lattice; latticeRead only.
-js/models/spells.js   300  SPELLS spellDef spellsFor castSpell finishCast
-                           applySpellToRun spellCombatAction dropSustained
-                           -- five SR5 categories. direct spells IGNORE armour.
+js/models/spells.js   560  THE CANON GRIMOIRE. SPELLS(57 of SR5 core's 93)
+                           spellDef spellsFor knowsSpell knowsSpellOfShape
+                           bestSpellOfShape bestCombatSpell bestCommandSpell
+                           spellDrain castSpell finishCast applySpellToRun
+                           sustainPenaltyFor dropSustainedInRun
+                           spellCombatAction dropSustained registerSpellEffects
+                           -- CANON SR5 SPELLS, names and stats as printed
+                              (UNDERSTANDING.md §7b). 36 deferred BY NAME in
+                              the file, each with its reason.
+                           -- spellsFor = GRIMOIRE ∩ trained, never the book.
+                              classification.spellsKnown holds spell IDS,
+                              generated Magic-rating deep, focus-weighted,
+                              signature guaranteed (runner.js FOCUS_SPELLS).
+                           -- Drain = max(2, Force + printed mod), through
+                              resistDrain's drainValue override. maxForceFor
+                              = 2× Magic (canon); overcast past Magic is
+                              physical.
+                           -- castSpell default = meatspace QUICK CAST (one
+                              sorcery roll); opts.viaLattice = the astral
+                              deep path, same spell, thread by thread.
+                           -- direct spells IGNORE armour (combat AND
+                              forceAgainstThing); indirect AP = −Force.
+                           -- writes one formula item per spell into
+                              ITEM_TEMPLATES at load (fml_<id>, canon name);
+                              teachFormula = formula + 5 karma -> spell id.
+                           -- verb bridge: castBolt/castSmash/castBlast +
+                              magicFingers/levitate/command in verbs.js, all
+                              grimoire-gated via carries. `blast` fronts
+                              bestCombatSpell — no longer anonymous.
+                           -- run hooks: spellConcealment is PER-WATCHER
+                              (mana fools minds not lenses; nothing physical
+                              hides an aura), silenced suppresses loud in
+                              wasWitnessed, revealed feeds missionPrompt,
+                              sustaining carries effects into crewCombatants
+                              and bills −2/spell via spellPoolMods.
+                           -- Stabilize auto-casts at resolveTakedown between
+                              the wound and the grave.
+                           -- KNOWN GAP: no Force dial in the popup yet;
+                              casts default to full Magic (task flagged).
 js/models/helpers.js  270  makeHelper bindSpirit finishBind loadAgent
                            unloadAgent agentSlotsFor helperAct instructHelper
                            dismissHelper describeHelper
