@@ -158,13 +158,26 @@
       // A spell still being STUDIED shows greyed with its progress:
       // taught first, paid for in karma after, and the dossier is
       // where the player watches that debt come due.
-      ((c.spellsKnown && c.spellsKnown.length) || (c.spellQueue && c.spellQueue.length)
-        ? `<div class="det"><span class="dk">grimoire</span>${(c.spellsKnown || [])
-            .map((id) => { const s = MJ.spellDef(id); return s ? esc(s.label) : esc(id); })
-            .concat((c.spellQueue || []).map((q) => {
-              const s = MJ.spellDef(q.spellId);
-              return `<span class="muted">${esc(s ? s.label : q.spellId)} (${q.paid}/${q.cost} karma)</span>`;
-            })).join(", ")}</div>`
+      // AN EMPTY BOOK IS A FACT ABOUT THE HIRE, NOT A MISSING LINE.
+      // A mage whose Sorcery never got trained carries no spells, and
+      // rendering nothing at all made that read as a bug rather than
+      // as what they are — a conjurer or an enchanter, whose Magic
+      // goes somewhere else. So mages always get the row, and an
+      // empty one says what it would take to fill it. This is the
+      // price of the ruling: the book is bounded by training, so the
+      // player has to be able to SEE untrained before they pay.
+      (c.family === "mage" || (c.spellsKnown && c.spellsKnown.length) || (c.spellQueue && c.spellQueue.length)
+        ? `<div class="det"><span class="dk">grimoire</span>${
+            (c.spellsKnown || []).length || (c.spellQueue || []).length
+              ? (c.spellsKnown || [])
+                  .map((id) => { const s = MJ.spellDef(id); return s ? esc(s.label) : esc(id); })
+                  .concat((c.spellQueue || []).map((q) => {
+                    const s = MJ.spellDef(q.spellId);
+                    return `<span class="muted">${esc(s ? s.label : q.spellId)} (${q.paid}/${q.cost} karma)</span>`;
+                  })).join(", ")
+              : `<span class="muted">empty — no spellcasting training${
+                  (r.attributes.magic || 0) > 0 ? "; buy or build a formula and teach it" : ""}</span>`
+          }</div>`
         : "") +
       `<div class="det"><span class="dk">kit</span>${kit.length ? kit.join(", ") : '<span class="muted">nothing issued</span>'}</div>`;
   }
