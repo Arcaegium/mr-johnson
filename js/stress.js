@@ -2108,6 +2108,47 @@
         "C25: Defense reads the round you should EXPECT, never the worst gun on site");
     }
 
+    // ── A RATING IS A SPREAD, AND NEITHER END IS THE ANSWER ──────
+    // Obstacle tiers are drawn uniformly across 1..rating, so a "~4"
+    // building is a 2, a 3, a 5 and a 6. Every number the card quotes
+    // picks a point on that spread, and the two fight reads pick
+    // DIFFERENT points on purpose:
+    //
+    //   Defense — the median. Absorbing hits is averaged over a whole
+    //     firefight, so the ordinary round is what decides it.
+    //   Attack  — the upper quarter. Failing to penetrate is NOT
+    //     averaged: the guard you cannot scratch does not become
+    //     scratchable because the last two were softer.
+    //
+    // Neither may ever be the maximum. You no more know their best
+    // armour than their best gun, and quoting the outlier is the same
+    // overclaim as reading the true tier.
+    for (let rating = 1; rating <= 10; rating++) {
+      const mid = MJ.laneMidTier(rating);
+      const high = MJ.laneHighTier(rating);
+      check(mid >= 1 && high >= 1, "C25: a tier band is never below 1 (rating " + rating + ")");
+      check(high >= mid, "C25: Attack must never read BELOW Defense on the spread (rating " + rating + ")");
+      check(high <= rating, "C25: and never above the rating itself (rating " + rating + ")");
+      if (rating >= 2) {
+        check(high < rating,
+          "C25: the Attack read is the high end of TYPICAL, never the best they have (rating " + rating + ")");
+      }
+      if (rating >= 4) {
+        check(high > mid,
+          "C25: and it must actually sit above the median, or it is just Defense again (rating " + rating + ")");
+      }
+    }
+
+    // The gate must move with the band, not with the true roster.
+    {
+      const s = MJ.mintSite("c25-band", 5, { value: 8 });
+      MJ.initSecurityState(MJ.makeRNG("c25-band-i"), s);
+      const soft = MJ.laneDemands(s, { physical: 1, astral: 1, matrix: 1 }, {});
+      const hard = MJ.laneDemands(s, { physical: 10, astral: 10, matrix: 10 }, {});
+      check(hard._fightArmour > soft._fightArmour,
+        "C25: the armour the Attack gate quotes must move with the estimate, not the building");
+    }
+
     // ── ICE IS NOT A FIREFIGHT ───────────────────────────────────
     // Black ICE carries fights:true, armour and a weapon, and none of
     // it is answerable with a coat or a gun — it burns a decker's

@@ -225,6 +225,32 @@
   // stays honestly vague about how hard, which is exactly the shape
   // of a briefing.
   //
+  // ── Reading a rating as a SPREAD, not a single opponent ────────
+  // A site's rating is a budget. Obstacle tiers are drawn uniformly
+  // across 1..rating, so a "~4" building is not four identical guards
+  // — it is a 2, a 3, a 5 and a 6, and they even out. Every number the
+  // card quotes therefore has to pick a point on that spread, and
+  // WHICH point is a design decision per lane, not a detail.
+  //
+  // Never the maximum. That is the outlier, and the player standing
+  // outside has no way to know whether it is in there — quoting it is
+  // the same overclaim as quoting the true tier.
+  //
+  // The card is a FLOOR, not a promise. A crew that packs exactly to
+  // it will meet the half of the spread that sits above it and take a
+  // beating, and that is the lesson: bring a few points more than the
+  // card asks. It is meant to be learned by playing, which is why the
+  // numbers are honest rather than padded.
+  // The upper quarter, HELD OFF THE TOP. `ceil(3r/4)` alone lands
+  // exactly on the maximum at rating 3 (ceil(2.25) = 3), which is the
+  // one thing this must never quote — so it is also capped at one
+  // below the rating. Only a rating-1 site reads its own ceiling, and
+  // there the spread is a single tier, so there is nothing else to
+  // read.
+  const midTier = (rating) => Math.max(1, Math.ceil(rating / 2));
+  const highTier = (rating) => Math.max(1,
+    Math.min(rating > 1 ? rating - 1 : rating, Math.ceil((rating * 3) / 4)));
+
   // `shown` is { physical, astral, matrix } as raw 1-10 values.
   // `confirmed` is the same keys as booleans: has the crew actually
   // proven that axis, or is this still the briefing talking? It never
@@ -249,7 +275,7 @@
 
     const things = siteObstacles(site);
     let typicalPower = 0;    // the hit you should EXPECT to take
-    let worstArmour = 0;     // the toughest thing that shoots back
+    let hardestArmour = 0;   // the high end of what shoots back
     let toughest = null;     // and the thing itself, for the Attack gate
     let sharpestEyes = 0;    // the best pair of eyes on the ground
 
@@ -285,38 +311,47 @@
       // caught by ICE is real exposure, but it is Tech's problem —
       // don't be seen — not something you answer with armour or a gun.
       if (thing.fights && (thing.presence || []).some((p) => p !== "matrix")) {
-        // ── DEFENSE READS THE TYPICAL HIT, NOT THE WORST GUN ──────
-        // Obstacle tiers are drawn uniformly across 1..rating, so the
-        // single hardest thing a site COULD field is an outlier — and
-        // nobody standing outside the building knows whether it is in
-        // there. Reading Defense off that outlier made the lane
-        // structurally red: at the softest security band in the game
-        // the best affordable coat was still a point short, which
-        // trains a player to ignore the one chip trying to tell them
-        // they are going to bleed.
+        // ── DEFENSE READS THE MIDDLE OF THE SPREAD ────────────────
+        // Defense is not a gate you clear once. It is ATTRITION — you
+        // get shot at repeatedly by whatever turns up, so the round
+        // that decides whether the crew comes home is the ORDINARY
+        // one, and the ordinary one sits at the median.
         //
-        // The MEDIAN tier is what you should expect to be shot by,
-        // and Defense is not a gate you clear once. It is ATTRITION —
-        // you get shot at repeatedly by whatever turns up, and it is
-        // the ordinary round that decides whether the crew comes
-        // home. The Attack gate below deliberately keeps the WORST
-        // case, because that one really is pass/fail: a guard you
-        // cannot scratch is a fight you cannot win, and softening it
-        // would restore the exact silence that lost a crew.
-        const typicalTier = Math.max(1, Math.ceil(asTier / 2));
-        const w = MJ.weaponProfile(MJ.weaponForTier(MJ.OBSTACLE_TEMPLATE(thing.type) || {}, typicalTier));
+        // Reading it off the site's hardest possible gun instead made
+        // the lane structurally red: at the softest band in the game
+        // the best affordable coat was still a point short, which
+        // teaches a player to ignore the one chip trying to tell them
+        // they are going to bleed.
+        const defTier = midTier(asTier);
+        const w = MJ.weaponProfile(MJ.weaponForTier(MJ.OBSTACLE_TEMPLATE(thing.type) || {}, defTier));
         // Strength rides melee Power, and a site's fighters scale
         // their attributes with tier exactly as mission.js builds
         // them — 2 + floor(t/3).
-        const strength = 2 + Math.floor(typicalTier / 3);
+        const strength = 2 + Math.floor(defTier / 3);
         const power = (w.power || 0) + (w.useStrength ? strength : 0);
         // AP eats armour, so folding it in here keeps both sides of
         // the Defense line in plain armour points: you are safe from
         // this weapon when your rating reaches Power minus AP.
         typicalPower = Math.max(typicalPower, power - (w.ap || 0));
+
+        // ── ATTACK READS THE HIGH END OF TYPICAL ──────────────────
+        // Not the maximum — you no more know their best armour than
+        // you know their best gun, and quoting the outlier is the same
+        // overclaim either way. But not the median either, and the
+        // asymmetry with Defense is the point: absorbing a hit is
+        // averaged over a whole firefight, while FAILING TO PENETRATE
+        // is not averaged at all. The guard you cannot scratch does
+        // not become scratchable because the last two were softer — he
+        // just stands there while the crew empties magazines into him.
+        //
+        // So the floor sits at the upper quarter of the spread. A crew
+        // that packs exactly to it will still meet things it cannot
+        // hurt; that is the lesson the card is there to teach, and the
+        // player learns to bring a few points more.
+        const atkTier = highTier(asTier);
         const templateArmour = (MJ.OBSTACLE_TEMPLATE(thing.type) || {}).armour || 0;
-        const armour = templateArmour + Math.floor(asTier / 2);
-        if (armour >= worstArmour) { worstArmour = armour; toughest = thing; }
+        const armour = templateArmour + Math.floor(atkTier / 2);
+        if (armour >= hardestArmour) { hardestArmour = armour; toughest = thing; }
       }
       if ((thing.senses || []).length) {
         // The same pool the site already rolls to spot the crew
@@ -341,7 +376,7 @@
     // get through before the dice matter at all, and the thing it
     // belongs to, so the gate can be asked with the real verb table
     // rather than a guess about which verbs count as fighting.
-    demands._fightArmour = worstArmour;
+    demands._fightArmour = hardestArmour;
     demands._toughest = toughest;
     return demands;
   }
@@ -439,6 +474,8 @@
 
   MJ.LANE_DEFS = LANE_DEFS;
   MJ.LANE_ORDER = LANE_ORDER;
+  MJ.laneMidTier = midTier;
+  MJ.laneHighTier = highTier;
   MJ.lanesOfSkill = lanesOfSkill;
   MJ.lanesOfVerb = lanesOfVerb;
   MJ.runnerLane = runnerLane;

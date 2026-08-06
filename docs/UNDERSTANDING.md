@@ -482,20 +482,38 @@ weapon, so incoming Power was 6 at every rating and armour was worth the same
 everywhere. Guards now ladder holdout → pistol → SMG → rifle → machine gun
 across tiers 1–10, which is what gives Defense something to be a read *about*.
 
-**Defense reads the TYPICAL hit; Attack reads the WORST case.** Obstacle tiers
-are drawn uniformly across `1..rating`, so the single hardest thing a site
-*could* field is an outlier — and nobody standing outside knows whether it is in
-there. The two lanes resolve that differently on purpose:
+**A RATING IS A SPREAD, AND NEITHER END IS THE ANSWER.** Obstacle tiers are
+drawn uniformly across `1..rating`, so a "~4" building is not four identical
+guards — it is a 2, a 3, a 5 and a 6, and they even out. Every number the card
+quotes has to pick a point on that spread, and **which** point is a design
+decision per lane.
 
-- **Defense is attrition, not a gate.** You get shot at repeatedly by whatever
-  turns up, and it is the ordinary round that decides whether the crew comes
-  home. So it reads the **median** tier. Off the worst gun it was structurally
-  red — at the softest band in the game the best affordable coat was still a
-  point short — and a chip that is red whatever you do teaches you to stop
-  reading it.
-- **Attack really is pass/fail.** A guard you cannot scratch is a fight you
-  cannot win, so it keeps the worst case. Softening it would restore the exact
-  silence that lost a crew.
+**Never the maximum.** That is the outlier, and a player standing outside has no
+way to know whether it is in there. Quoting their best armour is the same
+overclaim as quoting their best gun — or as reading the true tier. The
+upper-quarter formula is explicitly held one below the rating for exactly this
+reason (`ceil(3r/4)` lands *on* the max at rating 3).
+
+| lane | reads | because |
+|---|---|---|
+| Defense | the **median** tier | Absorbing hits is averaged over a whole firefight, so the ordinary round is what decides whether the crew comes home. |
+| Attack | the **upper quarter** | Failing to penetrate is *not* averaged. The guard you cannot scratch does not become scratchable because the last two were softer — he just stands there while the crew empties magazines into him. |
+
+**The card is a FLOOR, not a promise, and it is meant to be learned by playing.**
+A crew that packs exactly to it meets the half of the spread sitting above it and
+takes a beating. Measured over 300 generated sites: the building held something
+harder than the card's floor **33%** of the time, and the crew's best could not
+hurt that thing **28%** of the time. That is the lesson — bring a few points more
+than the card asks — and it is why the numbers are honest rather than padded.
+Padding them would just move the floor and teach nothing.
+
+**The dice lanes are not on this spread and are deliberately worst-case.** Sneak,
+Face, Tech, Banish, the Attack *pool* and Awareness all read `diceForSecurity` at
+the full rating, matching the header's `P:~12d`. The reason is mechanical rather
+than informational: you have to clear *every* obstacle on the route, so the
+hardest lock sets the bar and there is nothing to average. The two fight reads
+are the exception because armour and Power are not pass/fail per route — they are
+per exchange.
 
 **The armour ladder is contiguous, 1–8, and that is load-bearing.** Armour is one
 side of the Penetrate gate, so every rating a weapon can demand has to be

@@ -21,9 +21,9 @@ wins and this file is stale — verify before trusting a line here.
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
 Last verified after the lane model landed. Suite: 25 classes,
-89,315 assertions, 0 failures, identical across three consecutive runs.
+89,362 assertions, 0 failures, identical across three consecutive runs.
 
-**Baseline moved deliberately**, 95,109 → 89,315. Class 25 is new (305
+**Baseline moved deliberately**, 95,109 → 89,362. Class 25 is new (352
 assertions, the lane model's own probes). The drop is content drift, not lost
 coverage: `generateSkillSpread` now grants a Perception baseline and
 `generateObstacleInstance` picks a weapon off a tier ladder, so both consume the
@@ -56,7 +56,7 @@ js/core/resolve.js    243  THE DICE. rollDicePool countHits thresholdForTier
                            drainValueFor resistDrain maxForceFor
                            beginExtendedTest extendedTestStep resolveExtendedTest
 
-js/models/runner.js   901  SKILLS(20) SKILL_ATTRIBUTE attributeFor attributeCeiling
+js/models/runner.js   901  SKILLS(21) SKILL_ATTRIBUTE attributeFor attributeCeiling
                            attributeCost attributePriority ATTRIBUTE_SHARE
                            METATYPES FOCUSES(19) ARCHETYPE_SKILLS buildSkillTiers
                            generateRunner mintRunner getEffectiveSkills
@@ -64,7 +64,7 @@ js/models/runner.js   901  SKILLS(20) SKILL_ATTRIBUTE attributeFor attributeCeil
                            growRunner marginalSkillCost halfStepCost
                            SKILL_GATES isSkillEligible HANDLES handleBaseFromIndex
 js/models/site.js    1286  THREAT OBSTACLE_TEMPLATES generateObstacleInstance
-                           generateHost NODE_TYPES planeOfAffordance SKILL_PLANE
+                           generateHost NODE_TYPES weaponForTier canBeForced
                            deriveSecurity generateSite mintSite mintSiteByName
                            encodeSiteName decodeSiteName siteIdentityFromIndex
                            nonLoudWaysFor CONDITIONS CONDITION_IDS CONDITION_WORDS
@@ -192,9 +192,22 @@ js/models/lanes.js    340  THE REPORT CARD -- what a runner NEEDS TO BE.
                               each, capped at the lead's rank). Awareness is
                               max instead (you cannot help someone look);
                               Defense is min (nobody soaks for you).
-                           -- Defense reads the MEDIAN tier (attrition, not a
-                              gate); Attack keeps the WORST case (a guard you
-                              cannot scratch is a fight you cannot win).
+                           -- A RATING IS A SPREAD (tiers roll 1..rating), and
+                              laneMidTier/laneHighTier pick where on it each
+                              fight read stands. Defense = MEDIAN (absorbing
+                              is averaged over a firefight). Attack = UPPER
+                              QUARTER (failing to penetrate is not averaged).
+                              NEITHER may be the maximum -- highTier is capped
+                              at rating-1 because ceil(3r/4) lands on the max
+                              at rating 3.
+                           -- the card is a FLOOR, not a promise. Measured over
+                              300 sites: something harder than it was in the
+                              building 33% of the time. That is the lesson,
+                              not a bug -- pack above the card.
+                           -- the DICE lanes stay worst-case (diceForSecurity
+                              at the full rating, matching the header). You
+                              must clear every obstacle on a route, so the
+                              hardest sets the bar and nothing averages.
                            -- NEITHER half of the fight read may see ICE. It
                               has fights:true and a weapon and no coat or gun
                               answers it. Left in, it demanded armour 8 at a
