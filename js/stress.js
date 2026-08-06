@@ -3024,6 +3024,91 @@
       "C17: sustaining must weigh on the caster's other pools (saw " + MJ.sustainPenaltyFor(run, mage) + ")");
     check(MJ.sustainPenaltyFor(run, crew[0]) === 0, "C17: and on NOBODY else's");
 
+    // ── CASTING IS NOT ONE FLAT "ODD MOMENT" ─────────────────────
+    // What a cast READS AS is the spell's own business. Armour going
+    // up in front of a guard is a man watching someone prepare for
+    // violence — threatening, not awkward — while a detection spell
+    // is a mage staring a beat too long.
+    check(MJ.spellThreat(MJ.SPELLS.armor) === MJ.THREAT.THREATENING,
+      "C17: a buff going up in the open reads THREATENING");
+    check(MJ.spellThreat(MJ.SPELLS.physicalBarrier) === MJ.THREAT.THREATENING,
+      "C17: so does a wall of mana appearing");
+    check(MJ.spellThreat(MJ.SPELLS.manabolt) === MJ.THREAT.THREATENING,
+      "C17: and so does throwing one");
+    check(MJ.spellThreat(MJ.SPELLS.invisibility) === MJ.THREAT.QUESTIONABLE,
+      "C17: somebody blurring out of sight is questionable");
+    check(MJ.spellThreat(MJ.SPELLS.detectLife) === MJ.THREAT.AWKWARD,
+      "C17: a mage staring a beat too long is merely awkward");
+    check(MJ.spellThreat(MJ.SPELLS.armor) !== MJ.spellThreat(MJ.SPELLS.detectLife),
+      "C17: the ladder must actually discriminate, or it is decoration");
+
+    // ── CAST BEFORE ANYONE IS WATCHING AND IT COSTS NOTHING ──────
+    // The whole reason the grimoire cannot live only at the obstacle
+    // prompt. `prep` is the crew still outside; nothing is there to
+    // see it, so the threatening buff is free. The SAME spell in
+    // front of the first obstacle is not — and the difference must
+    // not depend on luck, so this compares the read directly.
+    {
+      const mkRun = () => {
+        const s = MJ.mintSite("c17-prep", 3, { value: 6, orientation: "physical" });
+        MJ.initSecurityState(MJ.makeRNG("c17-prep-i"), s);
+        const r = MJ.beginMission(MJ.makeRNG("c17-prep-r"),
+          { site: s, kind: "jobObjective", objective: {} }, [mage].concat(crew), 1);
+        // A guard with eyes, standing on the first thing they meet.
+        const g = MJ.generateObstacleInstance(MJ.makeRNG("c17-prep-g"), "guard", 4, "physical");
+        g.rooms = [1];
+        r.obstacles = [g]; r.index = 0;
+        return r;
+      };
+      mage.classification.spellsKnown.push("armor");
+      const outside = mkRun();
+      const t1 = MJ.castUtilitySpell(outside, mage, "armor", { force: 4, prep: true });
+      check(t1.prep === true && !t1.read,
+        "C17: cast outside, before the route — nobody is there, so nothing reads it");
+      check(MJ.threatBand(outside.state, outside.day) === "normal",
+        "C17: and the room is exactly as calm as it was");
+
+      const inFront = mkRun();
+      let sawIt = false;
+      for (let i = 0; i < 12 && !sawIt; i++) {
+        const t2 = MJ.castUtilitySpell(inFront, mage, "armor", { force: 4 });
+        if (t2.read) {
+          sawIt = true;
+          check(t2.read.threatClass === MJ.THREAT.THREATENING,
+            "C17: the SAME spell six feet from a guard reads THREATENING");
+        }
+        inFront.sustaining = []; // let it be cast again
+      }
+      check(sawIt, "C17: a guard with eyes must eventually catch a buff going up in his face");
+      mage.classification.spellsKnown.pop();
+    }
+
+    // ── The Force dial: the player's own decision, priced ────────
+    // §14 says the player picks Force, and every cast went out at
+    // full Magic until this existed. The ladder must offer a real
+    // spread INCLUDING the overcast line, because crossing it is the
+    // decision.
+    {
+      const ladder = MJ.forceLadder(mage); // Magic 5 -> max 10
+      check(ladder.length >= 4, "C17: the Force dial needs real choices on it");
+      check(ladder[0].force === 1, "C17: pushing gently is always available");
+      check(ladder[ladder.length - 1].force === MJ.maxForceFor(mage),
+        "C17: and so is pushing as hard as they can hold");
+      check(ladder.some((r) => !r.overcast) && ladder.some((r) => r.overcast),
+        "C17: the ladder must straddle the overcast line — that IS the decision");
+      check(ladder.every((r, i, a) => i === 0 || r.force > a[i - 1].force),
+        "C17: the rungs climb, and never repeat");
+      const cheap = MJ.drainPreview(mage, MJ.SPELLS.manabolt, 1);
+      const dear = MJ.drainPreview(mage, MJ.SPELLS.manabolt, 10);
+      check(cheap.value === 2 && !cheap.physical, "C17: a gentle push floors at 2 and stays stun");
+      check(dear.value === 7 && dear.physical, "C17: a hard one costs F-3 and turns PHYSICAL");
+      // And the dial actually reaches the model.
+      const soft = MJ.castSpell(MJ.makeRNG("c17-soft"), mage, "manabolt", { force: 1 });
+      const hard = MJ.castSpell(MJ.makeRNG("c17-hard"), mage, "manabolt", { force: 9 });
+      check(soft.force === 1 && hard.force === 9, "C17: the chosen Force is the Force cast");
+      check(soft.drain.drainValue < hard.drain.drainValue, "C17: and it is what the Drain is priced off");
+    }
+
     // ── The astral deep path still exists: same spell, via lattice ─
     const viaLattice = MJ.castSpell(rng.fork("lat"), mage, "manabolt", { force: 4, viaLattice: true });
     check(viaLattice.ok && !viaLattice.done && !!viaLattice.lattice,

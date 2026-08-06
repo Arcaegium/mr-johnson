@@ -182,6 +182,83 @@
     return SPELLS[id] || null;
   }
 
+  // ── What CASTING THIS looks like to a watcher ──────────────────
+  // Magic in the open is not one flat "odd moment". What the act
+  // READS AS depends on what it visibly is, and the ladder is the
+  // same one every other act uses:
+  //
+  //   THREATENING  you are visibly arming yourself or the air is
+  //                hardening into a wall. Armour going up in front of
+  //                a guard is not awkward — it is a man watching
+  //                someone prepare for violence, and he responds to
+  //                it like one.
+  //   QUESTIONABLE something obviously happened: a person blurred out
+  //                of sight, sound died in a room, hands glowed over
+  //                a wounded runner.
+  //   AWKWARD      a mage staring a beat too long at a door.
+  //
+  // THIS IS WHY YOU CAST BEFORE YOU WALK UP. The threat only lands if
+  // something SEES it (mission.js wasWitnessed), so Armor in an empty
+  // corridor costs nothing and the same spell six feet from a guard
+  // costs the whole room. That is the decision the grimoire exists to
+  // offer, and it is why the grimoire cannot live only at the moment
+  // you are already standing in front of the thing.
+  const HOME_THREAT = {
+    buff:      "THREATENING",
+    barrier:   "THREATENING",
+    conceal:   "QUESTIONABLE",
+    silence:   "QUESTIONABLE",
+    heal:      "QUESTIONABLE",
+    stabilize: "QUESTIONABLE",
+    disguise:  "QUESTIONABLE",
+    debuff:    "THREATENING",
+    analyze:   "AWKWARD",
+    reveal:    "AWKWARD",
+  };
+
+  function spellThreat(def) {
+    const T = MJ.THREAT || {};
+    if (!def) return T.NORMAL;
+    if (def.combat) return T.THREATENING;
+    return T[def.threat || HOME_THREAT[def.home] || "QUESTIONABLE"] || T.QUESTIONABLE;
+  }
+
+  // ── The Force dial ─────────────────────────────────────────────
+  // §14 says the player picks Force, and until now every cast went
+  // out at full Magic because nothing asked. Force is the one dial
+  // magic has that nothing else does: it scales what the spell DOES
+  // and what it costs, in the same breath.
+  //
+  // Not 1..2×Magic as a wall of rows — a ladder of the decisions
+  // actually worth making, with the overcast line (Magic+1, where
+  // Drain turns PHYSICAL) always on it because that is the line the
+  // player is choosing to cross or not.
+  function forceLadder(caster) {
+    const magic = (caster && caster.attributes && caster.attributes.magic) || 0;
+    if (magic <= 0) return [];
+    const max = MJ.maxForceFor(caster);
+    const rungs = [1, Math.ceil(magic / 2), magic, magic + 1, Math.ceil(magic * 1.5), max];
+    const seen = {};
+    return rungs
+      .map((f) => Math.max(1, Math.min(max, Math.round(f))))
+      .filter((f) => (seen[f] ? false : (seen[f] = true)))
+      .sort((a, b) => a - b)
+      .map((f) => ({ force: f, overcast: f > magic }));
+  }
+
+  // What a given Force costs THIS spell, before any dice: the canon
+  // Drain value, and which track it will land on.
+  function drainPreview(caster, def, force) {
+    const magic = (caster && caster.attributes && caster.attributes.magic) || 0;
+    return {
+      force: force,
+      value: Math.max(2, force + ((def && def.drain) || 0)),
+      overcast: force > magic,
+      physical: force > magic,
+      resistPool: ((caster && caster.attributes && caster.attributes.willpower) || 0) + magic,
+    };
+  }
+
   // ── The dossier is the authority ───────────────────────────────
   // What a runner can cast: the spells THEY KNOW, gated by Magic and
   // training. Never the whole book — §8: spells live on the dossier,
@@ -536,6 +613,9 @@
   MJ.SPELLS = SPELLS;
   MJ.SPELL_CATEGORIES = CATEGORIES;
   MJ.spellDef = spellDef;
+  MJ.spellThreat = spellThreat;
+  MJ.forceLadder = forceLadder;
+  MJ.drainPreview = drainPreview;
   MJ.spellsFor = spellsFor;
   MJ.knowsSpell = knowsSpell;
   MJ.knowsSpellOfShape = knowsSpellOfShape;

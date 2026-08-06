@@ -873,6 +873,28 @@
     return null;
   }
 
+  // ── Who sees a cast — INCLUDING the thing standing in front of you
+  // `wasWitnessed` deliberately excludes the obstacle being acted ON:
+  // take down the one guard in the room and there is nobody left to
+  // have an opinion about it. That rule is right for an act AGAINST
+  // the thing, and wrong for a spell that is not aimed at it at all.
+  // A mage who armours up six feet from a guard has not handled the
+  // guard — the guard is a bystander with eyes, and he is looking
+  // straight at them.
+  //
+  // So a cast asks the wider question: does ANYTHING here perceive
+  // this plane, the thing in front of the crew included.
+  function castNoticedBy(run, here, runner) {
+    const watchers = perceiversNear(run, here, "physical").slice();
+    if (here && sensesPlane(here, "physical") && !run.neutralized.has(here)) watchers.push(here);
+    for (const w of watchers) {
+      const hidden = MJ.countHits(MJ.rollDicePool(run.rng, concealmentPool(run, runner, w)));
+      const saw = MJ.countHits(MJ.rollDicePool(run.rng, noticePool(w)));
+      if (saw > hidden) return w;
+    }
+    return null;
+  }
+
   // Is this act's SOUND covered? Hush and Silence blanket the crew's
   // ground; Stealth quiets one runner. A silenced gunshot is not
   // automatically heard — but it still has to survive being SEEN,
@@ -1628,7 +1650,7 @@
     return drain;
   }
 
-  // ── Casting a utility spell mid-run ─────────────────────────────
+  // ── Casting a utility spell, ANYWHERE IN MEATSPACE ──────────────
   // The meatspace quick cast: one action, one beat. Invisibility
   // before the corridor, Hush before the shot, Clairvoyance before
   // the corner, Analyze Device at the box in front of you. This is
@@ -1636,8 +1658,18 @@
   // hallway — the deep thread-by-thread cast lives on the astral
   // (the lattice), same rules, different rendering.
   //
-  // `opts.obstacle` targets the CURRENT thing for the analyze home;
-  // `opts.target` names a crew member for touch spells (Heal, Mask).
+  // NOTHING HERE ASSUMES AN OBSTACLE, and that is deliberate. A spell
+  // is not a way of answering the thing in front of you; it is
+  // something a mage does, and the most valuable moment to do it is
+  // BEFORE anyone is looking — Armor and Invisibility go up in the
+  // empty corridor, not six feet from the guard, because the threat
+  // only lands if something SEES it. Callers that happen to be at an
+  // obstacle pass one; callers that are not, do not.
+  //
+  // `opts.obstacle` the thing being analyzed / the ground being cast
+  //                 on. Optional: absent means open ground.
+  // `opts.target`   a crew member for the spells that land on people.
+  // `opts.force`    the player's Force pick (§14). Defaults to Magic.
   function castUtilitySpell(run, runner, spellId, opts) {
     opts = opts || {};
     const def = MJ.spellDef(spellId);
@@ -1674,9 +1706,21 @@
       }
     }
 
+    // ── WHO, IF ANYONE, IS AROUND TO SEE THIS ───────────────────
+    // `opts.prep` is the crew still outside, before the route has
+    // been entered: genuinely nobody is there, so nothing can witness
+    // it. That must be explicit rather than inferred, because
+    // `run.obstacles[run.index]` is the FIRST obstacle from the
+    // moment the run is built — a prep cast that fell through to it
+    // would have been "seen" by a guard the crew has not walked up to
+    // yet, which is precisely the situation pre-casting exists to
+    // avoid.
+    const here = opts.prep ? null : (opts.obstacle || run.obstacles[run.index]);
+
     const task = {
       cast: true, spell: spellId, verb: def.label,
       runner: runner.identity.handle,
+      prep: !!opts.prep,
       force: cast.force, pool: cast.pool, hits: cast.hits,
       success: cast.success, drain: cast.drain,
       applied: applied, learned: learned,
@@ -1685,13 +1729,19 @@
         : def.label + (applied && applied.sustained ? " — holding it" : ""),
     };
 
-    // Casting is a real act on real ground. Quiet, but a camera that
-    // catches a runner mid-gesture with mana bending around them has
-    // seen something QUESTIONABLE — magic in the open alarms people.
-    const here = run.obstacles[run.index];
-    if (here && wasWitnessed(run, here, { loud: false, plane: "physical" }, cast.success, runner)) {
-      const appliedRead = MJ.witnessAct(run.state, run.day, MJ.THREAT.QUESTIONABLE);
-      task.read = { threatClass: MJ.THREAT.QUESTIONABLE, band: appliedRead.band };
+    // Casting is a real act on real ground, and WHAT IT READS AS is
+    // the spell's own business: a detection spell is a mage staring a
+    // beat too long, while Armor going up is a man watching someone
+    // prepare for violence. Both only matter if something SEES it —
+    // which is the whole reason to cast in the empty corridor rather
+    // than in front of the guard.
+    const cls = MJ.spellThreat(def);
+    if (here && cls !== MJ.THREAT.NORMAL && castNoticedBy(run, here, runner)) {
+      const appliedRead = MJ.witnessAct(run.state, run.day, cls);
+      task.read = {
+        threatClass: cls, band: appliedRead.band,
+        changed: appliedRead.band !== appliedRead.before, awkward: appliedRead.awkward,
+      };
       if (appliedRead.tipped) {
         run.engagedAlert = true;
         task.responders = spawnResponders(run).map((o) => o.label + " T" + o.tier);

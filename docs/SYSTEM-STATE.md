@@ -21,9 +21,9 @@ wins and this file is stale — verify before trusting a line here.
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
 Last verified after the canon grimoire landed. Suite: 25 classes,
-98,880 assertions, 0 failures, identical across three consecutive runs.
+98,899 assertions, 0 failures, identical across three consecutive runs.
 
-**Baseline moved deliberately**, 89,390 → 98,880. Class 17 was rewritten
+**Baseline moved deliberately**, 89,390 → 98,899. Class 17 was rewritten
 against the canon spell system (512 assertions — grimoire gating, canon Drain
 codes, the 2×Magic ceiling, direct-vs-indirect against armour, the verb
 bridge, generation, the Attack lane reading the dossier). C11 grew formula
@@ -283,16 +283,47 @@ js/models/spells.js   560  THE CANON GRIMOIRE. SPELLS(57 of SR5 core's 93)
                               and the Defense lane counts it: cast on the
                               worst-dressed runner, floor +min(6,Magic),
                               capped at the SECOND-worst coat.
-                           -- UI: ONE "cast a spell" per mage on the obstacle
-                              menu -> the grimoire submenu, which SHOWS
-                              unusable spells greyed with the reason. This
-                              deliberately breaks the main menu's hide-what-
+                           -- spellThreat(def): a cast is NOT one flat odd
+                              moment. buff/barrier/debuff -> THREATENING
+                              (armour going up is a man watching someone
+                              prepare for violence), conceal/silence/heal/
+                              disguise -> QUESTIONABLE, analyze/reveal ->
+                              AWKWARD. Only lands if something SEES it, which
+                              is why you cast before you walk up.
+                           -- forceLadder/drainPreview: the §14 Force dial.
+js/grimoire.js        230  THE GRIMOIRE, ANYWHERE IN MEATSPACE. entriesFor
+                           forceRows open castersIn SPELL_VERB_IDS
+                           -- KNOWS NOTHING ABOUT OBSTACLES. ctx.obstacle is
+                              OPTIONAL; without one the spells needing a
+                              target grey out with "nothing in front of
+                              them". Callers: the obstacle prompt's "cast a
+                              spell" row AND the pre-run prep step. Any
+                              future caller (hub, astral scene) gets the same
+                              rules for free.
+                           -- SHOWS unusable spells greyed with the reason.
+                              Deliberately breaks the main menu's hide-what-
                               doesn't-apply rule: the submenu is the
-                              character sheet. choice.spellId overrides the
-                              verb's automatic best-of-shape.
-                           -- KNOWN GAP: no Force dial in the popup yet;
-                              casts default to full Magic (task flagged).
-js/models/mission.js       missionPlanes(mission) -- WHICH GROUND A DISPATCH
+                              character sheet.
+                           -- two steps: pick spell -> pick FORCE. The ladder
+                              always straddles the overcast line and prints
+                              what each rung buys and costs.
+                           -- a spell routed through a verb shows the VERB's
+                              readsAs (escalation included), never its own
+                              home threat -- shown must equal applied.
+js/models/mission.js       castUtilitySpell(run, runner, spellId, opts)
+                           -- ASSUMES NO OBSTACLE. opts.prep = the crew still
+                              outside, and it is EXPLICIT rather than
+                              inferred: run.obstacles[0] exists from the
+                              moment the run is built, so a prep cast falling
+                              through to it would be "seen" by a guard they
+                              have not walked up to yet.
+                           castNoticedBy -- a cast asks a WIDER witness
+                              question than an act. wasWitnessed excludes the
+                              obstacle acted ON (take down the guard, nobody
+                              is left to have an opinion); a spell is not
+                              aimed at him, so he is a bystander with eyes
+                              and he counts.
+                           missionPlanes(mission) -- WHICH GROUND A DISPATCH
                               WALKS, and the lane card reads it instead of
                               the whole site. astralRun/recon:astral ->
                               ["astral"], matrixRun -> ["matrix"], street ->

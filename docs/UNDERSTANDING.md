@@ -777,21 +777,70 @@ astral 2, cold-sim 3, hot-sim 4** — and `buildRound`'s pass structure already
 runs faster consciousnesses more often in one shared scene, with the slumped
 body a defenceless combatant the crew defends (§9's "real, protectable body").
 
-### Cast a spell — one door, then the whole grimoire
-The obstacle menu shows **one "cast a spell" per mage**, not a scatter of
-per-shape entries. It opens the dossier: every spell they know, with the ones
-that cannot work *here* **greyed and saying why** ("it has no mind to probe",
-"nobody is bleeding", "already holding it").
+### The grimoire is its own thing, callable from anywhere
+**`grimoire.js` knows nothing about obstacles.** A spell is not a way of
+answering the thing in front of you; it is something a mage *does*, and the most
+valuable moment to do most of them is before anybody is looking. So the module
+owns two functions and one menu, and the obstacle prompt is merely *one caller*:
 
-This **deliberately breaks the main menu's rule** that we never show what we know
-doesn't apply. The main menu hides dead approaches because they are nine lines of
-noise between the player and the transcript; the submenu is the **character
-sheet**, and reading what your mage *cannot* do to this thing is how the player
-learns what the spells are. That knowledge was bought at hire, not hidden.
+- `entriesFor(caster, ctx)` — every spell they know, each castable-here or greyed
+  with the reason. **`ctx.obstacle` is optional**; without one, the spells that
+  need a target say so ("nothing in front of them to cast it at").
+- `open(opts)` — the two-step menu: pick the spell, then pick the **Force**.
+
+Callers today: the obstacle prompt's "cast a spell" row, and the **pre-run prep
+step**. Anything later — a hub screen, an astral scene, an overworld — calls the
+same two functions and inherits the same rules.
+
+The submenu **deliberately breaks the main menu's rule** that we never show what
+we know doesn't apply. The main menu hides dead approaches because they are nine
+lines of noise between the player and the transcript; the submenu is the
+**character sheet**, and reading what your mage *cannot* do here is how the
+player learns what the spells are. That knowledge was bought at hire.
 
 The player's pick is honoured all the way down — `choice.spellId` overrides the
-verb's automatic "best known of this shape", so choosing Stunbolt over Manabolt
-throws Stunbolt.
+verb's automatic "best known of this shape", so choosing Stunbolt throws
+Stunbolt. A spell routed through a verb shows the **verb's** projected class
+(`readsAs`, repeat-escalation included), never its own, so the threat shown is
+the threat applied.
+
+### Force is the player's dial
+§14 says the player picks Force, and until the dial existed every cast silently
+went out at full Magic. Force is the one lever magic has that nothing else does:
+**it scales what the spell does and what it costs in the same breath.** The
+ladder offers the decisions worth making rather than 1..2×Magic as a wall of
+rows, and always straddles the **overcast line** — where Drain turns PHYSICAL —
+because crossing it is the decision. Each rung prints what it buys ("5 armour",
+"DV 6, AP −6") and what it will cost to resist.
+
+### Cast before anyone is watching
+**A cast is not one flat "odd moment."** What it reads as is the spell's own
+business, on the same ladder every other act uses:
+
+| reads | what it looks like |
+|---|---|
+| **THREATENING** | a buff or a barrier — you are visibly arming yourself, or the air is hardening into a wall |
+| **QUESTIONABLE** | somebody blurred out of sight, sound died, hands glowed over a wounded runner |
+| **AWKWARD** | a mage staring a beat too long at a door |
+
+Armour going up in front of a guard is **not awkward** — it is a man watching
+someone prepare for violence, and he responds like one. But the threat only
+lands if something **sees** it, so the same spell in an empty corridor costs
+nothing. **That is the decision the prep step exists to offer:** the run opens
+*outside*, with nothing in front of the crew, and the grimoire offers exactly the
+spells worth pre-casting.
+
+`opts.prep` says so **explicitly** rather than being inferred — `run.obstacles[0]`
+exists from the moment the run is built, so a prep cast that fell through to it
+would have been "seen" by a guard the crew has not walked up to yet, which is
+precisely what pre-casting exists to avoid.
+
+**A cast asks a wider witness question than an act does.** `wasWitnessed`
+excludes the obstacle being acted *on* — take down the one guard in the room and
+nobody is left to have an opinion. That is right for an act against the thing and
+wrong for a spell not aimed at it: the mage who armours up six feet from a guard
+has not *handled* him, he is a bystander with eyes. So `castNoticedBy` includes
+the thing in front of the crew.
 
 ### The card reads the DISPATCH, not the site
 An astral recon meets wards and spirits. Quoting the corridor's guards at it —
@@ -814,10 +863,6 @@ one person. The fight honours the same number — Armor grants **Force** armour
 (`stacksFromForce`), not the flat +1 that was a rounding error wearing canon's
 name.
 
-**Known gap:** the popup casts at full Magic; the Force dial (§14: the player
-picks Force) is a flagged follow-up. A Magic-6 mage who defaults through three
-casts can drain-drop before the fight — the risk is real, the *choice* isn't
-surfaced yet.
 
 ## 8. THE ASTRAL REALM
 
