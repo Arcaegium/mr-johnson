@@ -4,8 +4,9 @@
 context window. It is self-contained: every decision, the reasoning behind it,
 and what remains to build. Read this first when resuming.
 
-Companion: `docs/MAGE-SHAPES.md` (the presentation table). Governing docs
-remain `UNDERSTANDING.md` and `SYSTEM-STATE.md`.
+Companions: `docs/MAGE-SHAPES.md` and `docs/RUNNER-SHAPES.md` (the presentation
+tables — Phase A, complete). Governing docs remain `UNDERSTANDING.md` and
+`SYSTEM-STATE.md`.
 
 ---
 
@@ -215,14 +216,37 @@ skill, opposite attributes, different profession.**
 
 Ordered by dependency. Do not skip ahead — later steps assume earlier ones.
 
-### Phase A — the shape tables (design, no code)
+### Phase A — the shape tables (design, no code) — **COMPLETE**
 - [x] A1. Mage presentations — `MAGE-SHAPES.md`
-- [ ] A2. Fighter presentations
-- [ ] A3. Decker presentations (incl. the low-Body Computer specialist of D9)
-- [ ] A4. Rigger presentations (must account for D8's extra-bodies system)
-- [ ] A5. Face presentations
-- [ ] A6. Adepts — Magic without the four magic skills; none of the mage shapes
-      fit them. May need their own table.
+- [x] A2. Fighter presentations — `RUNNER-SHAPES.md`
+- [x] A3. Decker presentations — the affinity becomes the presentation; the
+      Coder is D9's low-Body Computer specialist
+- [x] A4. Rigger presentations — **three of four blocked on Phase D**; only the
+      Mechanic is buildable now
+- [x] A5. Face presentations
+- [x] A6. Adepts — see the finding in §9
+
+### What Phase A surfaced (fold into Phase B)
+
+- **The bench profession is a pattern, not a special case.** Artificer (mage),
+  Surgeon (streetDoc), Coder (decker), Mechanic (rigger) are one shape four
+  times: best in the workshop, must be fielded to earn the karma that improves
+  the workshop. D9 deserves ONE systemic answer, not four.
+- **The unattended body is a pattern too.** Astral Intruder, Jumped-In rigger,
+  and a decker going slump all leave a meat body for the crew to guard. The
+  plane/turn-ratio note in `UNDERSTANDING.md` is the system all three need.
+- **`tank` and `streetDoc` are mis-shaped.** `tank`'s keySkill is
+  `intimidation`, which is Charisma-linked — a fighter focus paid for by a Face
+  attribute, able to generate a runner bad at their own nameplate.
+  `streetDoc` is a fighter-family focus whose list holds no combat skill at all.
+  **Review both before writing bands.**
+- **The band table cannot be one shape for all five families.** Mages separate
+  on *attributes* (identical skills, different profession). Deckers all want
+  Intelligence and separate on *skills and physical stats*. Fighters separate on
+  both.
+- **The Commander is the only force multiplier the card can already see** —
+  `lanes.js` implements teamwork stacking. Worth studying before Phase C, since
+  it is the working example of a support role that reads correctly.
 
 ### Phase B — the birth allocator
 - [ ] B1. Revert the half-finished `runner.js` work (§0).
@@ -315,7 +339,39 @@ still under investigation when work stopped.
 
 ---
 
-## 8. STANDING PROJECT RULES THAT CONSTRAIN ALL OF THIS
+## 8. THE ADEPT FINDING
+
+**Measured, 2026-08-06: an adept's Magic attribute is completely inert.**
+
+Adepts are `origin: "magic"` on a non-mage focus — **9.3% of the generated
+market** over a 600-runner sample. Comparing the same runner at Magic 4 and
+Magic 0:
+
+- identical dice pools on every skill
+- identical values in every lane
+- **identical price** — `attributePriority` is skill-derived, adepts hold no
+  magic-linked skills, so Magic is never counted
+
+`runner.js` states the intent plainly: adepts "get a smaller Magic score
+powering their abilities (Killing Hands, Improved Reflexes) without casting."
+Those abilities were never built. Nearly a tenth of the market generates
+carrying a defining trait that changes nothing.
+
+This is the mute mage in a different costume. Fix it at the source.
+
+**The build is cheaper than it looks.** SR5 gives adepts Power Points equal to
+their Magic rating, spent on powers — structurally identical to the grimoire: a
+per-runner list, bounded by an attribute, read by the verb layer. `spellsFor`,
+the `carries` gate and `bestCombatSpell` are the working model to copy.
+
+**Open modelling question for Phase B:** adept presentations cross focus lines
+(a Presence adept could be a `face` or a `tank`; a Striker could be `melee` or
+`tank`). So adept presentation is a **second axis**, not a replacement for
+focus. Decide how that composes before writing the band table.
+
+---
+
+## 9. STANDING PROJECT RULES THAT CONSTRAIN ALL OF THIS
 
 - **AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME.**
 - **A rating is a SPREAD.** No number quoted at the player is read off the
