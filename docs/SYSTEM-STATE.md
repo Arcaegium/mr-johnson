@@ -624,7 +624,7 @@ Anything here is a dial, not a decision.
 - **`inspector.html`** — benches, one button each: RNG, Runner, Market, Growth,
   Site, Board, Resolve, Market Cycle, Economy, Alert, **Combat**, Dispatch,
   Site Watch-List, **Stress Test**.
-- **`js/stress.js`** — ~94.2k assertions across 22 classes. Verdict line reads
+- **`js/stress.js`** — ~93.2k assertions across 25 classes. Verdict line reads
   `VERDICT: N failures across M assertions.`
 - **How to run headless:** load `inspector.html` in the preview tab, then
   `javascript_tool`: click every `btn-*` id, then scrape `document.body.innerText`
@@ -636,6 +636,35 @@ Anything here is a dial, not a decision.
   "the systems agree with each other." What it can never buy is "this is worth
   playing" — for that somebody has to sit in the chair and make the decisions,
   and no assertion count substitutes for it.
+
+### Performance — measured, and mostly a non-question
+
+**The game was never slow. The suite was.** A player-shaped workload — forty
+dispatch-dialog re-renders plus a full stepped run — is **11ms end to end**.
+The only thing that ever took real time is the suite, because it mints
+thousands of throwaway worlds.
+
+Two things were profiled and acted on:
+
+- **`dicePoolFor` built a fresh 21-key effective-skills object to read one
+  entry**, ~107k times a run: the single largest cost in the codebase.
+  Now calls `effectiveSkill(runner, skillId)`. Measured **264ms → 76ms**, and
+  it dropped `getEffectiveSkills` from 296k calls to 183k. C12 holds the fast
+  path to the slow one across wounds, Drain and implants, because a dice pool
+  that quietly disagrees with the character sheet is a worse bug than a slow one.
+- **Caching `actsFor` per thing was built, measured, and thrown away** — it was
+  *slower*. 84% of calls are first looks at a freshly minted obstacle, and each
+  paid a WeakMap probe, a store and a freeze on top of the crossing it had to do
+  anyway. Warm median went **1303ms → 1523ms with the cache in.** The note in
+  `verbs.js` is the reason not to reach for it again on a hunch.
+
+`effectiveSkill` is deliberately **not memoised**: invalidation would have to
+fire on every wound, Drain point, implant and half-step, and a stale pool is
+worse than a slow one.
+
+Remaining suite time is world *generation* (`generateSite`, `mintSite`), which
+is inherent to what it is doing. Suite warm median: **~1.3–1.4s**, down from
+2041ms.
 
 ---
 

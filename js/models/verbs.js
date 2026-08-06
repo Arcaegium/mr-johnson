@@ -451,6 +451,18 @@
   // which is the real question a crew standing in front of it has.
   // A maglock is a physical object and a device on the host, so the
   // decker and the lockpick are looking at the same door.
+  //
+  // Re-derived on every call, deliberately. The crossing reads only
+  // fixed properties, so it CAN be cached per thing — that was built,
+  // measured, and thrown away, because it was SLOWER: 84% of calls
+  // are first looks at a freshly minted thing, and every one of those
+  // paid a WeakMap probe, a store, and a freeze on top of the
+  // crossing it had to do anyway. Suite warm median went 1303ms ->
+  // 1523ms with the cache in. The player's side never needed it
+  // either — a full session of dispatch reads plus a stepped run is
+  // 11ms end to end. If full spatial fidelity (§15) ever makes this
+  // hot, measure THEN; the cache is ten lines away and this note is
+  // the reason not to reach for it on a hunch.
   function actsFor(thing) {
     return Object.keys(VERBS)
       .map((id) => crossOne(id, thing))

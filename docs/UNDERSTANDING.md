@@ -777,9 +777,21 @@ adding one later is a row, not a system.
 | **Sustaining** | −2 dice on everything else the caster does while held | the effects layer + `sustainPenaltyFor` |
 
 ### Spells live on the dossier — finally true
-A mage generates knowing **Magic-rating spells**, focus-weighted with the
-signature guaranteed (a combatMage always has Manabolt; a healthMage, Heal).
+A mage generates knowing spells bounded by **Magic and Sorcery, whichever binds
+first** — focus-weighted, with the signature guaranteed for any mage who has a
+book at all (a combatMage always has Manabolt; a healthMage, Heal).
 `spellsFor()` is **grimoire ∩ trained**, never the whole book.
+
+**Talent is not training.** Sizing the book off Magic alone was measured
+shipping **27% of all mages holding spells they could not cast a word of** —
+the three focuses that file sorcery under tertiary (conjuring, enchanting,
+detection) drew a full list and then `spellsFor` quite rightly refused it.
+A conjurer with no Spellcasting is not a broken mage, it is a *conjurer*: their
+Magic goes into spirits and the Banish lane already reads that. What was broken
+was printing spells on their sheet. So an untrained mage carries an **empty
+book** — which the study queue can still fill later — and the load-bearing
+assertion in C17 is no longer the sizing formula but `mute === 0`: nobody
+walks around with a spell their own skill sheet forbids them to cast.
 
 **Spell verbs are named for the SHAPE they front**, in canon's own combat
 vocabulary — `castDirectMana`, `castDirectPhysical`, `castIndirect`, plus

@@ -152,7 +152,12 @@
   // failure however gifted the runner, so neither the attribute nor
   // any bonus can rescue it.
   function dicePoolFor(runner, skillId, bonusDice) {
-    const rank = MJ.getEffectiveSkills(runner)[skillId] || 0;
+    // ONE skill, not the whole sheet. This used to build a fresh
+    // 21-key effective-skills object to read a single entry, and it
+    // is the hottest path in the game — over a hundred thousand
+    // calls in one suite run, measured as the largest single cost in
+    // the codebase. Same formula, same answer.
+    const rank = MJ.effectiveSkill(runner, skillId);
     if (rank <= 0) return 0;
     const attrId = MJ.attributeFor(skillId);
     const attr = attrId ? (runner.attributes[attrId] || 0) : 0;

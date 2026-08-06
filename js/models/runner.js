@@ -841,6 +841,32 @@
     return out;
   }
 
+  // ── ONE skill, when one skill is all you wanted ────────────────
+  // getEffectiveSkills builds a fresh 21-key object every call, and
+  // `dicePoolFor` was calling it to read a single entry — a hundred
+  // thousand times in one suite run, which measured as the single
+  // largest cost in the codebase. Same formula, same answer, none of
+  // the allocation.
+  //
+  // It stays a THIN MIRROR of the function above rather than a
+  // clever cache: memoising a runner's sheet means invalidating it
+  // on every wound, every point of Drain, every implant and every
+  // half-step of growth, and a stale dice pool is a far worse bug
+  // than a slow one. A stress probe holds the two to each other.
+  function effectiveSkill(runner, skillId) {
+    let rank = Math.floor(runner.skills[skillId] || 0);
+    if (rank > 0) {
+      for (const implant of runner.implants || []) {
+        const mod = (implant.skillMods || {})[skillId];
+        if (mod) rank += mod;
+      }
+    }
+    if (rank <= 0) return rank;
+    const penalty = Math.floor((runner.wounds || 0) / WOUNDS_PER_DIE) +
+      Math.floor((runner.stun || 0) / WOUNDS_PER_DIE);
+    return penalty > 0 ? Math.max(0, rank - penalty) : rank;
+  }
+
   // The market's claim line. A "Specialist" claim names the SKILL
   // the runner supposedly concentrates in — their top visible skill,
   // which is the market's read of them (user ruling: "Specialist:
@@ -904,9 +930,23 @@
   // What any street mage might have picked up along the way.
   const STAPLE_SPELLS = ["stunbolt", "heal", "invisibility", "armor", "detectLife", "clairvoyance", "manabolt", "levitate"];
 
-  function generateGrimoire(rng, focus, attrs) {
+  // THE BOOK IS BOUNDED BY THE TRAINING, NOT JUST THE TALENT.
+  // Magic says how much a mage could hold; Sorcery is whether anybody
+  // ever taught them to cast. Sizing the grimoire off Magic alone
+  // handed conjurers, enchanters and detection mages — the three
+  // focuses that file sorcery under tertiary — a full spell list they
+  // could not cast a word of: measured at 27% of all mages generated,
+  // walking around with six spells and a permanently empty menu,
+  // because `spellsFor` quite rightly refuses to cast without the
+  // skill. A conjurer with no Spellcasting is not broken, it is a
+  // conjurer; what was broken was printing spells on their sheet.
+  // Their Magic goes into spirits, and the Banish lane already reads
+  // that.
+  function generateGrimoire(rng, focus, attrs, skills) {
     if (focus.family !== "mage") return null;
-    const count = Math.max(1, attrs.magic || 1);
+    const trained = (skills && skills.sorcery) || 0;
+    if (trained <= 0) return [];      // a mage, with an empty book
+    const count = Math.max(1, Math.min(attrs.magic || 1, trained + 1));
     const list = FOCUS_SPELLS[focus.id] || STAPLE_SPELLS;
     // The signature is certain; the rest of their training is not.
     const known = [list[0]];
@@ -972,7 +1012,7 @@
         origin: origin,
         deckerAffinity: focus.family === "decker" ? generateDeckerAffinity(r) : null,
         // Spell IDS into MJ.SPELLS — the grimoire is what you hired.
-        spellsKnown: generateGrimoire(r, focus, attrs),
+        spellsKnown: generateGrimoire(r, focus, attrs, skills),
         // Formulas taught but not yet paid for in karma — the study
         // queue growRunner services at top priority.
         spellQueue: focus.family === "mage" ? [] : null,
@@ -1043,6 +1083,7 @@
   MJ.focusById = focusById;
   MJ.generateRunner = generateRunner;
   MJ.getEffectiveSkills = getEffectiveSkills;
+  MJ.effectiveSkill = effectiveSkill;
   MJ.computePrice = computePrice;
   MJ.describeDiscipline = describeDiscipline;
   MJ.karmaCost = karmaCost;   // exposed for inspection/tuning — real SR5 rank cost curve

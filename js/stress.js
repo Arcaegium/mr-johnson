@@ -1655,6 +1655,40 @@
     }
     subject.wounds = 0; subject.stun = 0;
 
+    // ── THE FAST PATH MUST AGREE WITH THE SLOW ONE ───────────────
+    // `effectiveSkill` exists purely for speed: dicePoolFor was
+    // building a fresh 21-key sheet to read one entry, a hundred
+    // thousand times a run. It is a hand-written mirror of
+    // getEffectiveSkills, which means it can drift — and a dice pool
+    // that silently disagrees with the character sheet is a far
+    // worse bug than a slow one. So they are held to each other
+    // across wounds, Drain and implants.
+    {
+      const mirror = makeRoster(rng.fork("mirror"), 3);
+      mirror.push(subject);
+      for (const r of mirror) {
+        for (const [w, st] of [[0, 0], [3, 0], [0, 4], [5, 6], [12, 2], [1, 1]]) {
+          r.wounds = w; r.stun = st;
+          const sheet = MJ.getEffectiveSkills(r);
+          for (const skill of MJ.SKILLS) {
+            check(MJ.effectiveSkill(r, skill) === (sheet[skill] || 0),
+              "C12: effectiveSkill must equal the sheet (" + skill + " at " + w + "/" + st + ")");
+          }
+        }
+        r.wounds = 0; r.stun = 0;
+      }
+      // And with chrome on, since implants are the other input.
+      const chromed = mirror[0];
+      chromed.implants = [{ label: "probe wiring", skillMods: { firearms: 2, stealth: 1 } }];
+      chromed.wounds = 4;
+      const sheet = MJ.getEffectiveSkills(chromed);
+      for (const skill of MJ.SKILLS) {
+        check(MJ.effectiveSkill(chromed, skill) === (sheet[skill] || 0),
+          "C12: and must agree with implants on too (" + skill + ")");
+      }
+      chromed.implants = []; chromed.wounds = 0;
+    }
+
     // Either full track puts a runner down.
     const downer = makeRoster(rng.fork("down"), 1)[0];
     downer.wounds = 0; downer.stun = MJ.stunTrack(downer);
@@ -2663,6 +2697,28 @@
     // `computer` never fronts a live act (it survives on the crafting
     // bench and nowhere else).
     check(!MJ.VERBS.attackIce, "C22: the Matrix has no attack verb — nothing there has a body");
+
+    // ── THE CROSSING READS PROPERTIES, NOT RUN STATE ──────────────
+    // What a verb can reach is a fact about the THING — presence,
+    // senses, living, fights, bypassable — settled when it was minted.
+    // What a run scratches onto it later (immunities learned the hard
+    // way, damage taken) must not silently re-answer the question, or
+    // the menu starts changing shape mid-fight for reasons no rule
+    // states. This is also the property that would make caching the
+    // crossing safe; it was measured as not worth it (see verbs.js),
+    // but the invariant stands on its own.
+    {
+      const one = MJ.generateObstacleInstance(MJ.makeRNG("c22-pure-a"), "guard", 4, "physical");
+      const shape = (a) => JSON.stringify(a.map((x) => [x.id, x.reaches, x.lands, x.why]));
+      const before = shape(MJ.actsFor(one));
+      one.immune = { stealth: "sensor-equipped" };
+      one.damageTaken = 5;
+      check(shape(MJ.actsFor(one)) === before,
+        "C22: the crossing reads fixed properties — a run's marks cannot change it");
+      const lock = MJ.generateObstacleInstance(MJ.makeRNG("c22-pure-b"), "maglock", 4, "physical");
+      check(shape(MJ.actsFor(lock)) !== shape(MJ.actsFor(one)),
+        "C22: and a different KIND of thing still gets a different answer");
+    }
     // ── EVERY VERB TABLE, not just this one ──────────────────────
     // The one-decking-skill ruling was policed here and nowhere
     // else, so matrix.js's `probe` sat on `computer` — a bench skill
@@ -3337,7 +3393,13 @@
     check(MJ.castSpell(rng, mundane, "manabolt", {}).ok === false, "C17: an untrained caster cannot cast");
 
     // ── Generation: the dossier arrives stocked ───────────────────
-    const tally = { mage: 0, sized: 0, sig: 0, other: 0 };
+    // The book is bounded by TALENT and TRAINING both. Sizing it off
+    // Magic alone shipped 27% of mages holding six spells they could
+    // not cast a word of — the three focuses that file sorcery under
+    // tertiary. So the load-bearing assertion here is no longer the
+    // formula, it is `mute`: nobody walks around with a spell their
+    // own skill sheet refuses to let them cast.
+    const tally = { mage: 0, sized: 0, sig: 0, other: 0, mute: 0, booked: 0, empty: 0 };
     for (let i = 0; i < 600; i++) {
       const r = MJ.generateRunner(MJ.makeRNG("c17gen" + i), {});
       if (r.classification.family !== "mage") {
@@ -3346,15 +3408,24 @@
       }
       tally.mage += 1;
       const known = r.classification.spellsKnown || [];
-      if (known.length === Math.max(1, r.attributes.magic)) tally.sized += 1;
+      const trained = (r.skills && r.skills.sorcery) || 0;
+      const want = trained > 0 ? Math.max(1, Math.min(r.attributes.magic || 1, trained + 1)) : 0;
+      if (known.length === want) tally.sized += 1;
+      if (known.length) tally.booked += 1; else tally.empty += 1;
+      // A signature is a promise about a SPECIALTY, so it binds only
+      // where there is a book to write it in.
       const focusList = { combatMage: "manabolt", detectionMage: "clairvoyance", healthMage: "heal",
         illusionMage: "invisibility", manipulationMage: "magicFingers" }[r.classification.focusId];
-      if (!focusList || known.indexOf(focusList) !== -1) tally.sig += 1;
+      if (!focusList || !known.length || known.indexOf(focusList) !== -1) tally.sig += 1;
+      if (known.length && !MJ.spellsFor(r).length) tally.mute += 1;
       check(known.every((id) => !!MJ.SPELLS[id]), "C17: a generated grimoire holds only real spells");
     }
     check(tally.mage > 30, "C17: the sample needs mages in it");
-    check(tally.sized === tally.mage, "C17: a grimoire is sized by Magic — one spell per point");
-    check(tally.sig === tally.mage, "C17: the focus's signature spell is always known");
+    check(tally.mute === 0, "C17: NO mage carries a spell they are untrained to cast");
+    check(tally.sized === tally.mage, "C17: a grimoire is sized by Magic AND Sorcery, whichever binds first");
+    check(tally.sig === tally.mage, "C17: a mage with a book always knows their signature spell");
+    check(tally.booked > 10, "C17: and most mages do get a book");
+    check(tally.empty > 0, "C17: while an untrained mage — a pure conjurer — carries none");
     check(tally.other > 0, "C17: the unawakened carry no grimoire at all");
 
     // ── The Attack lane reads the grimoire, not the rank ──────────
