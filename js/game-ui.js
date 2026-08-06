@@ -610,6 +610,17 @@
       return;
     }
     $("statline").textContent = `Universe "${S.universeSeed}"`;
+    // The rewind button is only truthful when a morning is actually on
+    // file, so its visibility is driven by the store, not by a guess.
+    // Async, and deliberately not awaited — the button appearing a
+    // frame late is invisible; blocking every render on IndexedDB is
+    // not.
+    if (MJ.game.hasRewindPoint) {
+      MJ.game.hasRewindPoint().then((has) => {
+        const btn = document.querySelector('[data-act="rewind-day"]');
+        if (btn) btn.hidden = !has;
+      });
+    }
     healLearned();
     for (const tab of Object.keys(WIDGETS)) {
       for (const w of WIDGETS[tab]) {
@@ -847,6 +858,19 @@
       return;
     }
     if (action === "save-game") { if (S) MJ.game.saveSession(S).then(render); return; }
+    // Put the day back. Deliberately NOT a confirm dialog — the button
+    // is hidden unless a morning is on file, its title says what it
+    // discards, and a player who reaches for it has just watched
+    // somebody die and knows exactly what they are asking for.
+    if (action === "rewind-day") {
+      MJ.game.rewindDay().then((restored) => {
+        if (!restored) { $("statline").textContent = "Nothing to rewind to."; return; }
+        S = restored;
+        UI.crew.clear(); UI.entry = null; UI.focus = null; UI.pending = null;
+        render();
+      });
+      return;
+    }
 
     // View state — leaving a tab closes every card.
     if (action === "tab") { UI.tab = el.dataset.tab; UI.entry = null; UI.focus = null; render(); return; }

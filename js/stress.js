@@ -1310,6 +1310,43 @@
     MJ.game.endDay(s6b, rng6.fork("post-load"));
     check(s6b.day === s6.day + 1, "C10: a loaded session must keep playing");
 
+    // ── THE MORNING IS KEPT, AND ONLY FOR THE PLAYER ──────────────
+    // Runners die on jobs, and the player must never be shut out of
+    // that decision. beginDay writes the state as it stood this
+    // morning; nothing else is written until settleDay. Two things
+    // have to hold, and only one of them is about the player:
+    //
+    //   1. a LIVE day banks the morning, so whatever today does can
+    //      be walked away from — including a death;
+    //   2. an rng-driven day banks NOTHING. The suite runs thousands
+    //      of days. If it wrote, it would shred the player's save
+    //      slots on every stress run, which is a far worse bug than
+    //      any it is here to catch.
+    //
+    // IndexedDB is async and this suite is not, so the probe stubs
+    // the store and counts calls — the gate is the thing under test,
+    // not the database.
+    {
+      const realBank = MJ.saveRewindPoint;
+      let banked = 0;
+      MJ.saveRewindPoint = () => { banked += 1; return Promise.resolve(); };
+      try {
+        const sSuite = MJ.game.newGame("c10-rewind-suite");
+        MJ.game.settleDay(sSuite, MJ.game.beginDay(sSuite, rng6.fork("driven")));
+        check(banked === 0,
+          "C10: an rng-driven day must never touch the player's save slots");
+
+        const sLive = MJ.game.newGame("c10-rewind-live");
+        const liveDay = MJ.game.beginDay(sLive);
+        check(banked === 1, "C10: a live day must bank the morning before it resolves");
+        check(liveDay.live === true, "C10: and must know it is live");
+        MJ.game.settleDay(sLive, liveDay);
+        check(banked === 1, "C10: settling must not bank a second morning");
+      } finally {
+        MJ.saveRewindPoint = realBank;
+      }
+    }
+
     // Layer 3 sanity: two live (timestamped) refreshes differ.
     const s5 = MJ.game.newGame("itest-arrivals");
     MJ.game.refreshBoard(s5);

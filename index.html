@@ -23,6 +23,10 @@
         <button data-act="save-game">Save</button>
         <button data-act="end-day" style="border-color: var(--accent); color: var(--accent)">Play Day &raquo;</button>
         <button data-act="quick-day" class="sm" title="AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME — the skip button">quick resolve</button>
+        <!-- Only appears once a morning is on file. Runners die on
+             jobs, and the player is never shut out of that decision. -->
+        <button data-act="rewind-day" class="sm" hidden
+                title="Put the day back the way it was this morning — everything today did is discarded, and the dice are fresh if you play it again">&laquo; rewind the day</button>
       </div>
     </header>
 

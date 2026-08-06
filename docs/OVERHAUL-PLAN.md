@@ -284,17 +284,29 @@ Ordered by dependency. Do not skip ahead — later steps assume earlier ones.
 - [ ] E3. One free permanent runner; killable; no dispatch requirement; caps
       like everyone else.
 
-### Phase F — the save/death gate (independent; can be done any time)
-- [ ] F1. **No save may be written while a mission outcome is unacknowledged.**
-      `settleDay` currently autosaves at day end while missions resolve inside
-      the day, so a death is committed with no player gate. One slot
-      (`SAVE_KEY = "current"`, `put` overwrites) means no rewind exists.
-- [ ] F2. Snapshot `current` → `previous` at `beginDay`.
-- [ ] F3. The player's dismissal of the outcome is what commits it. Refresh or
-      load before that, and the day did not happen.
-- [ ] F4. This is a turn-based combat game: **there must be no situation where a
-      runner is hurt or killed and the player is not involved.** Auto-resolve is
-      scaffolding, not the game.
+### Phase F — the save/death gate — **DONE** (commit below)
+- [x] F1. **No save may be written while a mission outcome is unacknowledged.**
+      Verified: `settleDay` is the *only* autosave in the game path
+      (`game.js`, guarded by `day.live`), and `playDay` does not settle until
+      the player has dismissed every result. Measured — mid-day the disk still
+      holds the start of today. The window already existed; it was invisible.
+- [x] F2. `beginDay` banks the morning to a second slot **before any dispatch
+      opens**. `save.js` now has `saveRewindPoint` / `loadRewindPoint` /
+      `clearRewindPoint` on a `previous` key.
+- [x] F3. `MJ.game.rewindDay()` restores it, and a "« rewind the day" control
+      appears in the header only while a morning is on file. One step back, not
+      an undo stack — the point is spent when used, and each new day overwrites
+      it. Fresh dice on a replay: this recreates the DECISION, never the
+      outcome, the same rule `repeatPlan` follows.
+- [x] F4. *For the current fidelity.* The played path puts the player inside
+      every result before anything commits, and quick-resolve is opt-in
+      scaffolding they chose. **Revisit when turn-based combat lands** — the
+      rule is that a runner is never hurt or killed without the player in the
+      room, and a per-day rewind is the coarsest possible version of that.
+
+Probed in C10: an rng-driven day must bank **nothing** (the suite runs thousands
+of days; writing would shred the player's slots on every stress run), and a live
+day must bank exactly one morning, before it resolves.
 
 ---
 

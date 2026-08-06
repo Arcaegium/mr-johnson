@@ -456,13 +456,48 @@
   // diverge, because there is only one thing to diverge from.
   function beginDay(session, rngOverride) {
     const rng = rngOverride || liveRNG(); // layer 4: fresh dice, always
+    const live = !rngOverride;
+    // ── THE MORNING, KEPT ─────────────────────────────────────────
+    // Written BEFORE a single dispatch opens, because runners die on
+    // jobs and the player must never be shut out of that decision.
+    // Nothing is written again until settleDay, so from here until the
+    // day is settled the player can walk away from everything that
+    // happened — and once it IS settled, this slot still holds the
+    // morning, so the choice outlives the dismissal that used to end
+    // it. An injected rng means the suite or a replay is driving, and
+    // must never touch the player's slots.
+    if (live) MJ.saveRewindPoint(serializeSession(session));
     const acted = new Set();
     const entries = session.queue.map((d) => {
       const entry = MJ.openDispatch(rng, d, session.day, acted);
       entry.label = d.label;
       return entry;
     });
-    return { rng: rng, entries: entries, live: !rngOverride };
+    return { rng: rng, entries: entries, live: live };
+  }
+
+  // Put the day back the way it was this morning. Everything the day
+  // did — deaths included — is discarded, and the dice are fresh when
+  // it is played again, because this recreates the DECISION, never
+  // the outcome (the same rule repeatPlan follows).
+  function rewindDay() {
+    return MJ.loadRewindPoint().then((record) => {
+      if (!record) return null;
+      const session = deserializeSession(record);
+      // The morning is now the live save, and the rewind point is
+      // spent — one step back, not an undo stack.
+      return MJ.saveGame(record)
+        .then(() => MJ.clearRewindPoint())
+        .then(() => {
+          logLine(session, "rewound to the morning of day " + session.day +
+            " — today has not happened", "system", { rewound: true });
+          return session;
+        });
+    });
+  }
+
+  function hasRewindPoint() {
+    return MJ.loadRewindPoint().then((r) => !!r);
   }
 
   // Finish one opened dispatch, however it was steered, and write it
@@ -1049,6 +1084,8 @@
     deserializeSession: deserializeSession,
     saveSession: saveSession,
     loadSession: loadSession,
+    rewindDay: rewindDay,
+    hasRewindPoint: hasRewindPoint,
     liveRNG: liveRNG,
   };
 })();
