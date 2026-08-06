@@ -777,6 +777,43 @@ astral 2, cold-sim 3, hot-sim 4** — and `buildRound`'s pass structure already
 runs faster consciousnesses more often in one shared scene, with the slumped
 body a defenceless combatant the crew defends (§9's "real, protectable body").
 
+### Cast a spell — one door, then the whole grimoire
+The obstacle menu shows **one "cast a spell" per mage**, not a scatter of
+per-shape entries. It opens the dossier: every spell they know, with the ones
+that cannot work *here* **greyed and saying why** ("it has no mind to probe",
+"nobody is bleeding", "already holding it").
+
+This **deliberately breaks the main menu's rule** that we never show what we know
+doesn't apply. The main menu hides dead approaches because they are nine lines of
+noise between the player and the transcript; the submenu is the **character
+sheet**, and reading what your mage *cannot* do to this thing is how the player
+learns what the spells are. That knowledge was bought at hire, not hidden.
+
+The player's pick is honoured all the way down — `choice.spellId` overrides the
+verb's automatic "best known of this shape", so choosing Stunbolt over Manabolt
+throws Stunbolt.
+
+### The card reads the DISPATCH, not the site
+An astral recon meets wards and spirits. Quoting the corridor's guards at it —
+*Sneak 0/4, Face 0/4, Tech 0/4, Defense 1/4* — told a solo combat mage they were
+unqualified for ground they will never stand on. `missionPlanes()` maps each
+dispatch to the ground it walks, and the lane card filters to it.
+
+The rule inside is **bodies reach everything**: on a street job every pillar's
+verbs count, because the decker hacks the maglock **from the corridor** (AR — the
+shallow rung, no jack-in) exactly as the mage casts at it. So **Tech stays on a
+street card**. A pure projection or a host crawl has no body on site, so only
+that pillar's verbs — and worn armour, being meat, gives a projection no Defense
+row at all.
+
+### Armor the spell is Defense the crew brings
+The lane is the worst-dressed runner, and a mage who knows **Armor** casts it on
+exactly that runner before the doors. The forecast says so: the floor rises by
+`min(6, Magic)`, capped at the **second**-worst coat, because one cast armours
+one person. The fight honours the same number — Armor grants **Force** armour
+(`stacksFromForce`), not the flat +1 that was a rounding error wearing canon's
+name.
+
 **Known gap:** the popup casts at full Magic; the Force dial (§14: the player
 picks Force) is a flagged follow-up. A Magic-6 mage who defaults through three
 casts can drain-drop before the fight — the risk is real, the *choice* isn't

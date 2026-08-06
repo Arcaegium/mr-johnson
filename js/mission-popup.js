@@ -574,55 +574,112 @@
       });
     }
 
-    // ── The grimoire row ────────────────────────────────────────
-    // Utility spells the crew's mages could put up RIGHT NOW —
-    // Invisibility before the corridor, Hush before the shot,
-    // Analyze Device at the box in front of you. Casting costs the
-    // beat and the Drain but does not spend the obstacle: the prompt
-    // comes straight back with the spell now standing.
-    //
-    // Only what changes something from here is offered: no re-casting
-    // a blanket already up, no analyzing a thing with the wrong kind
-    // of truth, and a caster already holding spells sees their own
-    // −2s in the listed pool.
-    function grimoireCasts(prompt) {
-      const casts = [];
+    // ── The grimoire submenu ────────────────────────────────────
+    // ONE "cast a spell" entry per mage on the obstacle menu, opening
+    // the whole dossier: every spell they know, with the ones that
+    // cannot work HERE greyed and saying why. This deliberately
+    // breaks the main menu's "don't show what doesn't apply" rule —
+    // the submenu is the character sheet, and reading what your mage
+    // CANNOT do to this thing is how the player learns what the
+    // spells are. The knowledge was bought at hire, not hidden.
+    const SPELL_VERB_IDS = ["castBolt", "castSmash", "castBlast", "magicFingers", "levitate", "command", "blast"];
+    const SHAPE_VERB = { directMana: "castBolt", directPhys: "castSmash", indirect: "castBlast" };
+
+    function spellMenuFor(mage, prompt) {
       const upright = run.runners.filter((r) => !run.downed || !run.downed.has(r));
-      for (const mage of upright) {
-        for (const id of MJ.spellsFor(mage)) {
-          const def = MJ.spellDef(id);
-          if (!def || def.combat) continue; // thrown spells live on the obstacle menu
-          if (def.home === "bypass" || def.home === "remote" || def.home === "command") continue; // verbs already
-          if (def.home === "silence" && !def.single && run.silenced) continue;
-          if (def.home === "conceal" && (run.spellConcealment || []).some((c) => c.vsTech === !!def.vsTech)) continue;
-          if (def.home === "heal" && !upright.some((r) => (r.wounds || 0) > 0)) continue;
-          if (def.home === "stabilize") continue; // auto-cast at the moment it matters
-          if (def.home === "analyze") {
-            const ob = prompt.obstacle;
-            const rightKind = def.analyzes === "sapient" ? !!ob.sapient : !ob.living;
-            if (!rightKind) continue;
+      const held = (run.sustaining || []).filter((s) => s.caster === mage).length;
+      const pool = Math.max(0, MJ.dicePoolFor(mage, "sorcery", MJ.gearBonusFor(mage, "sorcery") - 2 * held));
+      const byVerb = {};
+      for (const o of prompt.options) byVerb[o.verbId] = o;
+
+      return MJ.spellsFor(mage).map((id) => {
+        const def = MJ.spellDef(id);
+        const e = { spellId: id, def: def, mage: mage, available: false, why: null, verbId: null, target: null };
+
+        if (def.combat) {
+          // A thrown spell resolves through its shape's verb — or
+          // through the astral `blast` when only the astral side of
+          // the thing is reachable (a ward).
+          const opt = byVerb[SHAPE_VERB[def.shape]] || byVerb.blast;
+          if (!opt) e.why = "nothing of it is here to reach";
+          else if (opt.discovered) e.why = opt.discovered;
+          else if (!opt.lands) e.why = opt.why || "it would do nothing to this";
+          else { e.available = true; e.verbId = opt.verbId; }
+        } else if (def.home === "remote" || def.home === "bypass" || def.home === "command") {
+          const verbId = def.home === "remote" ? "magicFingers" : def.home === "bypass" ? "levitate" : "command";
+          const opt = byVerb[verbId];
+          if (!opt) e.why = "nothing of it is here to reach";
+          else if (opt.discovered) e.why = opt.discovered;
+          else if (!opt.lands) e.why = opt.why || "it would do nothing to this";
+          else { e.available = true; e.verbId = verbId; }
+        } else if (def.home === "debuff") {
+          e.why = "thrown at somebody — the exchange will offer it";
+        } else if (def.home === "stabilize") {
+          e.why = "casts itself the moment somebody falls";
+        } else if (def.home === "silence") {
+          if (!def.single && run.silenced) e.why = "the ground is already silent";
+          else e.available = true;
+        } else if (def.home === "conceal") {
+          if ((run.spellConcealment || []).some((c) => c.vsTech === !!def.vsTech)) e.why = "already holding it over the crew";
+          else e.available = true;
+        } else if (def.home === "heal") {
+          const hurt = upright.filter((r) => (r.wounds || 0) > 0);
+          if (!hurt.length) e.why = "nobody is bleeding";
+          else { e.available = true; e.target = hurt.reduce((a, b) => (a.wounds >= b.wounds ? a : b)); }
+        } else if (def.home === "analyze") {
+          const ob = prompt.obstacle;
+          const rightKind = def.analyzes === "sapient" ? !!ob.sapient : !ob.living;
+          if (!rightKind) e.why = def.analyzes === "sapient" ? "it has no mind to probe" : "it is not a made thing to read";
+          else e.available = true;
+        } else if ((run.sustaining || []).some((s) => s.spell === id)) {
+          e.why = "already holding it";
+        } else {
+          // Remaining buffs and barriers go up from right here. Armor
+          // lands on the worst-dressed — the exact runner the Defense
+          // lane counts.
+          e.available = true;
+          if (id === "armor") {
+            e.target = upright.reduce((a, b) =>
+              (MJ.armourRatingFor(a) <= MJ.armourRatingFor(b) ? a : b));
           }
-          // Debuffs are thrown at somebody, so they live in combat.
-          // BUFFS are put up here — Armor before the corridor is the
-          // entire point of Armor, and crewCombatants carries every
-          // sustained effect into the fight when one starts.
-          if (def.home === "debuff") continue;
-          if (def.home === "buff" && (run.sustaining || []).some((s) => s.spell === id)) continue;
-          const held = (run.sustaining || []).filter((s) => s.caster === mage).length;
-          const pool = Math.max(0, MJ.dicePoolFor(mage, "sorcery", MJ.gearBonusFor(mage, "sorcery") - 2 * held));
-          casts.push({
-            mage: mage, spellId: id, def: def,
-            target: def.home === "heal"
-              ? upright.reduce((a, b) => ((a.wounds || 0) >= (b.wounds || 0) ? a : b))
-              : null,
-            html: nm(mage.identity.handle) + '<span class="dimmed"> casts </span>' + nm(def.label),
-            meta: "sorcery " + num(pool + "d") +
-              '<span class="dimmed"> · drain F' + (def.drain >= 0 ? "+" + def.drain : def.drain) + "</span>" +
-              (held ? '<span class="dimmed"> · holding ' + held + "</span>" : ""),
-          });
         }
-      }
-      return casts;
+
+        const drainCode = "F" + (def.drain >= 0 ? "+" + def.drain : def.drain);
+        e.html = (e.available ? nm(def.label) : '<span class="dimmed">' + esc(def.label) + "</span>");
+        e.meta = e.available
+          ? "sorcery " + num(pool + "d") + '<span class="dimmed"> · drain ' + drainCode + "</span>" +
+            (e.target && e.target !== mage ? '<span class="dimmed"> · on ' + esc(e.target.identity.handle) + "</span>" : "") +
+            (held ? '<span class="dimmed"> · holding ' + held + "</span>" : "")
+          : '<span class="dimmed">' + esc(e.why) + "</span>";
+        e.dead = !e.available;
+        return e;
+      });
+    }
+
+    function stepGrimoire(mage, prompt) {
+      const entries = spellMenuFor(mage, prompt);
+      MJ.decide.open({
+        title: esc(entry.label || run.kind),
+        subtitle: '<span class="dimmed">the grimoire</span>',
+        context: contextLines(run),
+        transcript: transcript,
+        heading: nm(mage.identity.handle) + '<span class="dimmed"> — what they know, against </span>' +
+          nm(prompt.label) + " " + num("T" + prompt.tier) +
+          '<div class="ask">Cast which?</div>',
+        options: entries.map((e) => ({ html: e.html, meta: e.meta, dead: e.dead })),
+        actions: [{ id: "back", label: "put the grimoire away", tone: "warn-btn" }],
+        onChoose: (opt, i) => {
+          const e = entries[i];
+          if (!e || !e.available) return;
+          if (e.verbId) {
+            MJ.missionChoose(run, { approach: e.verbId, runner: mage, spellId: e.spellId });
+          } else {
+            MJ.castUtilitySpell(run, mage, e.spellId, { obstacle: prompt.obstacle, target: e.target });
+          }
+          step();
+        },
+        onAction: () => step(),
+      });
     }
 
     function step() {
@@ -635,10 +692,29 @@
       // this crew — the wrong kind of act for this thing, or a skill
       // nobody has — is not information, it is nine lines of noise
       // between the player and the transcript.
-      const shown = prompt.options.filter((o) => o.available || o.discovered);
-      const casts = grimoireCasts(prompt);
-      const options = shown.map(optionFor).concat(casts.map((c) => ({ html: c.html, meta: c.meta })));
-      const stalled = !shown.some((o) => o.available);
+      // Spell verbs are FUNNELLED through the grimoire: the obstacle
+      // menu shows one "cast a spell" per mage instead of a scatter of
+      // per-shape entries, and the submenu is where the spells live.
+      const shown = prompt.options.filter((o) =>
+        (o.available || o.discovered) && SPELL_VERB_IDS.indexOf(o.verbId) === -1);
+      const upright = run.runners.filter((r) => !run.downed || !run.downed.has(r));
+      const casters = upright.filter((r) => MJ.spellsFor(r).length > 0);
+      const casts = casters.map((mage) => {
+        const castable = spellMenuFor(mage, prompt).filter((e) => e.available).length;
+        return {
+          mage: mage,
+          html: nm(mage.identity.handle) + '<span class="dimmed"> — </span>cast a spell',
+          meta: castable
+            ? num(castable) + '<span class="dimmed"> castable of ' + MJ.spellsFor(mage).length + " known</span>"
+            : '<span class="dimmed">nothing in the grimoire answers this</span>',
+          dead: !castable,
+        };
+      });
+      const options = shown.map(optionFor).concat(casts.map((c) => ({ html: c.html, meta: c.meta, dead: c.dead })));
+      // Stalled asks the MODEL's question (all approaches, spell verbs
+      // included) — the funnel changes where spells are clicked, not
+      // whether they count as ways through.
+      const stalled = !prompt.options.some((o) => o.available);
       // What detection magic already bought about the ground ahead —
       // paid for in Drain, so it belongs on the screen every beat.
       const revealedLine = prompt.revealed
@@ -665,9 +741,7 @@
         onChoose: (opt, i) => {
           if (i >= shown.length) {
             const c = casts[i - shown.length];
-            MJ.castUtilitySpell(run, c.mage, c.spellId,
-              { obstacle: prompt.obstacle, target: c.target });
-            return step();
+            return stepGrimoire(c.mage, prompt);
           }
           const c = shown[i];
           MJ.missionChoose(run, { skill: c.skill, runner: c.runner, approach: c.approach });

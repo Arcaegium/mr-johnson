@@ -319,6 +319,34 @@
     return mission.kind || "jobObjective";
   }
 
+  // ── Which planes a dispatch actually walks ──────────────────────
+  // The report card reads THE DISPATCH, not the site: an astral recon
+  // meets wards and spirits, so quoting the corridor's guards at it is
+  // noise. The rule distinguishes the Matrix's REACH from its
+  // INTERIOR:
+  //   street   the crew is bodily present, so every pillar's verbs
+  //            apply — the decker hacks the maglock from the corridor
+  //            (AR, the shallow rung) exactly like the mage casts at
+  //            it. The route walks physical AND astral ground. What
+  //            it never walks is the host's inside.
+  //   astral   pure projection: no body, no shooting, no AR fingers,
+  //            no kevlar. Astral obstacles, astral verbs.
+  //   matrix   the host crawl — its own graph, its own rules.
+  // Null from a card-less kind means "no site read at all".
+  function missionPlanes(mission) {
+    const kind = missionKind(mission);
+    if (kind === "astralRun") return ["astral"];
+    if (kind === "matrixRun") return ["matrix"];
+    // A recon examines through ONE lens — the sample it walks is
+    // drawn from that pool alone, so that pool is what the card
+    // reads. (A physical recon crew is still bodily present, so the
+    // all-pillars rule below still lets the decker and mage front
+    // approaches on what they meet.)
+    if (kind === "recon") return [mission.lens || "physical"];
+    if (kind === "crafting" || kind === "medical" || kind === "search") return null;
+    return ["physical", "astral"]; // the street: bodies on real ground
+  }
+
   // ── Route + recon obstacle selection ────────────────────────────
   // The shortest entry->objective path, WALKED: the crew comes in
   // through the entry point, clears the room it lands in, crosses to
@@ -1095,8 +1123,13 @@
       // shape decides the gate: direct skips armour entirely (and the
       // mana/physical split already decided reach at the verb layer);
       // indirect throws something real — Power = Force, AP = −Force,
-      // per canon.
-      const best = MJ.bestSpellOfShape(runner, verb.spellShape);
+      // per canon. A spell the player NAMED (opts.spellId, from the
+      // cast-a-spell submenu) wins over the automatic best, provided
+      // it is really theirs and really this shape.
+      const named = opts.spellId && MJ.knowsSpell(runner, opts.spellId) &&
+        (MJ.spellDef(opts.spellId) || {}).shape === verb.spellShape
+        ? { id: opts.spellId, def: MJ.spellDef(opts.spellId) } : null;
+      const best = named || MJ.bestSpellOfShape(runner, verb.spellShape);
       const force = Math.max(1, opts.force || (runner.attributes.magic || 0));
       const direct = verb.spellShape !== "indirect";
       profile = {
@@ -1352,9 +1385,18 @@
     // starts is exactly what a preparation spell is FOR.
     if (MJ.registerSpellEffects) MJ.registerSpellEffects();
     for (const held of run.sustaining || []) {
-      const onC = crew.find((c) => c.source === (held.target || held.caster));
       const byC = crew.find((c) => c.source === held.caster);
-      if (onC && held.effect) MJ.applyEffect(onC, held.effect, { source: held.spell });
+      const def = MJ.spellDef(held.spell) || {};
+      const stacks = def.stacksFromForce ? held.force : (def.effectStacks || 1);
+      if (held.effect) {
+        // A barrier covers the GROUND the crew is standing on, so
+        // everyone gets it; everything else sits on whoever it was
+        // cast on.
+        const holders = def.home === "barrier"
+          ? crew
+          : crew.filter((c) => c.source === (held.target || held.caster));
+        for (const h of holders) MJ.applyEffect(h, held.effect, { stacks: stacks, source: held.spell });
+      }
       if (byC) MJ.applyEffect(byC, "sustaining", { source: held.spell });
     }
     return crew;
@@ -1883,7 +1925,7 @@
   // making it always work.
   function forceThrough(run, obstacle, act, drain) {
     const runner = act.runner;
-    const force = forceProfileFor(runner, act.def, { force: run.castForce });
+    const force = forceProfileFor(runner, act.def, { force: run.castForce, spellId: run.castSpellId });
     const pool = MJ.dicePoolFor(runner, act.skill, run.intelBonus +
       MJ.gearBonusFor(runner, act.skill) + suppressionBonus(run.site, obstacle.projection, run.day) +
       spellPoolMods(run, runner, act.skill));
@@ -1998,15 +2040,22 @@
       // A verb fronting a REAL SPELL bills that spell's printed
       // Drain — Force plus its modifier, min 2 — which is the canon
       // pricing that makes Punch nearly free and area spells brutal.
-      // The astral's own verbs (unwind, banish, blast) keep the
-      // generic curve; they are not spellcasting.
-      const spellId = act.def.spellId ||
+      // The astral's own verbs (unwind, banish) keep the generic
+      // curve; they are not spellcasting.
+      //
+      // `choice.spellId` is the player naming WHICH spell from the
+      // submenu — honoured when the dossier actually holds it,
+      // otherwise the verb's own derivation stands.
+      const chosen = choice.spellId && MJ.knowsSpell(runner, choice.spellId) ? choice.spellId : null;
+      const spellId = chosen || act.def.spellId ||
         (act.def.spellShape && (MJ.bestSpellOfShape(runner, act.def.spellShape) || {}).id) ||
-        (act.verbId === "command" && (MJ.bestCommandSpell(runner) || {}).id) || null;
+        ((act.verbId === "command" || act.verbId === "blast") &&
+          ((act.verbId === "command" ? MJ.bestCommandSpell(runner) : MJ.bestCombatSpell(runner)) || {}).id) || null;
       const spellDef = spellId && MJ.spellDef(spellId);
       drain = MJ.resistDrain(run.rng, runner, force,
         spellDef ? { drainValue: Math.max(2, force + (spellDef.drain || 0)) } : undefined);
       run.castForce = force;
+      run.castSpellId = spellId; // so forceThrough throws THIS spell
       applyDrain(run, runner, drain);
     }
 
@@ -2765,6 +2814,7 @@
   MJ.finishMission = finishMission;
   MJ.discoverResourceSite = discoverResourceSite;
   MJ.missionKind = missionKind;
+  MJ.missionPlanes = missionPlanes;
   MJ.autoResolve = autoResolve;
   MJ.openDispatch = openDispatch;
   MJ.closeDispatch = closeDispatch;

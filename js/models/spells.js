@@ -127,17 +127,20 @@
     stealth:        { label: "Stealth",               category: "illusion", type: "P", range: "LOS", drain: -2, home: "silence", single: true, sustained: true },
 
     // ── MANIPULATION (11 of 18) ──────────────────────────────────
-    armor:          { label: "Armor",           category: "manipulation", type: "P", range: "LOS", drain: -2, home: "buff", effect: "spellArmor", sustained: true },
+    // stacksFromForce: the effect stacks to the Force it was cast at
+    // (capped by the registry's maxStacks) — canon Armor grants Force
+    // armour, and a flat +1 was a rounding error wearing the name.
+    armor:          { label: "Armor",           category: "manipulation", type: "P", range: "LOS", drain: -2, home: "buff", effect: "spellArmor", stacksFromForce: true, sustained: true },
     controlActions: { label: "Control Actions", category: "manipulation", type: "M", range: "LOS", drain: -1, home: "command", dominates: true, sustained: true },
     controlThoughts:{ label: "Control Thoughts",category: "manipulation", type: "M", range: "LOS", drain: -1, home: "command", dominates: true, sustained: true },
     fling:          { label: "Fling",           category: "manipulation", type: "P", range: "LOS", damage: "P", drain: -2, combat: true, shape: "indirect" },
     influence:      { label: "Influence",       category: "manipulation", type: "M", range: "LOS", drain: -1, home: "command" },
     levitate:       { label: "Levitate",        category: "manipulation", type: "P", range: "LOS", drain: -2, home: "bypass", sustained: true },
     magicFingers:   { label: "Magic Fingers",   category: "manipulation", type: "P", range: "LOS", drain: -2, home: "remote", sustained: true },
-    manaBarrier:    { label: "Mana Barrier",    category: "manipulation", type: "M", range: "A",   drain: -2, home: "barrier", sustained: true },
+    manaBarrier:    { label: "Mana Barrier",    category: "manipulation", type: "M", range: "A",   drain: -2, home: "barrier", effect: "barricaded", sustained: true },
     mobControl:     { label: "Mob Control",     category: "manipulation", type: "M", range: "A",   drain: 1,  home: "command", dominates: true, area: true, sustained: true },
     mobMind:        { label: "Mob Mind",        category: "manipulation", type: "M", range: "A",   drain: 1,  home: "command", dominates: true, area: true, sustained: true },
-    physicalBarrier:{ label: "Physical Barrier",category: "manipulation", type: "P", range: "A",   drain: -1, home: "barrier", sustained: true },
+    physicalBarrier:{ label: "Physical Barrier",category: "manipulation", type: "P", range: "A",   drain: -1, home: "barrier", effect: "barricaded", sustained: true },
   };
 
   // ── Deferred, BY NAME, with reasons — adding one is a row ──────
@@ -433,7 +436,8 @@
     // Sustained non-attack spells go UP rather than being thrown.
     if (def.sustained && !def.combat) {
       const holder = def.onTarget ? target : caster;
-      if (def.effect) MJ.applyEffect(holder, def.effect, { stacks: def.effectStacks || 1, source: spellId });
+      const stacks = def.stacksFromForce ? force : (def.effectStacks || 1);
+      if (def.effect) MJ.applyEffect(holder, def.effect, { stacks: stacks, source: spellId });
       if (def.dominates) MJ.applyEffect(target, "dominated", { source: spellId });
       MJ.applyEffect(caster, "sustaining", { source: spellId });
       out.sustained = true;

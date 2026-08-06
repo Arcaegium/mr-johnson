@@ -2296,6 +2296,72 @@
     check(MJ.attackPowerFor(bomber, guard) < 14,
       "C25: against something alive it must not count — you do not breach a man");
 
+    // ── THE CARD READS THE DISPATCH, NOT THE SITE ────────────────
+    // An astral recon meets wards and spirits. Quoting the corridor's
+    // guards at it — Sneak 0/4! Face 0/4! — told a solo combat mage
+    // they were unqualified for ground they will never stand on. The
+    // planes filter is the fix, and the pillar rule inside it is
+    // BODIES REACH EVERYTHING: on a street job every pillar's verbs
+    // count (the decker hacks the maglock from the corridor — AR, no
+    // jack-in), so Tech STAYS on a street card; a pure projection has
+    // no body, so only its own pillar is real there.
+    {
+      let astralSite = null;
+      for (let i = 0; i < 60 && !astralSite; i++) {
+        const s = MJ.mintSite("c25-planes", i, { value: 6 });
+        MJ.initSecurityState(MJ.makeRNG("c25-pl-i" + i), s);
+        const obs = MJ.siteObstacles(s);
+        if (obs.some((o) => o.projection === "astral") &&
+            obs.some((o) => o.projection === "physical" && o.type === "maglock")) astralSite = s;
+      }
+      check(!!astralSite, "C25: the planes probe needs a site with astral ground and a device");
+      const axes = { physical: 5, astral: 5, matrix: 5 };
+      const astralRows = MJ.laneReport(crew, astralSite, axes, {}, ["astral"]).map((r) => r.lane);
+      for (const gone of ["sneak", "face", "tech", "defense"]) {
+        check(astralRows.indexOf(gone) === -1,
+          "C25: a projection is never asked for " + gone + " — no body, no corridor, no kevlar");
+      }
+      const streetRows = MJ.laneReport(crew, astralSite, axes, {}, ["physical", "astral"]).map((r) => r.lane);
+      check(streetRows.indexOf("tech") !== -1,
+        "C25: Tech STAYS on a street card — the decker hacks the maglock from the corridor, no jack-in");
+      check(streetRows.indexOf("defense") !== -1, "C25: and bodies on the ground wear armour");
+      const matrixRows = MJ.laneReport(crew, astralSite, axes, {}, ["matrix"]).map((r) => r.lane);
+      check(matrixRows.indexOf("defense") === -1 && matrixRows.indexOf("attack") === -1,
+        "C25: the host crawl asks for no armour and no gun — there is no Matrix attack, by design");
+      // missionPlanes is the one mapping the UI reads.
+      check(JSON.stringify(MJ.missionPlanes({ kind: "astralRun" })) === '["astral"]' &&
+        JSON.stringify(MJ.missionPlanes({ kind: "recon", lens: "astral" })) === '["astral"]' &&
+        JSON.stringify(MJ.missionPlanes({ kind: "matrixRun" })) === '["matrix"]' &&
+        JSON.stringify(MJ.missionPlanes({ site: site })) === '["physical","astral"]',
+        "C25: missionPlanes maps each dispatch to the ground it walks");
+    }
+
+    // ── ARMOR THE SPELL IS DEFENSE THE CREW BRINGS ───────────────
+    // Cast on the worst-dressed runner — the exact person the lane
+    // counts — so the forecast rises by the spell's bonus, capped at
+    // the second-worst coat because one cast armours one person.
+    {
+      const mage = MJ.generateRunner(MJ.makeRNG("c25-am"), { family: "mage" });
+      mage.attributes.magic = 4;
+      mage.skills.sorcery = 5;
+      mage.gear = []; // worn armour 0 — the worst-dressed by construction
+      mage.classification.spellsKnown = ["armor"];
+      const partner = crew[0]; // generated fighter with real worn armour
+      const worn = MJ.armourRatingFor(partner);
+      mage.classification.spellsKnown = [];
+      const bare = MJ.laneReport([mage, partner], site, shown, {}).find((r) => r.lane === "defense");
+      mage.classification.spellsKnown = ["armor"];
+      const armored = MJ.laneReport([mage, partner], site, shown, {}).find((r) => r.lane === "defense");
+      if (bare && armored) {
+        check(bare.have === 0, "C25: without the spell, the naked mage IS the Defense read");
+        check(armored.have === Math.min(worn, Math.min(6, mage.attributes.magic)),
+          "C25: with it, the floor rises by min(6, Magic), capped at the second-worst coat (saw " +
+          armored.have + ")");
+      } else {
+        check(false, "C25: the armor-spell probe needs a Defense row on this site");
+      }
+    }
+
     // ── Rule 3: the card names no skills and no verbs ────────────
     for (const row of MJ.laneReport(crew, site, shown)) {
       check(typeof row.have === "number" && typeof row.need === "number" && isFinite(row.have),
@@ -2910,6 +2976,17 @@
     MJ.dropSustained(me, "increaseReflexes");
     check(MJ.actionsFor(me) === actionsBefore && MJ.effectModifier(me, "accuracy") === accBefore,
       "C17: dropping a sustained spell must return both the benefit and the cost");
+    // Armor grants FORCE armour (stacksFromForce) — a flat +1 was a
+    // rounding error wearing canon's name.
+    {
+      const c3 = MJ.beginCombat(MJ.makeRNG("arm"), [MJ.makeCombatant(mage, { side: "crew" })], [tank()], {});
+      const m3 = c3.combatants[0];
+      mage.classification.spellsKnown.push("armor");
+      MJ.spellCombatAction(c3, m3, "armor", m3, { force: 5 });
+      check(MJ.effectModifier(m3, "armour") === 5,
+        "C17: Armor at Force 5 is 5 armour, not 1 (saw " + MJ.effectModifier(m3, "armour") + ")");
+      mage.classification.spellsKnown.pop();
+    }
 
     // ── Out of combat: the quick cast, on the run's own hooks ─────
     const site = MJ.mintSite("stress-spell-u", 4);

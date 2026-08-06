@@ -479,7 +479,7 @@
   // day at a glance: where it is, what is guarding it, who is going,
   // and what that crew actually brings on each axis. Comparing those
   // last two against each other IS the decision.
-  function crewShape(runners, site) {
+  function crewShape(runners, site, mission) {
     if (!runners.length) return '<span class="muted">nobody assigned</span>';
     return runners.map((r) => `${esc(r.identity.handle)} <span class="muted">${esc(r.classification.focusLabel)}</span>`).join("<br>") +
       // The same report card as the dispatch dialog, because it is
@@ -487,7 +487,7 @@
       // but the day has not been played, and this is the last look
       // before it is. A P/A/M line here would have been the exact
       // number the card exists to replace.
-      laneCard(runners, site);
+      laneCard(runners, site, mission);
   }
 
   function siteSecurityLine(site) {
@@ -509,7 +509,7 @@
           `</span></div>` +
         `<div class="qcard-body">` +
           `<div class="qrow"><span class="qk">guarding it</span>${siteSecurityLine(site)}</div>` +
-          `<div class="qrow"><span class="qk">going</span>${crewShape(q.runners, site)}</div>` +
+          `<div class="qrow"><span class="qk">going</span>${crewShape(q.runners, site, q.mission)}</div>` +
         `</div></div>`;
     }).join("");
     $("planrail").innerHTML =
@@ -620,10 +620,14 @@
   // skills precisely so the number stays imprecise; spelling out
   // which one would fix it hands the player the coding meta and
   // deletes the reason to scout.
-  function laneCard(runners, site) {
+  function laneCard(runners, site, mission) {
     const axes = shownAxes(site);
     if (!axes) return "";
-    const rows = MJ.laneReport(runners, site, axes.values, axes.confirmed);
+    // The card reads THE DISPATCH: an astral recon is judged on
+    // astral ground, not on corridors this crew will never stand in.
+    const planes = mission ? MJ.missionPlanes(mission) : null;
+    if (mission && planes === null) return "";
+    const rows = MJ.laneReport(runners, site, axes.values, axes.confirmed, planes);
     if (!rows.length) return "";
     return `<div class="lanes">` + rows.map((r) => {
       // A "~" on the RIGHT of the slash only. What the crew brings is
@@ -700,7 +704,7 @@
         (site
           ? `<div class="crew-card">` +
               `<span class="sk">what this crew covers</span>` +
-              (picked.length ? laneCard(picked, site)
+              (picked.length ? laneCard(picked, site, UI.pending.mission)
                 : `<span class="muted">nobody assigned yet</span>`) +
             `</div>`
           : "") +

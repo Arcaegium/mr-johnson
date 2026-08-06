@@ -255,9 +255,27 @@
   // changes a number — it only lets the readout admit which of these
   // it is standing behind, the same way the header already prints
   // "~4d" against "4d✓".
-  function laneDemands(site, shown, confirmed) {
+  //
+  // `planes` is THE DISPATCH's ground (MJ.missionPlanes): which
+  // projections this crew will actually walk. The card reads the
+  // dispatch, not the site — an astral recon meets wards and spirits,
+  // and quoting the corridor's guards at it (Sneak 0/4! Face 0/4!)
+  // told a solo mage they were unqualified for ground they will never
+  // stand on. Null means unfiltered (the whole site).
+  //
+  // The pillar rule inside: BODIES REACH EVERYTHING. When the crew is
+  // physically present, every pillar's verbs count — the decker hacks
+  // the maglock from the corridor (AR, the shallow rung), the mage
+  // casts at it. So Tech stays on a street card. A pure projection or
+  // a host crawl has no body on site, so only its own pillar's verbs
+  // (plus anywhere-verbs) are real there.
+  function laneDemands(site, shown, confirmed, planes) {
     shown = shown || {};
     confirmed = confirmed || {};
+    const onGround = (thing) => !planes || planes.indexOf(thing.projection || "physical") !== -1;
+    const bodily = !planes || planes.indexOf("physical") !== -1;
+    const pillarCounts = (def) => bodily || def.anywhere ||
+      (planes && planes.indexOf(def.pillar) !== -1);
     const demands = {};
     const note = (laneId, projection) => {
       const value = Math.max(1, Math.min(10, Math.round(shown[projection] || 1)));
@@ -278,6 +296,7 @@
     let sharpestEyes = 0;    // the best pair of eyes on the ground
 
     for (const thing of things) {
+      if (!onGround(thing)) continue;
       const projection = thing.projection || "physical";
       // Tier is the site's secret. Everything derived below reads the
       // player's own number for that axis instead, so a site cannot
@@ -285,7 +304,7 @@
       const asTier = Math.max(1, Math.min(10, Math.round(shown[projection] || 1)));
 
       for (const act of MJ.actsFor(thing)) {
-        if (!act.effective) continue;
+        if (!act.effective || !pillarCounts(act.def)) continue;
         for (const laneId of lanesOfVerb(act.def)) note(laneId, projection);
       }
 
@@ -358,7 +377,11 @@
       }
     }
 
-    if (typicalPower > 0) {
+    // Worn armour is MEAT. A projection carries none and needs none
+    // of the kind this lane counts — astral defence is Willpower's
+    // business and arrives with the astral combat pass — so the row
+    // only exists where a body walks.
+    if (typicalPower > 0 && bodily) {
       demands.defense = {
         lane: "defense", need: typicalPower, unit: "armour", from: "physical",
         estimated: !confirmed.physical,
@@ -454,9 +477,9 @@
   // the card does not reshuffle itself between two jobs. Lanes the
   // site has no use for are simply absent — a card that always lists
   // seven rows says nothing about the building.
-  function laneReport(runners, site, shown, confirmed) {
+  function laneReport(runners, site, shown, confirmed, planes) {
     const crew = (runners || []).slice();
-    const demands = laneDemands(site, shown, confirmed);
+    const demands = laneDemands(site, shown, confirmed, planes);
     const fightArmour = demands._fightArmour || 0;
     const toughest = demands._toughest || null;
     const rows = [];
@@ -465,7 +488,28 @@
       if (!demand) continue;
       const def = LANE_DEFS[laneId];
       let have;
-      if (laneId === "attack") {
+      if (laneId === "defense") {
+        // ── ARMOR THE SPELL IS DEFENSE THE CREW BRINGS ────────────
+        // The lane is the worst-dressed runner — and a mage who knows
+        // Armor casts it on exactly that runner before the doors, so
+        // the forecast says so: the floor rises by the spell's bonus,
+        // but never past the SECOND-worst coat, because one cast
+        // armours one person. The fight honours the same number: the
+        // sustained effect stacks with Force (min(6, Magic) safe).
+        const armours = crew.map((r) => MJ.armourRatingFor(r)).sort((a, b) => a - b);
+        have = armours.length ? armours[0] : 0;
+        const caster = crew.filter((r) =>
+          MJ.knowsSpell && MJ.knowsSpell(r, "armor") &&
+          ((r.attributes && r.attributes.magic) || 0) > 0 &&
+          (MJ.getEffectiveSkills(r).sorcery || 0) > 0)
+          .reduce((a, b) => (!a || b.attributes.magic > a.attributes.magic ? b : a), null);
+        if (caster && armours.length) {
+          const bonus = Math.min(6, caster.attributes.magic);
+          have = armours.length > 1
+            ? Math.min(armours[1], armours[0] + bonus)
+            : armours[0] + bonus;
+        }
+      } else if (laneId === "attack") {
         // Only the runners who can actually get through count. A
         // holdout against a hardsuit contributes exactly nothing to
         // this lane, however good its owner is, and the whole point

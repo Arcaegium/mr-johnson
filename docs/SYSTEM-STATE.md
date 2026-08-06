@@ -21,9 +21,9 @@ wins and this file is stale — verify before trusting a line here.
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
 Last verified after the canon grimoire landed. Suite: 25 classes,
-98,868 assertions, 0 failures, identical across three consecutive runs.
+98,880 assertions, 0 failures, identical across three consecutive runs.
 
-**Baseline moved deliberately**, 89,390 → 98,868. Class 17 was rewritten
+**Baseline moved deliberately**, 89,390 → 98,880. Class 17 was rewritten
 against the canon spell system (512 assertions — grimoire gating, canon Drain
 codes, the 2×Magic ceiling, direct-vs-indirect against armour, the verb
 bridge, generation, the Attack lane reading the dossier). C11 grew formula
@@ -279,8 +279,29 @@ js/models/spells.js   560  THE CANON GRIMOIRE. SPELLS(57 of SR5 core's 93)
                               and bills −2/spell via spellPoolMods.
                            -- Stabilize auto-casts at resolveTakedown between
                               the wound and the grave.
+                           -- Armor grants FORCE armour (stacksFromForce),
+                              and the Defense lane counts it: cast on the
+                              worst-dressed runner, floor +min(6,Magic),
+                              capped at the SECOND-worst coat.
+                           -- UI: ONE "cast a spell" per mage on the obstacle
+                              menu -> the grimoire submenu, which SHOWS
+                              unusable spells greyed with the reason. This
+                              deliberately breaks the main menu's hide-what-
+                              doesn't-apply rule: the submenu is the
+                              character sheet. choice.spellId overrides the
+                              verb's automatic best-of-shape.
                            -- KNOWN GAP: no Force dial in the popup yet;
                               casts default to full Magic (task flagged).
+js/models/mission.js       missionPlanes(mission) -- WHICH GROUND A DISPATCH
+                              WALKS, and the lane card reads it instead of
+                              the whole site. astralRun/recon:astral ->
+                              ["astral"], matrixRun -> ["matrix"], street ->
+                              ["physical","astral"]. Inside: BODIES REACH
+                              EVERYTHING -- on a street job every pillar's
+                              verbs count (the decker hacks the maglock from
+                              the corridor in AR, no jack-in), so Tech stays
+                              on a street card; a projection has no body, so
+                              no Sneak/Face/Tech/Defense rows.
 js/models/helpers.js  270  makeHelper bindSpirit finishBind loadAgent
                            unloadAgent agentSlotsFor helperAct instructHelper
                            dismissHelper describeHelper
