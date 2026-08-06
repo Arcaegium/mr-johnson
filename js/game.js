@@ -394,7 +394,8 @@
   function teachGear(session, item, runner) {
     const result = MJ.teachFormula(runner, item, session.save.armory.items);
     logLine(session, result.ok
-      ? runner.identity.handle + " learned " + item.label + " (casting mechanics arrive with the magic pillar)"
+      ? runner.identity.handle + " began studying " + item.label +
+        " — the next " + result.cost + " karma they earn pays for it before anything else grows"
       : "study refused (" + item.label + ") — " + result.error);
     return result;
   }

@@ -609,10 +609,36 @@
   }
 
   function growRunner(runner, karmaAward, rng) {
+    // ── Queued spells eat FIRST ────────────────────────────────────
+    // A formula is taught up front (armory.js teachFormula) and PAID
+    // FOR here: every award services the study queue at TOP PRIORITY
+    // — before the attribute skim, before any skill — until the
+    // spell's price is met. Paid in full, it materializes onto the
+    // grimoire, and whatever is left of the award flows to the next
+    // spell in line or on to normal growth. The price is therefore
+    // real: it is growth the runner visibly does not get while they
+    // study, not a debit against a bookkeeping counter.
+    let award = karmaAward;
+    const queue = runner.classification && runner.classification.spellQueue;
+    if (queue && queue.length) {
+      const known = runner.classification.spellsKnown =
+        runner.classification.spellsKnown || [];
+      while (queue.length && award > 0) {
+        const head = queue[0];
+        const pay = Math.min(award, head.cost - head.paid);
+        head.paid += pay;
+        award -= pay;
+        if (head.paid >= head.cost) {
+          known.push(head.spellId);
+          queue.shift();
+        }
+      }
+    }
+
     // Skim the attribute share off the top and bank it. Fractions
     // carry in the fund rather than being rounded away each time.
     if (runner.attributeFund === undefined) runner.attributeFund = 0;
-    const toAttributes = attributesMaxed(runner) ? 0 : karmaAward * ATTRIBUTE_SHARE;
+    const toAttributes = attributesMaxed(runner) ? 0 : award * ATTRIBUTE_SHARE;
     runner.attributeFund += toAttributes;
     spendAttributeFund(runner);
 
@@ -621,7 +647,7 @@
     // A veteran whose body has nothing left to give puts everything
     // into training instead — and any fund left stranded at that
     // wall comes back rather than sitting banked forever.
-    let remaining = karmaAward - toAttributes;
+    let remaining = award - toAttributes;
     if (toAttributes === 0 && runner.attributeFund > 0) {
       remaining += runner.attributeFund;
       runner.attributeFund = 0;
@@ -939,6 +965,9 @@
         deckerAffinity: focus.family === "decker" ? generateDeckerAffinity(r) : null,
         // Spell IDS into MJ.SPELLS — the grimoire is what you hired.
         spellsKnown: generateGrimoire(r, focus, attrs),
+        // Formulas taught but not yet paid for in karma — the study
+        // queue growRunner services at top priority.
+        spellQueue: focus.family === "mage" ? [] : null,
         disciplineLabel: disciplineLabel,     // visible claim: "specialist" | "generalist"
         trueArchetype: trueArchetype,          // hidden truth: "specialist" | "generalist"
         skillTiers: skillTiers,                // { primary, secondary[], tertiary[], overflow[] } — growth priority order

@@ -137,7 +137,22 @@
         : dim(e.why);
       e.dead = !e.available;
       return e;
-    });
+    }).concat(
+      // Spells still being STUDIED — taught, queued, not yet paid for
+      // in karma. Never castable, always shown: this menu is the
+      // character sheet, and watching the debt come due is part of
+      // owning the mage.
+      (((caster.classification || {}).spellQueue) || []).map((q) => {
+        const def = MJ.spellDef(q.spellId);
+        return {
+          spellId: q.spellId, def: def, caster: caster,
+          available: false, dead: true, verbId: null, target: null,
+          why: "still studying",
+          html: dim(def ? def.label : q.spellId),
+          meta: dim("still studying — " + q.paid + "/" + q.cost + " karma earned toward it"),
+        };
+      })
+    );
   }
 
   // ── The Force step ─────────────────────────────────────────────

@@ -1495,9 +1495,12 @@
     check(MJ.findConsumable(tank, "boost", "firearms") === null, "C11: boost must not match other skills");
     check(MJ.gearBonusFor(tank, "stealth") === 0, "C11: consumables must not count as passive gear");
 
-    // Formulas: mages only, spell IDS on the dossier, copy consumed,
-    // and 5 KARMA — canon learning cost, the gate that stops a rich
-    // Johnson mass-producing archmages with money alone.
+    // ── Formulas: taught FIRST, paid for in karma AFTER ──────────
+    // The user ruling: teaching queues the spell into the karma
+    // distribution system at TOP PRIORITY. The lesson is immediate;
+    // OWNING the spell is not — every award pays the study queue
+    // before any attribute or skill grows, and only a paid-in-full
+    // spell lands on the grimoire.
     check(!!MJ.ITEM_TEMPLATES.fml_manabolt && MJ.ITEM_TEMPLATES.fml_manabolt.label === "Formula: Manabolt",
       "C11: every implemented spell has a formula named for the CANON spell");
     check(Object.keys(MJ.SPELLS).every((id) => !!MJ.ITEM_TEMPLATES["fml_" + id]),
@@ -1516,21 +1519,66 @@
     check(!!mage, "C11: the probe needs a mage without Manabolt");
     MJ.watchRunner(mage, rng);
     MJ.hireRunner(mage, "permanent");
-    mage.karma = 3;
-    check(MJ.teachFormula(mage, formula, save.armory.items).ok === false,
-      "C11: 3 karma is not 5 — learning must refuse the broke");
-    check(save.armory.items.indexOf(formula) !== -1, "C11: a refused lesson must not eat the formula");
-    mage.karma = 7;
-    check(MJ.teachFormula(mage, formula, save.armory.items).ok === true, "C11: mage must learn the formula");
-    check(mage.karma === 2, "C11: and pay exactly 5 karma for it");
-    check(mage.classification.spellsKnown.indexOf("manabolt") !== -1,
-      "C11: the dossier records the SPELL ID, readable by the caster");
+    mage.karma = 0; // broke — and that must NOT block the lesson
+    check(MJ.teachFormula(mage, formula, save.armory.items).ok === true,
+      "C11: teaching needs no banked karma — the debt comes due later");
     check(save.armory.items.indexOf(formula) === -1, "C11: taught formula must be consumed");
-    check(MJ.knowsSpell(mage, "manabolt"), "C11: and the grimoire can cast from it");
+    check(mage.classification.spellsKnown.indexOf("manabolt") === -1,
+      "C11: taught is not OWNED — nothing lands on the grimoire unpaid");
+    check(!MJ.knowsSpell(mage, "manabolt"), "C11: and an unpaid spell cannot be cast");
+    check(mage.classification.spellQueue.length === 1 &&
+      mage.classification.spellQueue[0].spellId === "manabolt",
+      "C11: it sits in the study queue instead");
     const formula2 = MJ.makeItem("fml_manabolt");
     save.armory.items.push(formula2);
-    mage.karma = 10;
-    check(MJ.teachFormula(mage, formula2, save.armory.items).ok === false, "C11: re-learning the same formula must refuse");
+    check(MJ.teachFormula(mage, formula2, save.armory.items).ok === false,
+      "C11: re-teaching a spell already under study must refuse");
+    check(save.armory.items.indexOf(formula2) !== -1, "C11: and the refused copy is not eaten");
+
+    // ── The debt comes due AT TOP PRIORITY ───────────────────────
+    // A 3-karma award services the spell and grows NOTHING else —
+    // no attribute skim, no skill point, and the lifetime counter
+    // still records the earning.
+    const skillsBefore = JSON.stringify(mage.skills);
+    const fundBefore = mage.attributeFund || 0;
+    MJ.growRunner(mage, 3, rng.fork("study1"));
+    check(mage.classification.spellQueue[0].paid === 3, "C11: the award paid the study first");
+    check(JSON.stringify(mage.skills) === skillsBefore && (mage.attributeFund || 0) === fundBefore,
+      "C11: TOP PRIORITY means top — not a point reaches skills or the fund while the debt stands");
+    check(mage.karma === 3, "C11: the lifetime counter still records what was earned");
+    check(!MJ.knowsSpell(mage, "manabolt"), "C11: 3 of 5 is still not a spell");
+    // The next award finishes the spell and the REMAINDER flows on
+    // to normal growth.
+    MJ.growRunner(mage, 4, rng.fork("study2"));
+    check(MJ.knowsSpell(mage, "manabolt"), "C11: paid in full, it materializes onto the grimoire");
+    check(mage.classification.spellQueue.length === 0, "C11: and leaves the queue");
+    check((mage.attributeFund || 0) > fundBefore || JSON.stringify(mage.skills) !== skillsBefore,
+      "C11: the leftover 2 karma flowed back to normal growth");
+    // Re-teaching a spell now KNOWN refuses at the door.
+    const formula3 = MJ.makeItem("fml_manabolt");
+    save.armory.items.push(formula3);
+    check(MJ.teachFormula(mage, formula3, save.armory.items).ok === false,
+      "C11: re-learning a known spell must refuse");
+
+    // ── The queue is FIFO: first taught, first owned ─────────────
+    {
+      const f1 = MJ.makeItem("fml_heal"), f2 = MJ.makeItem("fml_armor");
+      save.armory.items.push(f1, f2);
+      const already = mage.classification.spellsKnown.slice();
+      if (already.indexOf("heal") === -1 && already.indexOf("armor") === -1) {
+        MJ.teachFormula(mage, f1, save.armory.items);
+        MJ.teachFormula(mage, f2, save.armory.items);
+        MJ.growRunner(mage, 7, rng.fork("fifo"));
+        check(MJ.knowsSpell(mage, "heal") && !MJ.knowsSpell(mage, "armor"),
+          "C11: seven karma into a ten-karma queue owns the FIRST spell, not half of each");
+        check(mage.classification.spellQueue[0].spellId === "armor" &&
+          mage.classification.spellQueue[0].paid === 2,
+          "C11: and the second is 2 of 5 along");
+        MJ.growRunner(mage, 3, rng.fork("fifo2"));
+        check(MJ.knowsSpell(mage, "armor") && mage.classification.spellQueue.length === 0,
+          "C11: the queue drains in order and closes");
+      }
+    }
 
     // Contract upgrades: pro-rata credit against today's price.
     const up = MJ.generateRunner(rng.fork("upgr"), { family: "face" });

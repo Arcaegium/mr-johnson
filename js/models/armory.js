@@ -535,14 +535,25 @@
     return item;
   }
 
-  // ── Spell formulas: taught to a mage, consumed on learning ──────
-  // Canon learning: the formula plus 5 KARMA plus study. The karma
-  // price is what stops a rich Johnson mass-producing archmages —
-  // money buys the paper, but the learning is the runner's own, paid
-  // in the same currency their growth runs on. The grimoire records
-  // SPELL IDS (models/spells.js), never display labels — labels are
-  // for the player, ids are for the machine, and an earlier pass
-  // storing labels made the dossier unreadable by the caster.
+  // ── Spell formulas: taught FIRST, paid for in karma AFTER ───────
+  // The lesson happens the day the formula is consumed — the shape
+  // of the spell is in their head. But knowing the shape is not
+  // OWNING it: the spell sits in a STUDY QUEUE, and every karma
+  // award the runner earns services that queue AT TOP PRIORITY —
+  // before a single point reaches an attribute or a skill — until
+  // the spell's price is paid. Paid in full, it materializes onto
+  // the grimoire (spellsKnown) and karma flows to the next spell in
+  // line, or back to normal growth.
+  //
+  // This replaced an earlier version that debited runner.karma
+  // directly — which was a lie, because runner.karma is the LIFETIME
+  // EARNED counter (the growth cascade auto-spends awards
+  // separately), so the "price" deducted from a bookkeeping total
+  // nothing else consumed. Now the price is real: it is growth the
+  // runner visibly does not get while they study.
+  //
+  // The grimoire records SPELL IDS (models/spells.js), never display
+  // labels — labels are for the player, ids are for the machine.
   const FORMULA_KARMA_COST = 5;
 
   function teachFormula(runner, item, armoryItems) {
@@ -554,14 +565,12 @@
     }
     const known = runner.classification.spellsKnown = runner.classification.spellsKnown || [];
     if (known.indexOf(t.spellId) !== -1) return { ok: false, error: "already knows it" };
-    if ((runner.karma || 0) < FORMULA_KARMA_COST) {
-      return { ok: false, error: "needs " + FORMULA_KARMA_COST + " karma to internalise it" };
-    }
-    runner.karma -= FORMULA_KARMA_COST;
-    known.push(t.spellId);
+    const queue = runner.classification.spellQueue = runner.classification.spellQueue || [];
+    if (queue.some((q) => q.spellId === t.spellId)) return { ok: false, error: "already studying it" };
+    queue.push({ spellId: t.spellId, paid: 0, cost: FORMULA_KARMA_COST });
     const i = armoryItems.indexOf(item);
     if (i !== -1) armoryItems.splice(i, 1); // the copy is consumed in study
-    return { ok: true, spellId: t.spellId, karmaSpent: FORMULA_KARMA_COST };
+    return { ok: true, spellId: t.spellId, queued: true, cost: FORMULA_KARMA_COST };
   }
 
   // ── Cyberware surgery: consume, spend Essence, mark the dossier ─

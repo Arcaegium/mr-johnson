@@ -21,7 +21,7 @@ wins and this file is stale — verify before trusting a line here.
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
 Last verified after the canon grimoire landed. Suite: 25 classes,
-98,899 assertions, 0 failures, identical across three consecutive runs.
+98,906 assertions, 0 failures, identical across three consecutive runs.
 
 **Baseline moved deliberately**, 89,390 → 98,899. Class 17 was rewritten
 against the canon spell system (512 assertions — grimoire gating, canon Drain
@@ -265,8 +265,14 @@ js/models/spells.js   560  THE CANON GRIMOIRE. SPELLS(57 of SR5 core's 93)
                            -- direct spells IGNORE armour (combat AND
                               forceAgainstThing); indirect AP = −Force.
                            -- writes one formula item per spell into
-                              ITEM_TEMPLATES at load (fml_<id>, canon name);
-                              teachFormula = formula + 5 karma -> spell id.
+                              ITEM_TEMPLATES at load (fml_<id>, canon name).
+                           -- teachFormula QUEUES, never grants: the spell
+                              sits in classification.spellQueue and growRunner
+                              services that queue AT TOP PRIORITY — no
+                              attribute skim, no skill point while a spell
+                              debt stands. Paid in full (5 karma) it
+                              materializes onto spellsKnown; FIFO. runner.karma
+                              stays the untouched lifetime counter.
                            -- verb bridge: castBolt/castSmash/castBlast +
                               magicFingers/levitate/command in verbs.js, all
                               grimoire-gated via carries. `blast` fronts

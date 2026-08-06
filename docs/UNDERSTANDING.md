@@ -743,10 +743,20 @@ adding one later is a row, not a system.
 ### Spells live on the dossier — finally true
 A mage generates knowing **Magic-rating spells**, focus-weighted with the
 signature guaranteed (a combatMage always has Manabolt; a healthMage, Heal).
-`spellsFor()` is **grimoire ∩ trained**, never the whole book. Growth is canon:
-a formula (auto-generated into the armoury, one per spell, named for the spell)
-plus **5 karma**. The dossier renders the grimoire — two mages at the same
-price knowing different spells are different hires, which is the point.
+`spellsFor()` is **grimoire ∩ trained**, never the whole book.
+
+**Learning is taught first, paid for after.** A formula (auto-generated into the
+armoury, one per spell, named for the spell) is consumed the day it is taught —
+the shape is in their head — but the spell enters a **study queue** rather than
+the grimoire. Every karma award the runner earns services that queue **at top
+priority**: not a point reaches an attribute or a skill while a spell debt
+stands. Paid in full (5 karma), the spell **materializes onto the grimoire**,
+and karma flows to the next spell in line or back to normal growth. The price is
+therefore real — it is growth the runner visibly does not get while they study —
+where the earlier version debited the lifetime karma counter, a number nothing
+else spent. The dossier shows the study in progress (`Fireball (3/5 karma)`,
+greyed), and so does the cast menu: watching the debt come due is part of owning
+the mage.
 
 ### Meatspace casting: a spell is a verb only its caster has
 Grimoire-gated verbs (`carries`, the same mechanism as `shoot` needing a gun):

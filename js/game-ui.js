@@ -148,9 +148,16 @@
       // SPELLS ARE WHAT YOU HIRED (§8) — so the dossier says which.
       // Two mages at the same price knowing different spells are
       // different hires, and this line is where that becomes visible.
-      (c.spellsKnown && c.spellsKnown.length
-        ? `<div class="det"><span class="dk">grimoire</span>${c.spellsKnown
-            .map((id) => { const s = MJ.spellDef(id); return s ? esc(s.label) : esc(id); }).join(", ")}</div>`
+      // A spell still being STUDIED shows greyed with its progress:
+      // taught first, paid for in karma after, and the dossier is
+      // where the player watches that debt come due.
+      ((c.spellsKnown && c.spellsKnown.length) || (c.spellQueue && c.spellQueue.length)
+        ? `<div class="det"><span class="dk">grimoire</span>${(c.spellsKnown || [])
+            .map((id) => { const s = MJ.spellDef(id); return s ? esc(s.label) : esc(id); })
+            .concat((c.spellQueue || []).map((q) => {
+              const s = MJ.spellDef(q.spellId);
+              return `<span class="muted">${esc(s ? s.label : q.spellId)} (${q.paid}/${q.cost} karma)</span>`;
+            })).join(", ")}</div>`
         : "") +
       `<div class="det"><span class="dk">kit</span>${kit.length ? kit.join(", ") : '<span class="muted">nothing issued</span>'}</div>`;
   }
