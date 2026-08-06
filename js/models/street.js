@@ -60,16 +60,17 @@
     return !!(run.observed && run.observed.get(obstacle));
   }
 
-  // What else can see the crew from where they are standing. The
-  // same rule witnessing uses, exposed as something the player can
-  // ask about BEFORE acting rather than discover afterwards.
+  // What else can see the crew from where they are standing —
+  // literally the witness rules' own question, asked out loud before
+  // acting instead of discovered afterwards. It calls mission.js's
+  // `perceiversNear` rather than re-deriving it: this used to be a
+  // hand-rolled copy with slightly different filtering, which is
+  // exactly how a readout starts disagreeing with the resolver it is
+  // supposed to be previewing.
   function watchersHere(run) {
     const obstacle = run.obstacles[run.index];
-    if (!obstacle || !obstacle.rooms) return [];
-    return run.obstacles.filter((o) =>
-      o !== obstacle && !run.neutralized.has(o) &&
-      (o.senses || []).indexOf("physical") !== -1 &&
-      o.rooms && o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1));
+    if (!obstacle) return [];
+    return MJ.perceiversNear(run, obstacle, "physical");
   }
 
   function streetPrompt(run) {

@@ -115,7 +115,12 @@
     };
   }
 
-  function finishBind(rng, binding) {
+  // `opts.run` lets a binding made DURING a run bill through the one
+  // drain law (mission.js applyDrain) — tracks, drop, the lot. Off a
+  // run (the bench, a probe) it still writes both tracks; there is
+  // simply no run to fall out of.
+  function finishBind(rng, binding, opts) {
+    opts = opts || {};
     if (!binding || !binding.ok) return binding;
     const success = !!(binding.lattice && binding.lattice.success);
     const drain = MJ.resistDrain(rng, binding.conjurer, binding.force);
@@ -123,9 +128,10 @@
     binding.done = true;
     binding.success = success;
     binding.drain = drain;
-    if (drain.damage > 0 && drain.physical) {
-      binding.conjurer.wounds = (binding.conjurer.wounds || 0) + drain.damage;
-    }
+    // ONE DRAIN LAW. Summoning used to discard stun Drain entirely
+    // and write wounds only on an overcast, so a conjurer could call
+    // spirits all night for nothing.
+    if (drain.damage > 0) MJ.applyDrain(opts.run || null, binding.conjurer, drain);
     if (success) {
       // Force buys both how capable it is and how long it stays.
       binding.helper = makeHelper("spirit", {

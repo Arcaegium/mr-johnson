@@ -595,6 +595,10 @@
         },
         heading: nm(mage.identity.handle) + '<span class="dimmed"> — what they know</span>' +
           (headingSuffix || "") + '<div class="ask">Cast which?</div>',
+        onRelease: (e) => {
+          MJ.dropSustainedInRun(run, mage, e.spellId);
+          onDone();
+        },
         onCast: (e, force) => {
           if (e.verbId) {
             // A thrown spell resolves through the verb table, so the

@@ -374,15 +374,17 @@
     const dice = MJ.rollDicePool(rng, pool);
     const hits = MJ.countHits(dice);
     const drain = spellDrain(rng, caster, def, force);
-    const cast = {
+    // THIS FUNCTION DOES NOT BILL THE DRAIN. It rolls it and hands
+    // it back; the caller applies it through the one drain law
+    // (mission.js applyDrain), which owns the tracks and the drop.
+    // Writing wounds here as well would charge an overcasting mage
+    // twice for the same push — and it did, until the tracks became
+    // one system.
+    return {
       ok: true, spell: spellId, def: def, force: force,
       overcast: force > magic, caster: caster,
       pool: pool, hits: hits, success: hits > 0, done: true, drain: drain,
     };
-    if (drain.damage > 0 && drain.physical) {
-      cast.caster.wounds = (cast.caster.wounds || 0) + drain.damage;
-    }
-    return cast;
   }
 
   function finishCast(rng, cast) {
@@ -393,10 +395,7 @@
     cast.done = true;
     cast.success = success;
     cast.drain = drain;
-    if (drain.damage > 0 && drain.physical) {
-      cast.caster.wounds = (cast.caster.wounds || 0) + drain.damage;
-    }
-    return cast;
+    return cast; // the caller bills it — see castSpell
   }
 
   // ── Out of combat: what a cast does to a run ───────────────────
@@ -502,10 +501,11 @@
     const drain = spellDrain(combat.rng, source, def, force);
     out.drain = drain;
     if (drain.damage > 0) {
+      // Inside a fight the caster IS a combatant, so it lands on the
+      // combatant's tracks and rides home through carryDamageHome
+      // like every other box taken in the exchange — no separate
+      // write to the dossier, which used to charge the runner twice.
       MJ.applyDamage(caster, drain.damage, !drain.physical);
-      if (drain.physical && caster.source && typeof caster.source.wounds === "number") {
-        caster.source.wounds += drain.damage;
-      }
       out.drainTaken = drain.damage;
       if (caster.down) { out.casterDown = true; return out; }
     }

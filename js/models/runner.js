@@ -818,13 +818,21 @@
         if (out[skill] !== undefined && out[skill] > 0) out[skill] += implant.skillMods[skill];
       }
     }
-    // Injury is not a specialist problem. `runner.wounds` counts
-    // boxes on the physical track, and boxes cost dice on EVERYTHING
-    // — a decker with cracked ribs is worse at talking their way out
-    // of the lobby too. Tabletop rate: -1 die per three boxes, so a
-    // scratch or two is shrugged off and a real mauling is felt
-    // across the whole sheet until somebody treats it.
-    const penalty = Math.floor((runner.wounds || 0) / WOUNDS_PER_DIE);
+    // Injury is not a specialist problem. Boxes cost dice on
+    // EVERYTHING — a decker with cracked ribs is worse at talking
+    // their way out of the lobby too. Tabletop rate: -1 die per
+    // three boxes, so a scratch or two is shrugged off and a real
+    // mauling is felt across the whole sheet until somebody treats
+    // it.
+    //
+    // BOTH TRACKS CHARGE, and they charge SEPARATELY — canon. Three
+    // boxes of wounds and three of Drain is -2 dice, not -1, because
+    // being hurt and being wrung out are two different problems
+    // arriving at the same hands. This is what finally makes a mage
+    // who overreached early genuinely worse for the rest of the
+    // operation rather than merely closer to a threshold.
+    const penalty = Math.floor((runner.wounds || 0) / WOUNDS_PER_DIE) +
+      Math.floor((runner.stun || 0) / WOUNDS_PER_DIE);
     if (penalty > 0) {
       for (const skill of Object.keys(out)) {
         if (out[skill] > 0) out[skill] = Math.max(0, out[skill] - penalty);
@@ -975,7 +983,13 @@
       attributes: attrs,
       essence: essence,
       skills: skills,
-      wounds: 0,       // boxes of physical damage carried; -1 die per three
+      wounds: 0,       // boxes of PHYSICAL damage carried; -1 die per three
+      // Boxes of STUN. Drain, stun batons, gel rounds, biofeedback —
+      // real and persistent, because an operation is many missions
+      // long and a mage who burned out at the second door is still
+      // burned out at the fifth. Clears fast with rest, unlike a
+      // wound. Same -1 die per three.
+      stun: 0,
       restedDays: 0,   // consecutive days off the job, which is how they mend
       karma: 0,
       attributeFund: 0, // banked share of past awards, waiting on the next attribute step

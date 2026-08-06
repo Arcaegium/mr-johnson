@@ -107,12 +107,20 @@
       `&nbsp;&nbsp;<span class="muted">est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</span></div>`;
   }
 
+  // BOTH TRACKS. A mage carrying six boxes of Drain is as unfit for
+  // the next door as one carrying six of buckshot, and the sheet has
+  // to say so — the dice penalty reads both, so the readout does too.
   function woundRead(r) {
-    if (!r.wounds) return "";
-    const max = MJ.physicalTrack(r);
-    const dice = Math.floor(r.wounds / 3);
-    return `<span class="${r.wounds >= max || dice > 0 ? "warn" : "muted"}">${r.wounds}/${max} boxes${dice > 0 ? ` (−${dice}d)` : ""}</span>`;
+    const w = r.wounds || 0, s = r.stun || 0;
+    if (!w && !s) return "";
+    const wMax = MJ.physicalTrack(r), sMax = MJ.stunTrack(r);
+    const dice = Math.floor(w / 3) + Math.floor(s / 3);
+    const parts = [];
+    if (w) parts.push(`<span class="${w >= wMax ? "warn" : "muted"}">${w}/${wMax} phys</span>`);
+    if (s) parts.push(`<span class="${s >= sMax ? "warn" : "muted"}">${s}/${sMax} stun</span>`);
+    return parts.join(" · ") + (dice > 0 ? ` <span class="warn">(−${dice}d)</span>` : "");
   }
+  const isHurt = (r) => (r.wounds || 0) > 0 || (r.stun || 0) > 0;
 
   // ── The runner dossier ──────────────────────────────────────────
   // EXPLICIT ALLOWLIST of player-visible fields. `trueArchetype` is
@@ -144,7 +152,7 @@
       `<div class="det"><span class="dk">attributes</span>B${a.body} A${a.agility} S${a.strength} W${a.willpower} I${a.intelligence} C${a.charisma}` +
         `${a.magic ? " M" + a.magic : ""} <span class="muted">· essence ${r.essence.current}/${r.essence.max} · tracks ${MJ.physicalTrack(r)}P/${MJ.stunTrack(r)}S</span></div>` +
       `<div class="det"><span class="dk">skills</span><div class="skillgrid">${skills}</div></div>` +
-      `<div class="det"><span class="dk">condition</span>karma ${r.karma}${r.wounds ? " · " + woundRead(r) : ' · <span class="muted">unhurt</span>'} · ${fmtContract(r)}</div>` +
+      `<div class="det"><span class="dk">condition</span>karma ${r.karma}${isHurt(r) ? " · " + woundRead(r) : ' · <span class="muted">unhurt</span>'} · ${fmtContract(r)}</div>` +
       // SPELLS ARE WHAT YOU HIRED (§8) — so the dossier says which.
       // Two mages at the same price knowing different spells are
       // different hires, and this line is where that becomes visible.
@@ -214,7 +222,7 @@
   const runnerRows = (list, market) => list.map((r) =>
     entry(keyFor(r, "r"), runnerLine(r),
       market ? esc(MJ.describeDiscipline(r))
-             : `${fmtContract(r)}${r.wounds ? " · " + woundRead(r) : ""}`,
+             : `${fmtContract(r)}${isHurt(r) ? " · " + woundRead(r) : ""}`,
       () => runnerDetail(r) + runnerActions(r))).join("");
 
   // ── Contracts ───────────────────────────────────────────────────
@@ -249,7 +257,11 @@
     if (t.category === "consumable") return t.effect === "absorbWound" ? "absorbs a wound · single use"
       : `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}, one roll · single use`;
     if (t.category === "program") return `+${MJ.gearBonusForTier(t.tier)}d ${t.skill} (needs a deck)`;
-    if (t.category === "formula") return `teaches ${t.spellCategory} spell (casting pending)`;
+    if (t.category === "formula") {
+      const s = MJ.spellDef(t.spellId);
+      return s ? `teaches ${s.label} — ${s.category}, drain F${s.drain >= 0 ? "+" + s.drain : s.drain} · 5 karma to internalise`
+        : `teaches a ${t.spellCategory} spell`;
+    }
     return `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}`;
   }
 
@@ -428,14 +440,20 @@
 
   for (const w of WIDGETS.armory) {
     if (w.medicae) {
-      w.count = () => S.roster.filter((r) => r.market.hired && r.wounds > 0).length;
+      w.count = () => S.roster.filter((r) => r.market.hired && isHurt(r)).length;
       w.sum = () => "wounds always; surgery needs a Street Doc";
       w.body = () => {
-        const hurt = S.roster.filter((r) => r.market.hired && r.wounds > 0);
+        const hurt = S.roster.filter((r) => r.market.hired && isHurt(r));
         if (!hurt.length) return emptyNote("nobody is carrying anything");
         return hurt.map((r) => entry(keyFor(r, "r"), runnerLine(r), woundRead(r), () =>
-          `<div class="det"><span class="dk">case</span>${r.wounds} box(es) <span class="muted">· essence spent ${(r.essence.max - r.essence.current).toFixed(1)} — chrome complicates surgery</span></div>` +
-          `<div class="actionbar"><button class="sm" data-act="dispatch" data-plan="treat:${keyFor(r, "r")}">assign a medic</button></div>`)).join("");
+          `<div class="det"><span class="dk">case</span>${woundRead(r)} <span class="muted">· essence spent ${(r.essence.max - r.essence.current).toFixed(1)} — chrome complicates surgery</span></div>` +
+          // A medic treats INJURY. Drain is not a wound — it comes
+          // off on its own with a night's rest, and no street doc
+          // makes that go faster.
+          `<div class="det"><span class="dk">treatable</span>${r.wounds
+            ? "yes — " + r.wounds + " box(es) of injury"
+            : '<span class="muted">nothing a medic can do — that is Drain, and it needs a night off</span>'}</div>` +
+          (r.wounds ? `<div class="actionbar"><button class="sm" data-act="dispatch" data-plan="treat:${keyFor(r, "r")}">assign a medic</button></div>` : ""))).join("");
       };
     } else {
       const cats = w.cats;
@@ -497,10 +515,18 @@
       laneCard(runners, site, mission);
   }
 
-  function siteSecurityLine(site) {
+  // ONLY THE PLANES THIS DISPATCH WALKS. The lane card below already
+  // filters an astral recon to its own ground; a header still
+  // reciting P/A/M would be quoting the crew numbers for corridors
+  // and hosts the card just told them do not apply.
+  const AXIS_LETTER = { physical: "P", astral: "A", matrix: "M" };
+  function siteSecurityLine(site, mission) {
     if (!site) return '<span class="muted">not at a site</span>';
     const v = MJ.siteIntelView(site, S.day);
-    return `P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}`;
+    const planes = mission ? MJ.missionPlanes(mission) : null;
+    if (mission && planes === null) return '<span class="muted">nothing to case</span>';
+    return (planes || ["physical", "astral", "matrix"])
+      .map((a) => `${AXIS_LETTER[a]}:${fmtAxis(v[a])}`).join(" ");
   }
 
   function renderPlanRail() {
@@ -515,7 +541,7 @@
             `<button class="sm" data-act="queue-del" data-idx="${i}">✕</button>` +
           `</span></div>` +
         `<div class="qcard-body">` +
-          `<div class="qrow"><span class="qk">guarding it</span>${siteSecurityLine(site)}</div>` +
+          `<div class="qrow"><span class="qk">guarding it</span>${siteSecurityLine(site, q.mission)}</div>` +
           `<div class="qrow"><span class="qk">going</span>${crewShape(q.runners, site, q.mission)}</div>` +
         `</div></div>`;
     }).join("");
@@ -687,7 +713,7 @@
           // What is waiting, opposite what you are bringing — the
           // comparison IS the decision, so it should not need a tab
           // change to make.
-          `<div class="csec"><span class="sk">what is guarding it</span>${siteSecurityLine(site)}</div>` +
+          `<div class="csec"><span class="sk">what is guarding it</span>${siteSecurityLine(site, UI.pending.mission)}</div>` +
         `</div>` +
         `<div class="crew-tabs">` +
           ["hired", "watchlist", "market"].map((t) =>

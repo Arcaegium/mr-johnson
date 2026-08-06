@@ -1606,11 +1606,18 @@
     check(MJ.sellMaterials(save, "resource:scrap").ok === false, "C11: empty stock must refuse");
   }
 
-  // ── Class 12: injury carries, exhaustion does not ───────────────
-  // Physical damage is the roster's memory of a bad night. It rides
-  // home on the runner, costs dice on everything until treated, and
-  // walks back into the next firefight already on the track. Stun
-  // is the other half of the pair and belongs entirely to the fight.
+  // ── Class 12: BOTH TRACKS carry; recovery is what differs ───────
+  // Physical damage is the roster's memory of a bad night. Stun is
+  // the memory of a hard one. BOTH ride home on the runner and both
+  // cost dice, because an operation is many missions long and a mage
+  // who burned out at the second door is still burned out at the
+  // fifth. What separates them is recovery: a wound needs days or a
+  // medic; stun needs a night off.
+  //
+  // Stun used to evaporate the moment a fight ended, which left
+  // Drain — canonically stun damage — with nowhere to land outside
+  // combat, so four callers invented four different workarounds.
+  // This class holds the single law that replaced them.
   function class12_injury() {
     const rng = MJ.makeRNG("stress-injury");
 
@@ -1631,24 +1638,61 @@
     }
     subject.wounds = 0;
 
+    // STUN CHARGES THE SAME WAY, AND SEPARATELY. Being hurt and
+    // being wrung out are two different problems arriving at the same
+    // hands, so three of each is -2 dice, not -1.
+    subject.stun = 3;
+    const stunned = MJ.getEffectiveSkills(subject);
+    for (const skill of trained) {
+      check(stunned[skill] === Math.max(0, clean[skill] - 1),
+        "C12: stun costs dice exactly like wounds (" + skill + ")");
+    }
+    subject.wounds = 3; subject.stun = 3;
+    const both = MJ.getEffectiveSkills(subject);
+    for (const skill of trained) {
+      check(both[skill] === Math.max(0, clean[skill] - 2),
+        "C12: the tracks charge SEPARATELY — 3 and 3 is -2 dice, not -1 (" + skill + ")");
+    }
+    subject.wounds = 0; subject.stun = 0;
+
+    // Either full track puts a runner down.
+    const downer = makeRoster(rng.fork("down"), 1)[0];
+    downer.wounds = 0; downer.stun = MJ.stunTrack(downer);
+    check(MJ.isDown(downer), "C12: a full stun track is down");
+    downer.stun = 0; downer.wounds = MJ.physicalTrack(downer);
+    check(MJ.isDown(downer), "C12: so is a full physical track");
+    downer.wounds = 0;
+    check(!MJ.isDown(downer), "C12: and neither full is standing");
+
+    // Stun overflow bleeds into physical — past the end of the track
+    // it stops being tiredness.
+    const over = makeRoster(rng.fork("over"), 1)[0];
+    over.wounds = 0; over.stun = MJ.stunTrack(over) - 1;
+    const spill = MJ.takeDamage(over, 5, true);
+    check(over.stun === MJ.stunTrack(over), "C12: stun caps at its track");
+    check(spill.overflow === 4 && over.wounds === 2,
+      "C12: and the overflow lands as real damage (saw " + over.wounds + ")");
+
     // A runner walks into a fight carrying what they have not healed.
     const carrier = makeRoster(rng.fork("carry"), 1)[0];
     carrier.wounds = 4;
+    carrier.stun = 2;
     const cc = MJ.makeCombatant(carrier, { side: "crew" });
     check(cc.physical === 4, "C12: a combatant must start on the boxes their runner carries");
-    check(cc.stun === 0, "C12: stun never carries into a fight");
+    check(cc.stun === 2, "C12: INCLUDING stun — half-drained from the last door is how they arrive");
     check(cc.physical <= cc.physicalMax, "C12: carried damage cannot exceed the track");
 
-    // Coming out: physical goes on the dossier, stun does not, and
-    // a lighter night never heals what a worse one already did.
+    // Coming out: BOTH tracks go on the dossier, and a lighter night
+    // never heals what a worse one already did.
     cc.physical = 7; cc.stun = 6;
     MJ.carryDamageHome(cc);
     check(carrier.wounds === 7, "C12: physical damage must ride home (have " + carrier.wounds + ")");
+    check(carrier.stun === 6, "C12: and so must stun — an operation is many missions long");
     const lighter = MJ.makeCombatant(carrier, { side: "crew" });
-    lighter.physical = 2; lighter.stun = 9;
+    lighter.physical = 2; lighter.stun = 1;
     MJ.carryDamageHome(lighter);
-    check(carrier.wounds === 7, "C12: a lighter fight must not heal an older injury");
-    check(!("stun" in carrier), "C12: stun must not become a roster field");
+    check(carrier.wounds === 7 && carrier.stun === 6,
+      "C12: a lighter fight must not heal an older injury on either track");
 
     // Enemies have no dossier to write to — the writeback must be
     // safe on anything that walks into a fight.
@@ -1658,11 +1702,27 @@
 
     // Rest closes boxes one at a time and stops at healthy.
     const rester = makeRoster(rng.fork("rest"), 1)[0];
-    rester.wounds = 3;
+    rester.wounds = 3; rester.stun = 0;
     let closed = 0;
     for (let d = 1; d <= 60 && rester.wounds > 0; d++) closed += MJ.restDay(rester, d);
     check(rester.wounds === 0 && closed === 3, "C12: rest must close exactly the boxes that were open");
     check(MJ.restDay(rester, 61) === 0 && rester.wounds === 0, "C12: rest on a healthy runner is inert");
+
+    // STUN CLEARS FAST — the whole difference between the tracks. A
+    // wound is days; Drain is a night off, or one hard casting day
+    // would bench a mage for a week and nobody would push Force.
+    const tired = makeRoster(rng.fork("tired"), 1)[0];
+    tired.wounds = 0; tired.stun = MJ.stunTrack(tired);
+    let nights = 0;
+    while (tired.stun > 0 && nights < 40) { nights += 1; MJ.restDay(tired, nights); }
+    check(tired.stun === 0 && nights <= 4,
+      "C12: a full stun track clears in a handful of nights (took " + nights + ")");
+    const slow = makeRoster(rng.fork("slow"), 1)[0];
+    slow.wounds = MJ.physicalTrack(slow); slow.stun = 0;
+    let days = 0;
+    while (slow.wounds > 0 && days < 200) { days += 1; MJ.restDay(slow, days); }
+    check(days > nights * 3,
+      "C12: and injury takes far longer than exhaustion (" + days + " vs " + nights + ")");
 
     // Treatment never over-heals, and a full track is a hard case
     // rather than automatically the worst case in the world.
@@ -2603,6 +2663,28 @@
     // `computer` never fronts a live act (it survives on the crafting
     // bench and nowhere else).
     check(!MJ.VERBS.attackIce, "C22: the Matrix has no attack verb — nothing there has a body");
+    // ── EVERY VERB TABLE, not just this one ──────────────────────
+    // The one-decking-skill ruling was policed here and nowhere
+    // else, so matrix.js's `probe` sat on `computer` — a bench skill
+    // — for weeks. The pillars have their own verb tables and they
+    // obey the same rulings.
+    for (const [tableName, table] of [["MATRIX_VERBS", MJ.MATRIX_VERBS],
+                                      ["ASTRAL_VERBS", MJ.ASTRAL_VERBS],
+                                      ["STREET_VERBS", MJ.STREET_VERBS]]) {
+      for (const id of Object.keys(table || {})) {
+        const skill = table[id].skill;
+        if (!skill) continue;
+        check(MJ.SKILLS.indexOf(skill) !== -1,
+          "C22: " + tableName + "." + id + " rolls a real skill (" + skill + ")");
+        check(skill !== "computer" && skill !== "enchanting",
+          "C22: " + tableName + "." + id + " must not roll a BENCH skill (" + skill + ")");
+      }
+    }
+    for (const id of Object.keys(MJ.MATRIX_VERBS || {})) {
+      const skill = MJ.MATRIX_VERBS[id].skill;
+      if (skill) check(skill === "hacking",
+        "C22: decking is ONE skill — " + id + " rolls " + skill);
+    }
     for (const id of Object.keys(MJ.VERBS)) {
       const v = MJ.VERBS[id];
       if (v.pillar !== "matrix") continue;
@@ -3155,6 +3237,83 @@
       const hard = MJ.castSpell(MJ.makeRNG("c17-hard"), mage, "manabolt", { force: 9 });
       check(soft.force === 1 && hard.force === 9, "C17: the chosen Force is the Force cast");
       check(soft.drain.drainValue < hard.drain.drainValue, "C17: and it is what the Drain is priced off");
+    }
+
+    // ── ONE DRAIN LAW, AND EVERY DOOR OBEYS IT ───────────────────
+    // The review found Drain landing four different ways depending
+    // on which door the mage cast through: the street accumulated
+    // against an invented threshold, combat used the tracks, and the
+    // astral and the conjuring bench DISCARDED stun entirely — so a
+    // mage could push flat out forever on exactly the plane where
+    // Drain is meant to be the tether's partner. Nothing caught it
+    // because each path was internally consistent and separately
+    // probed; nothing asserted they AGREE. This does.
+    {
+      const drained = () => {
+        const m = MJ.generateRunner(MJ.makeRNG("c17-law"), { family: "mage" });
+        m.attributes.magic = 4; m.attributes.willpower = 1; m.wounds = 0; m.stun = 0;
+        m.skills.sorcery = 5; m.skills.conjuring = 5;
+        m.classification.spellsKnown = ["manabolt"];
+        MJ.watchRunner(m, MJ.makeRNG("c17-law-w")); MJ.hireRunner(m, "permanent");
+        return m;
+      };
+      const runFor = (m) => {
+        const s = MJ.mintSite("c17-law-site", 2, { value: 4 });
+        MJ.initSecurityState(MJ.makeRNG("c17-law-i"), s);
+        return MJ.beginMission(MJ.makeRNG("c17-law-r"),
+          { site: s, kind: "jobObjective", objective: {} }, [m], 1);
+      };
+
+      // Street cast.
+      const a = drained(), runA = runFor(a);
+      MJ.applyDrain(runA, a, MJ.resistDrain(MJ.makeRNG("da"), a, 4, { drainValue: 6 }));
+      check((a.stun || 0) > 0, "C17: a street cast bills the STUN track");
+
+      // The astral's lattice — the path that used to bill nothing.
+      const b = drained(), runB = runFor(b);
+      MJ.applyDrain(runB, b, MJ.resistDrain(MJ.makeRNG("da"), b, 4, { drainValue: 6 }));
+      check((b.stun || 0) === (a.stun || 0),
+        "C17: the astral bills the SAME — it used to discard stun entirely");
+
+      // Overcasting turns it physical, on every door.
+      const c = drained(), runC = runFor(c);
+      MJ.applyDrain(runC, c, MJ.resistDrain(MJ.makeRNG("dc"), c, 9, { drainValue: 6 }));
+      check((c.wounds || 0) > 0 && (c.stun || 0) === 0,
+        "C17: overcast Drain is PHYSICAL, and does not touch the stun track");
+
+      // Enough of it drops you — when the TRACK fills, not at an
+      // invented threshold.
+      const d = drained(), runD = runFor(d);
+      let guard = 0;
+      while (!MJ.isDown(d) && guard++ < 40) {
+        MJ.applyDrain(runD, d, MJ.resistDrain(MJ.makeRNG("dd" + guard), d, 4, { drainValue: 8 }));
+      }
+      check(MJ.isDown(d), "C17: enough Drain drops the caster");
+      check((d.stun || 0) >= MJ.stunTrack(d), "C17: and it is the FULL TRACK that does it");
+      check(runD.downed && runD.downed.has(d), "C17: a dropped caster leaves the run");
+      // DROPPED BY EXHAUSTION IS NOT DROPPED BY A BULLET. Whatever
+      // wounds they carry came from stun OVERFLOW (canon: past the
+      // end of the stun track it stops being tiredness) — the
+      // takedown itself must not fill the physical track the way a
+      // firefight does, or a hard casting day would read as a
+      // mauling and risk the 1-in-20 funeral.
+      check((d.wounds || 0) < MJ.physicalTrack(d),
+        "C17: a stun takedown does not fill the physical track (" +
+        d.wounds + "/" + MJ.physicalTrack(d) + ")");
+      check(!d.dead, "C17: and nobody dies of being wrung out");
+
+      // AND IT SURVIVES THE MISSION. An operation is many missions
+      // long, so the Drain a mage took at the second door is still on
+      // them at the fifth.
+      const e = drained(), runE = runFor(e);
+      MJ.applyDrain(runE, e, MJ.resistDrain(MJ.makeRNG("de"), e, 4, { drainValue: 6 }));
+      const carried = e.stun;
+      check(carried > 0, "C17: the probe needs Drain to have landed");
+      const runE2 = runFor(e); // a NEW mission, same runner
+      check(e.stun === carried,
+        "C17: Drain does not end at a mission boundary — it ends when they rest");
+      check(MJ.makeCombatant(e, { side: "crew" }).stun === carried,
+        "C17: and it walks into the next firefight with them");
     }
 
     // ── The astral deep path still exists: same spell, via lattice ─

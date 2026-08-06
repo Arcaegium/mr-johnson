@@ -860,17 +860,24 @@
     return Math.max(0, own + bonus);
   }
 
-  // Did anything ELSE on this ground both perceive this plane AND
-  // actually catch it? Returns the watcher that did, or null.
-  function noticedBy(run, target, plane, runner) {
-    const watchers = perceiversNear(run, target, plane);
-    if (!watchers.length) return null;
+  // ── One notice contest, two guest lists ────────────────────────
+  // Roll the crew's concealment against each watcher's attention and
+  // return the first that catches them. WHO is watching is the only
+  // thing that varies, so it is the only thing the callers differ on
+  // — the dice live here once, or the two lists drift apart.
+  function caughtBy(run, watchers, runner) {
     for (const w of watchers) {
       const hidden = MJ.countHits(MJ.rollDicePool(run.rng, concealmentPool(run, runner, w)));
       const saw = MJ.countHits(MJ.rollDicePool(run.rng, noticePool(w)));
       if (saw > hidden) return w;
     }
     return null;
+  }
+
+  // Did anything ELSE on this ground both perceive this plane AND
+  // actually catch it? Returns the watcher that did, or null.
+  function noticedBy(run, target, plane, runner) {
+    return caughtBy(run, perceiversNear(run, target, plane), runner);
   }
 
   // ── Who sees a cast — INCLUDING the thing standing in front of you
@@ -887,12 +894,7 @@
   function castNoticedBy(run, here, runner) {
     const watchers = perceiversNear(run, here, "physical").slice();
     if (here && sensesPlane(here, "physical") && !run.neutralized.has(here)) watchers.push(here);
-    for (const w of watchers) {
-      const hidden = MJ.countHits(MJ.rollDicePool(run.rng, concealmentPool(run, runner, w)));
-      const saw = MJ.countHits(MJ.rollDicePool(run.rng, noticePool(w)));
-      if (saw > hidden) return w;
-    }
-    return null;
+    return caughtBy(run, watchers, runner);
   }
 
   // Is this act's SOUND covered? Hush and Silence blanket the crew's
@@ -1437,6 +1439,21 @@
     const runner = combatant.source;
     const overflow = Math.max(0,
       (combatant.physical - combatant.physicalMax) + (combatant.stun - combatant.stunMax));
+    // ── WHICH TRACK PUT THEM DOWN ────────────────────────────────
+    // Filling the stun track is UNCONSCIOUS: they are out of the
+    // operation and carried home, but nobody is dying of exhaustion
+    // and nothing needs a medic. Filling the physical track is the
+    // one that can kill. Treating a drained mage like a shot one
+    // would have handed every hard casting day a 1-in-20 funeral and
+    // a full physical track, which is not what Drain is.
+    const byStunOnly = (combatant.physical || 0) < (combatant.physicalMax || 0);
+    if (byStunOnly) {
+      runner.stun = MJ.stunTrack(runner); // out cold, and still carrying it
+      return {
+        runner: runner.identity.handle, died: false, wounds: runner.wounds || 0,
+        unconscious: true, stun: runner.stun,
+      };
+    }
     if (run.rng.chance(DEATH_ON_TAKEDOWN)) {
       // ── Stabilize: the spell between the wound and the grave ────
       // Canon: it stops dying, nothing more — the runner is exactly
@@ -1618,35 +1635,38 @@
     };
   }
 
+  // ── ONE DRAIN LAW, EVERYWHERE ───────────────────────────────────
   // Drain lands on the caster, not the target. Stun normally — they
   // are wrung out, and it clears with rest. PHYSICAL if they
   // overcast, because reaching past what you can hold is an injury,
   // and that is the line the mage chooses to cross or not.
   //
-  // Enough Drain drops them out of the run, exactly like a takedown:
-  // a mage who overreaches on the second door is not walking to the
-  // fifth. Wounds land through the same path as any other casualty.
-  const DRAIN_DOWN_THRESHOLD = 8;
-
+  // It goes on the DOSSIER'S OWN TRACKS. There is no per-run
+  // accumulator any more and no invented threshold: a caster drops
+  // when their stun track FILLS, which is the same rule a stun baton
+  // obeys, and they carry what is left of it into the next mission
+  // because an operation is many missions long.
+  //
+  // Every path bills through here — meatspace verbs, utility casts,
+  // the astral's lattice, spirit binding. Four workarounds used to
+  // live where this one function does, which is why the same Force-6
+  // Stunbolt cost three different things depending on which door the
+  // mage cast through, and cost NOTHING on the astral.
   function applyDrain(run, runner, drain) {
     if (!drain || drain.damage <= 0) return drain;
-    if (!run.drainTaken) run.drainTaken = new Map();
-    const total = (run.drainTaken.get(runner) || 0) + drain.damage;
-    run.drainTaken.set(runner, total);
-    if (total >= DRAIN_DOWN_THRESHOLD) {
-      if (!run.downed) run.downed = new Set();
-      if (!run.downed.has(runner)) {
-        run.downed.add(runner);
-        drain.dropped = true;
-        drain.casualty = resolveTakedown(run, {
-          source: runner,
-          physical: drain.physical ? total : 0,
-          physicalMax: DRAIN_DOWN_THRESHOLD,
-          stun: drain.physical ? 0 : total,
-          stunMax: DRAIN_DOWN_THRESHOLD,
-        });
-      }
-    }
+    const hit = MJ.takeDamage(runner, drain.damage, !drain.physical);
+    drain.overflowed = hit.overflow;
+    if (!hit.down) return drain;
+    if (!run) return drain; // no run to fall out of — the caller owns it
+    if (!run.downed) run.downed = new Set();
+    if (run.downed.has(runner)) return drain;
+    run.downed.add(runner);
+    drain.dropped = true;
+    drain.casualty = resolveTakedown(run, {
+      source: runner,
+      physical: runner.wounds || 0, physicalMax: MJ.physicalTrack(runner),
+      stun: runner.stun || 0, stunMax: MJ.stunTrack(runner),
+    });
     return drain;
   }
 
@@ -2349,6 +2369,20 @@
       const skill = act.def.skill;
       if (!skill || !act.effective) continue;
       if (knownUseless(run, obstacle, skill)) continue;
+      // ── A SPELL VERB IS NOT A SKILL GAP ──────────────────────────
+      // Spell verbs are gated on the GRIMOIRE, not the skill, so
+      // counting them by `def.skill` taught two wrong lessons: a
+      // crew with no mage was told to hire "sorcery" — any mage will
+      // do — when what the guard needs is a mage who knows an attack
+      // spell; and a mage with the wrong book (all Heal, no bolts)
+      // had sorcery ranks, so the gap vanished and the stall taught
+      // nothing at all.
+      if (act.def.carries) {
+        if (upright.some((r) => act.def.carries(r))) continue; // somebody can — no gap
+        const want = act.def.spellShape || act.def.spellId ? "a spell that answers this" : null;
+        if (want && missing.indexOf(want) === -1) missing.push(want);
+        continue;
+      }
       let bestRank = 0;
       for (const skills of eff) bestRank = Math.max(bestRank, skills[skill] || 0);
       // One thing can offer the same skill twice (a guard can be
@@ -2859,6 +2893,14 @@
   // The mage's mid-run actions: put a spell up, read the ground.
   MJ.castUtilitySpell = castUtilitySpell;
   MJ.revealedRead = revealedRead;
+  // THE one drain law. Exported so the astral and the conjuring
+  // bench bill through the same function the street does, instead of
+  // each inventing what Drain costs on their own plane.
+  MJ.applyDrain = applyDrain;
+  // Who can see the crew from where they stand. Exported so the
+  // street pillar asks the SAME question the witness rules ask,
+  // rather than re-deriving it with slightly different filtering.
+  MJ.perceiversNear = perceiversNear;
   MJ.missionAbort = missionAbort;
   MJ.missionDone = missionDone;
   MJ.finishMission = finishMission;

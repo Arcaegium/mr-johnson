@@ -68,6 +68,21 @@
   // both have, so either can be measured without being in a fight.
   // The roster needs that: a runner's carried injuries are boxes on
   // the same physical track they would fill in combat.
+  // ── BOTH TRACKS ARE PERSISTENT ─────────────────────────────────
+  // A runner carries `wounds` (physical) and `stun` on the DOSSIER,
+  // not merely inside a fight. That was not always true, and the gap
+  // is what made Drain incoherent: Drain is stun damage, stun damage
+  // needs a stun track, and outside combat there was nowhere to put
+  // it — so every caster invented a local workaround instead.
+  //
+  // It also has to be persistent because a RUN IS NOT ONE MISSION.
+  // Missions string together into longer operations, so a mage who
+  // burned themselves out on the second door is still burned out on
+  // the fifth. Drain does not end at a mission boundary; it ends
+  // when they rest.
+  //
+  // Stun clears fast and physical does not — that is the whole
+  // difference between being wrung out and being hurt.
   function physicalTrack(c) {
     return 8 + Math.ceil(((c.attributes || {}).body || 1) / 2);
   }
@@ -75,11 +90,47 @@
     return 8 + Math.ceil(((c.attributes || {}).willpower || 1) / 2);
   }
 
-  // The two damages differ in what they are, so they differ in what
-  // they leave behind. Physical damage is injury — it rides home on
-  // the runner and is still there next week unless somebody treats
-  // it. Stun is exhaustion, a beating, the ringing after a stun
-  // baton: real inside the fight, gone by the next job.
+  // What a runner is carrying right now, clamped to their tracks.
+  function carriedStun(runner) {
+    return Math.max(0, Math.min(runner.stun || 0, stunTrack(runner)));
+  }
+
+  // Filling EITHER track puts you down. Read off the dossier, so the
+  // same question has the same answer in a fight, between missions,
+  // and on the hub screen.
+  function isDown(runner) {
+    return (runner.wounds || 0) >= physicalTrack(runner) ||
+      (runner.stun || 0) >= stunTrack(runner);
+  }
+
+  // ── One damage law, for anything holding tracks ────────────────
+  // Takes a RUNNER (dossier) or a COMBATANT and writes the right
+  // track. Overflow past a full track is returned so the caller can
+  // price how badly it went. Stun overflow bleeds into physical, per
+  // canon: fill the stun track and keep taking stun, and it starts
+  // doing real damage.
+  function takeDamage(target, amount, isStun) {
+    if (!target || amount <= 0) return { taken: 0, overflow: 0, down: false };
+    if (isStun) {
+      const cap = stunTrack(target);
+      target.stun = (target.stun || 0) + amount;
+      const overflow = Math.max(0, target.stun - cap);
+      if (overflow > 0) {
+        target.stun = cap;
+        // Past the end of the stun track it stops being tiredness.
+        target.wounds = (target.wounds || 0) + Math.ceil(overflow / 2);
+      }
+      return { taken: amount, overflow: overflow, down: isDown(target) };
+    }
+    target.wounds = (target.wounds || 0) + amount;
+    const cap = physicalTrack(target);
+    return { taken: amount, overflow: Math.max(0, target.wounds - cap), down: isDown(target) };
+  }
+
+  // The two damages differ in what they ARE, so they differ in what
+  // it takes to clear them — not in whether they persist. Both ride
+  // home on the runner; physical is injury and mends in days, stun
+  // is exhaustion and mends overnight.
   function carriedDamage(runner) {
     return Math.max(0, Math.min(runner.wounds || 0, physicalTrack(runner)));
   }
@@ -92,15 +143,34 @@
   // without it every scratch would need a medic, and the roster
   // would only ever get worse. Paying for Medicae buys speed, and
   // speed is what matters when a contract has a window.
+  //
+  // STUN CLEARS FAST. A night off puts most of it back, and that is
+  // the point: Drain is meant to price how hard a mage pushed
+  // THROUGH AN OPERATION, not to accumulate across a career. If it
+  // healed at injury's rate, one hard casting day would bench a mage
+  // for a week and nobody would ever push Force again. Willpower is
+  // what carries it off, the same attribute that resisted it.
   const REST_DAYS_PER_BOX = 4;
+  const STUN_CLEARED_PER_DAY = 3;
   function restDay(runner, daysRested) {
-    if (!runner || !runner.wounds) return 0;
-    const rate = REST_DAYS_PER_BOX - Math.floor((runner.attributes.body || 1) / 3);
-    const every = Math.max(1, rate);
-    if (daysRested % every !== 0) return 0;
-    const healed = Math.min(runner.wounds, 1);
-    runner.wounds -= healed;
-    return healed;
+    if (!runner) return 0;
+    let cleared = 0;
+    if (runner.stun > 0) {
+      const rate = STUN_CLEARED_PER_DAY + Math.floor((runner.attributes.willpower || 1) / 3);
+      const off = Math.min(runner.stun, rate);
+      runner.stun -= off;
+      cleared += off;
+    }
+    if (runner.wounds > 0) {
+      const rate = REST_DAYS_PER_BOX - Math.floor((runner.attributes.body || 1) / 3);
+      const every = Math.max(1, rate);
+      if (daysRested % every === 0) {
+        const healed = Math.min(runner.wounds, 1);
+        runner.wounds -= healed;
+        cleared += healed;
+      }
+    }
+    return cleared;
   }
 
   // ── Effects: everything that shifts the numbers ────────────────
@@ -155,9 +225,15 @@
     // charge a wounded runner twice for the same wound.
     wounded:    { label: "wounded",     kind: "condition", channels: { defence: 0 }, derived: true },
 
-    // Boons — chrome, magic, drugs. Nothing generates these yet;
-    // they are here so the systems that will can plug in without
-    // touching the resolver.
+    // Boons — chrome, magic, drugs.
+    //
+    // THIS TABLE IS NOT THE WHOLE TABLE. models/spells.js injects
+    // eight more rows at load (sustaining, bolstered, sapped,
+    // agonized, spellArmor, painEdited, dominated, barricaded) —
+    // deliberately, because the grimoire owns what its own spells
+    // do, and a spell effect is a row rather than a resolver change.
+    // Anything reading EFFECTS as a closed list will be wrong about
+    // a third of it.
     wired:       { label: "wired reflexes",  kind: "boon", channels: { initiative: 4, initiativeDice: 1 } },
     combatSense: { label: "combat sense",    kind: "boon", channels: { defence: 2 } },
     painEditor:  { label: "pain editor",     kind: "boon", channels: { soak: 2 } },
@@ -349,11 +425,13 @@
       // `initiativeDice` channel rather than by writing here.
       baseInitiativeDice: opts.initiativeDice || source.initiativeDice || 1,
       ammo: opts.ammo !== undefined ? opts.ammo : 30,
-      // A runner walks in carrying whatever they have not healed.
-      // Turning up to a firefight with four boxes already filled is
-      // the whole reason a Johnson keeps a bench and pays a medic.
+      // A runner walks in carrying whatever they have not healed —
+      // BOTH tracks. Turning up to a firefight with four boxes
+      // already filled is the whole reason a Johnson keeps a bench
+      // and pays a medic; turning up half-drained from the last door
+      // is the same lesson for a mage.
       physical: opts.physical !== undefined ? opts.physical : carriedDamage(source),
-      stun: 0,
+      stun: opts.stun !== undefined ? opts.stun : carriedStun(source),
       down: false,
       effects: [],
     };
@@ -379,12 +457,19 @@
   // What the fight leaves on the roster. Called for everyone still
   // standing when it ends; the ones who went down are the takedown
   // path's business, since going down is where dying is decided.
+  // BOTH TRACKS COME HOME. Stun used to evaporate when a fight
+  // ended, on the reasoning that a beating wears off — but "wears
+  // off" is a matter of RESTING, not of the shooting stopping, and
+  // an operation is many missions long. A mage who took Drain at the
+  // second door and a samurai who ate a stun baton at the third are
+  // both still carrying it at the fifth. Rest is what clears it.
   function carryDamageHome(combatant) {
     const runner = combatant.source;
     if (!runner || typeof runner.wounds !== "number") return 0;
-    const before = runner.wounds;
-    runner.wounds = Math.max(runner.wounds, combatant.physical);
-    return runner.wounds - before;
+    const before = (runner.wounds || 0) + (runner.stun || 0);
+    runner.wounds = Math.max(runner.wounds || 0, combatant.physical);
+    runner.stun = Math.max(runner.stun || 0, combatant.stun);
+    return ((runner.wounds || 0) + (runner.stun || 0)) - before;
   }
 
   // Flat, no roll — you can read the whole order before committing.
@@ -715,6 +800,9 @@
   MJ.physicalTrack = physicalTrack;
   MJ.stunTrack = stunTrack;
   MJ.carriedDamage = carriedDamage;
+  MJ.carriedStun = carriedStun;
+  MJ.isDown = isDown;
+  MJ.takeDamage = takeDamage;
   MJ.carryDamageHome = carryDamageHome;
   MJ.restDay = restDay;
 })();

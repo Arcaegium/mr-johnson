@@ -221,7 +221,13 @@
     const obstacle = run.latticeFor;
     const drain = MJ.latticeDrain(rng.fork ? rng.fork("ld") : rng, lattice);
     const mage = projector(run);
-    if (drain.damage > 0 && drain.physical) mage.wounds = (mage.wounds || 0) + drain.damage;
+    // ONE DRAIN LAW. This used to write wounds only when overcast and
+    // silently discard stun Drain — which made the astral the one
+    // plane where a mage could push flat out forever for free, on
+    // exactly the pillar where Drain is supposed to be the tether's
+    // partner. It bills through mission.js like every other cast now,
+    // tracks and drop included.
+    MJ.applyDrain(run, mage, drain);
 
     // Every move at the lattice was time out of body.
     for (let i = 0; i < Math.max(1, lattice.moves); i++) MJ.tickTether(run);

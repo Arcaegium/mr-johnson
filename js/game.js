@@ -530,6 +530,27 @@
           (t.pool !== undefined ? " " + t.pool + "d" : "") + ") — " + t.hits + "/" + t.threshold +
           " over " + t.intervals + " interval" + (t.intervals === 1 ? "" : "s") + ": " + outcome +
           (t.criticalGlitch ? " + CRITICAL GLITCH" : "") + readNote(t.read));
+      } else if (t.cast) {
+        // A CAST IS NOT A SKILL CHECK, and it has no obstacle when it
+        // is put up on open ground before the crew goes in. Falling
+        // through to the generic line printed "undefined Tundefined
+        // ... vs undefined needed", because every field that line
+        // reads belongs to an approach against a thing.
+        logLine(session, "    " + t.runner + " cast " + t.verb +
+          (t.prep ? " before going in" : "") + " at Force " + t.force +
+          " (" + t.pool + "d, " + t.hits + " hit" + (t.hits === 1 ? "" : "s") + "): " +
+          // t.result already opens with the spell's name, so strip it
+          // rather than saying it twice on one line.
+          (t.success
+            ? String(t.result).replace(t.verb + " — ", "").replace(t.verb, "held")
+            : "the circuit would not hold") + readNote(t.read),
+          "dispatch", { runners: [t.runner], spell: t.spell, force: t.force, success: !!t.success });
+        if (t.drain && t.drain.damage > 0) {
+          logLine(session, "      Drain: " + t.drain.damage +
+            (t.drain.physical ? " PHYSICAL (overcast)" : " stun") +
+            (t.drain.dropped ? " — " + t.runner + " DROPPED" : ""),
+            "roster", { runners: [t.runner], stun: t.drain.physical ? 0 : t.drain.damage });
+        }
       } else if (t.rejected) {
         // Found out the hard way — that's what the attempt bought.
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " tried " + t.skill + " — " + t.rejected);
@@ -635,7 +656,7 @@
       else {
         runner.restedDays = (runner.restedDays || 0) + 1;
         const mended = MJ.restDay(runner, runner.restedDays);
-        if (mended > 0 && runner.wounds === 0) {
+        if (mended > 0 && !runner.wounds && !runner.stun) {
           logLine(session, runner.identity.handle + " is back to full health",
             "roster", { runners: [runner.identity.handle], wounds: 0 });
         }
@@ -677,14 +698,23 @@
 
     // Keep the day's plan as replayable SPECS — the intent, never the
     // dice (layer 4 stays fresh on every attempt, by design).
+    // EVERY field a mission is rebuilt from, or the repeat quietly
+    // becomes a different play: a reagent harvest without its `kind`
+    // repeats as a generic one, a crafting job without its
+    // `templateId` regresses to the legacy tier-only exercise, and a
+    // matrix or astral run with no branch at all repeats as "no
+    // longer applicable".
     session.lastPlan = session.queue.map((q) => {
       const m = q.mission;
       return {
         kind: MJ.missionKind(m), label: q.label, runners: q.runners.slice(),
         mission: MJ.missionKind(m) === "jobObjective" ? m : null,
         site: m.site || null, lens: m.lens || null,
+        resourceKind: m.resourceKind || m.kindWanted || null,
+        templateId: m.templateId || null,
         itemTier: m.itemTier || null, patient: m.patient || null,
         searchKind: m.searchKind || null,
+        wantData: !!m.wantData,
       };
     });
 
@@ -727,10 +757,14 @@
         if (job && (job.expired || job.paid)) mission = null;
       }
     } else if (p.kind === "recon") mission = MJ.createReconMission(p.site, p.lens);
-    else if (p.kind === "resourceGathering") mission = MJ.createResourceMission(p.site);
-    else if (p.kind === "crafting") mission = MJ.createCraftingMission(p.itemTier);
+    else if (p.kind === "resourceGathering") mission = MJ.createResourceMission(p.site, p.resourceKind);
+    else if (p.kind === "crafting") mission = MJ.createCraftingMission(p.templateId || p.itemTier);
     else if (p.kind === "medical") mission = p.patient && p.patient.wounds > 0 ? MJ.createMedicalMission(p.patient) : null;
     else if (p.kind === "search") mission = makeSearchMission(session, p.searchKind);
+    // The two pillar runs were simply absent, so every astral or
+    // matrix play repeated as "no longer applicable".
+    else if (p.kind === "matrixRun") mission = MJ.createMatrixMission(p.site, { wantData: p.wantData });
+    else if (p.kind === "astralRun") mission = MJ.createAstralMission(p.site);
     if (!mission) {
       logLine(session, "repeat: skipped \"" + p.label + "\" — no longer applicable");
       return { ok: false, error: "no longer applicable" };

@@ -108,8 +108,16 @@
           if (!rightKind) e.why = def.analyzes === "sapient" ? "it has no mind to probe" : "it is not a made thing to read";
           else e.available = true;
         }
+      } else if ((run.sustaining || []).some((s) => s.spell === id && s.caster === caster)) {
+        // Holding it — so the useful act is LETTING GO. Sustaining
+        // costs the caster −2 on everything else, and until this
+        // existed there was no way to hand that back short of ending
+        // the run.
+        e.why = "holding it — cast again to let it go";
+        e.available = true;
+        e.release = true;
       } else if ((run.sustaining || []).some((s) => s.spell === id)) {
-        e.why = "already holding it";
+        e.why = "somebody else is already holding it";
       } else {
         // Buffs and barriers go up from wherever they are standing.
         // Armor lands on the worst-dressed runner — the same person
@@ -128,7 +136,9 @@
       e.held = held;
       e.threat = cls;
       e.html = e.available ? nm(def.label) : dim(def.label);
-      e.meta = e.available
+      e.meta = e.release
+        ? dim("let it go — hands back the −2 it is costing them")
+        : e.available
         ? "sorcery " + num(pool + "d") +
           dim(" · drain F" + (def.drain >= 0 ? "+" + def.drain : def.drain)) +
           (e.target && e.target !== caster ? dim(" · on " + e.target.identity.handle) : "") +
@@ -213,7 +223,10 @@
         actions: [{ id: "back", label: opts.backLabel || "put the grimoire away", tone: "warn-btn" }],
         onChoose: (opt, i) => {
           const e = entries[i];
-          if (e && e.available) pickForce(e);
+          if (!e || !e.available) return;
+          // Letting go is not a cast — no Force, no Drain, no roll.
+          if (e.release) return opts.onRelease && opts.onRelease(e);
+          pickForce(e);
         },
         onAction: () => opts.onBack && opts.onBack(),
       });

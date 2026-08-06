@@ -58,7 +58,7 @@
   const VERBS = {
     traverse:   { label: "move to another node", skill: null,
                   describe: "the persona walks the system's own topology" },
-    probe:      { label: "probe the node", skill: "computer",
+    probe:      { label: "probe the node", skill: "hacking",
                   describe: "what is on it, before you are standing on it" },
     run:        { label: "run against the ice", skill: "hacking",
                   describe: "execute — the ice gets a say" },
@@ -194,7 +194,7 @@
     }
 
     if (verb === "probe") {
-      const pool = MJ.dicePoolFor(dk, "computer", MJ.gearBonusFor(dk, "computer"));
+      const pool = MJ.dicePoolFor(dk, "hacking", MJ.gearBonusFor(dk, "hacking"));
       if (pool <= 0) return { ok: false, error: "nobody here can read a node" };
       const target = opts.node !== undefined ? opts.node : at;
       const node = nodeAt(run, target);
@@ -250,11 +250,13 @@
     run.jackedOut = true;
     const traced = ow.converged;
     if (traced) {
-      // Yanked rather than walked. Biofeedback fills the stun track,
-      // which is what makes convergence something to fear rather
-      // than a soft ending.
-      const dmg = 3;
-      dk.wounds = (dk.wounds || 0) + Math.ceil(dmg / 2);
+      // Yanked rather than walked. Biofeedback fills the STUN track
+      // — which is what makes convergence something to fear rather
+      // than a soft ending, and it is what the code now actually
+      // does: this used to write `wounds`, contradicting its own
+      // comment, because there was no persistent stun track to write.
+      const dmg = 6;
+      MJ.takeDamage(dk, dmg, true);
       if (!run.downed) run.downed = new Set();
       run.downed.add(dk);
     }
