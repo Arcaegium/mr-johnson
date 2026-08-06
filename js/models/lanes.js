@@ -226,20 +226,29 @@
   // of a briefing.
   //
   // `shown` is { physical, astral, matrix } as raw 1-10 values.
-  function laneDemands(site, shown) {
+  // `confirmed` is the same keys as booleans: has the crew actually
+  // proven that axis, or is this still the briefing talking? It never
+  // changes a number — it only lets the readout admit which of these
+  // it is standing behind, the same way the header already prints
+  // "~4d" against "4d✓".
+  function laneDemands(site, shown, confirmed) {
     shown = shown || {};
+    confirmed = confirmed || {};
     const demands = {};
     const note = (laneId, projection) => {
       const value = Math.max(1, Math.min(10, Math.round(shown[projection] || 1)));
       const need = MJ.diceForSecurity(value);
       const cur = demands[laneId];
       if (!cur || need > cur.need) {
-        demands[laneId] = { lane: laneId, need: need, unit: "dice", from: projection };
+        demands[laneId] = {
+          lane: laneId, need: need, unit: "dice", from: projection,
+          estimated: !confirmed[projection],
+        };
       }
     };
 
     const things = siteObstacles(site);
-    let worstPower = 0;      // the hardest hit the site can land
+    let typicalPower = 0;    // the hit you should EXPECT to take
     let worstArmour = 0;     // the toughest thing that shoots back
     let toughest = null;     // and the thing itself, for the Attack gate
     let sharpestEyes = 0;    // the best pair of eyes on the ground
@@ -256,17 +265,55 @@
         for (const laneId of lanesOfVerb(act.def)) note(laneId, projection);
       }
 
-      if (thing.fights) {
-        const w = MJ.weaponProfile(MJ.weaponForTier(MJ.OBSTACLE_TEMPLATE(thing.type) || {}, asTier));
+      // ── ONLY THINGS WITH A BODY JOIN THE FIGHT READ ────────────
+      // Black ICE has `fights: true`, armour 4 and a Black Hammer,
+      // and NONE of that is a firefight. It burns a decker's brain —
+      // biofeedback, straight onto the stun track — so no coat in the
+      // armoury does anything about it, and no gun in the armoury
+      // does anything TO it (there is no Matrix attack verb, by
+      // design). Letting it into this read broke the card twice:
+      //
+      //   Defense — a P4 site demanded armour 8, quoting the Power of
+      //     something that will never be in the room.
+      //   Attack  — ICE was the "toughest thing that fights back", so
+      //     `attackPowerFor` found no verb that could even reach it,
+      //     every runner failed the gate, and a wired samurai read
+      //     Attack 0 against a building full of ordinary guards.
+      //
+      // The second one is worse than the first: a false zero in the
+      // one lane whose whole job is to warn you honestly. Getting
+      // caught by ICE is real exposure, but it is Tech's problem —
+      // don't be seen — not something you answer with armour or a gun.
+      if (thing.fights && (thing.presence || []).some((p) => p !== "matrix")) {
+        // ── DEFENSE READS THE TYPICAL HIT, NOT THE WORST GUN ──────
+        // Obstacle tiers are drawn uniformly across 1..rating, so the
+        // single hardest thing a site COULD field is an outlier — and
+        // nobody standing outside the building knows whether it is in
+        // there. Reading Defense off that outlier made the lane
+        // structurally red: at the softest security band in the game
+        // the best affordable coat was still a point short, which
+        // trains a player to ignore the one chip trying to tell them
+        // they are going to bleed.
+        //
+        // The MEDIAN tier is what you should expect to be shot by,
+        // and Defense is not a gate you clear once. It is ATTRITION —
+        // you get shot at repeatedly by whatever turns up, and it is
+        // the ordinary round that decides whether the crew comes
+        // home. The Attack gate below deliberately keeps the WORST
+        // case, because that one really is pass/fail: a guard you
+        // cannot scratch is a fight you cannot win, and softening it
+        // would restore the exact silence that lost a crew.
+        const typicalTier = Math.max(1, Math.ceil(asTier / 2));
+        const w = MJ.weaponProfile(MJ.weaponForTier(MJ.OBSTACLE_TEMPLATE(thing.type) || {}, typicalTier));
         // Strength rides melee Power, and a site's fighters scale
         // their attributes with tier exactly as mission.js builds
         // them — 2 + floor(t/3).
-        const strength = 2 + Math.floor(asTier / 3);
+        const strength = 2 + Math.floor(typicalTier / 3);
         const power = (w.power || 0) + (w.useStrength ? strength : 0);
         // AP eats armour, so folding it in here keeps both sides of
         // the Defense line in plain armour points: you are safe from
         // this weapon when your rating reaches Power minus AP.
-        worstPower = Math.max(worstPower, power - (w.ap || 0));
+        typicalPower = Math.max(typicalPower, power - (w.ap || 0));
         const templateArmour = (MJ.OBSTACLE_TEMPLATE(thing.type) || {}).armour || 0;
         const armour = templateArmour + Math.floor(asTier / 2);
         if (armour >= worstArmour) { worstArmour = armour; toughest = thing; }
@@ -278,11 +325,17 @@
       }
     }
 
-    if (worstPower > 0) {
-      demands.defense = { lane: "defense", need: worstPower, unit: "armour", from: "physical" };
+    if (typicalPower > 0) {
+      demands.defense = {
+        lane: "defense", need: typicalPower, unit: "armour", from: "physical",
+        estimated: !confirmed.physical,
+      };
     }
     if (sharpestEyes > 0) {
-      demands.awareness = { lane: "awareness", need: sharpestEyes, unit: "dice", from: "physical" };
+      demands.awareness = {
+        lane: "awareness", need: sharpestEyes, unit: "dice", from: "physical",
+        estimated: !confirmed.physical,
+      };
     }
     // Carried for the Attack read below — the wall a bullet has to
     // get through before the dice matter at all, and the thing it
@@ -347,9 +400,9 @@
   // the card does not reshuffle itself between two jobs. Lanes the
   // site has no use for are simply absent — a card that always lists
   // seven rows says nothing about the building.
-  function laneReport(runners, site, shown) {
+  function laneReport(runners, site, shown, confirmed) {
     const crew = (runners || []).slice();
-    const demands = laneDemands(site, shown);
+    const demands = laneDemands(site, shown, confirmed);
     const fightArmour = demands._fightArmour || 0;
     const toughest = demands._toughest || null;
     const rows = [];
@@ -375,6 +428,9 @@
         unit: demand.unit,
         have: have,
         need: demand.need,
+        // Still the briefing talking. The crew's own side is never
+        // marked — they know what they hired and what they issued.
+        estimated: !!demand.estimated,
         covered: have >= demand.need,
       });
     }

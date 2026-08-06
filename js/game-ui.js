@@ -591,11 +591,13 @@
   function shownAxes(site) {
     if (!site) return null;
     const v = MJ.siteIntelView(site, S.day);
-    const out = {};
+    const values = {};
+    const confirmed = {};
     for (const axis of ["physical", "astral", "matrix"]) {
-      out[axis] = v[axis].confirmed ? v[axis].confirmed.value : v[axis].estimated;
+      values[axis] = v[axis].confirmed ? v[axis].confirmed.value : v[axis].estimated;
+      confirmed[axis] = !!v[axis].confirmed;
     }
-    return out;
+    return { values: values, confirmed: confirmed };
   }
 
   // ── The report card ─────────────────────────────────────────────
@@ -614,15 +616,24 @@
   function laneCard(runners, site) {
     const axes = shownAxes(site);
     if (!axes) return "";
-    const rows = MJ.laneReport(runners, site, axes);
+    const rows = MJ.laneReport(runners, site, axes.values, axes.confirmed);
     if (!rows.length) return "";
-    return `<div class="lanes">` + rows.map((r) =>
-      `<span class="lane${r.covered ? " ok" : " short"}" title="${r.unit === "armour"
-        ? "armour rating against the effective Power of the worst weapon here"
-        : "dice pool the crew fronts, against the pool this lane takes"}">` +
+    return `<div class="lanes">` + rows.map((r) => {
+      // A "~" on the RIGHT of the slash only. What the crew brings is
+      // a fact — you know who you hired and what you issued — and what
+      // is waiting is a briefing until somebody has been inside and
+      // seen it. Marking the needs is the same admission the header
+      // already makes with "~4d" against "4d✓", said per lane.
+      const need = (r.estimated ? "~" : "") + r.need + (r.unit === "dice" ? "d" : "");
+      const why = r.unit === "armour"
+        ? "your worst-dressed runner's armour, against the Power of the round you should expect to take here"
+        : "dice pool the crew fronts, against the pool this lane takes";
+      return `<span class="lane${r.covered ? " ok" : " short"}" ` +
+        `title="${why}${r.estimated ? " — estimated; nobody has confirmed this yet" : " — confirmed"}">` +
         `<span class="ln">${r.label}</span>` +
-        `<span class="lv">${r.have}<span class="lsep">/</span>${r.need}${r.unit === "dice" ? "d" : ""}</span>` +
-      `</span>`).join("") + `</div>`;
+        `<span class="lv">${r.have}<span class="lsep">/</span>${need}</span>` +
+      `</span>`;
+    }).join("") + `</div>`;
   }
 
   function renderCrewDialog() {

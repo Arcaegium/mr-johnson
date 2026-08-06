@@ -482,6 +482,46 @@ weapon, so incoming Power was 6 at every rating and armour was worth the same
 everywhere. Guards now ladder holdout → pistol → SMG → rifle → machine gun
 across tiers 1–10, which is what gives Defense something to be a read *about*.
 
+**Defense reads the TYPICAL hit; Attack reads the WORST case.** Obstacle tiers
+are drawn uniformly across `1..rating`, so the single hardest thing a site
+*could* field is an outlier — and nobody standing outside knows whether it is in
+there. The two lanes resolve that differently on purpose:
+
+- **Defense is attrition, not a gate.** You get shot at repeatedly by whatever
+  turns up, and it is the ordinary round that decides whether the crew comes
+  home. So it reads the **median** tier. Off the worst gun it was structurally
+  red — at the softest band in the game the best affordable coat was still a
+  point short — and a chip that is red whatever you do teaches you to stop
+  reading it.
+- **Attack really is pass/fail.** A guard you cannot scratch is a fight you
+  cannot win, so it keeps the worst case. Softening it would restore the exact
+  silence that lost a crew.
+
+**The armour ladder is contiguous, 1–8, and that is load-bearing.** Armour is one
+side of the Penetrate gate, so every rating a weapon can demand has to be
+*buyable* or the gate has bands nobody can stand in. It ran 1, 2, 3, 6, 8 — with
+a hole at 4–5 the best affordable coat left a crew one short of the softest
+target, and the next rung was a 3.5× price jump, so "buy better armour" was a
+wall with a door on the far side of it. Personal kit tops out at the tier cap
+too: a runner with a real combat record owns a jacket that stops a holdout round.
+
+**ICE is not a firefight, and neither half of the fight read may see it.** Black
+ICE carries `fights: true`, armour and a Black Hammer, and none of that is
+answerable with a coat or a gun — it burns a decker's brain onto the stun track,
+and there is no Matrix attack verb to shoot back with. Left in, it broke the card
+twice: a P4 site demanded armour 8 quoting a weapon that will never be in the
+room, and — worse — ICE became the "toughest thing that fights back", so every
+runner failed the Penetrate gate and a wired samurai read **Attack 0** against a
+building full of ordinary guards. A false zero in the one lane whose whole job is
+to warn you honestly is worse than no lane at all. Getting caught by ICE is real
+exposure, but it belongs to **Tech** — don't be seen — not to armour or guns.
+
+**The card marks what is still a briefing.** A `~` sits on the right of the slash
+until that axis has been confirmed, the same admission the header already makes
+with `~4d` against `4d✓`. What the crew brings is never marked: you know who you
+hired and what you issued. Confirming an axis changes no number — only what the
+readout is entitled to claim.
+
 ---
 
 ## 6. JOBS, THE BOARD & MISSIONS

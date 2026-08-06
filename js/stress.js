@@ -2073,6 +2073,94 @@
       check(answerable.has(id), "C25: and a lane nothing here answers to must NOT be (" + id + ")");
     }
 
+    // ── The armour ladder has no holes in it ─────────────────────
+    // Armour is one side of the Penetrate gate, so every rating a
+    // weapon can demand has to be BUYABLE. It used to run 1, 2, 3, 6,
+    // 8 — and with a hole at 4-5 the best affordable coat left a crew
+    // one point short of the softest target in the game, so "buy
+    // better armour" was a wall with a door on the far side of it.
+    const tiers = Object.keys(MJ.ITEM_TEMPLATES)
+      .filter((k) => MJ.ITEM_TEMPLATES[k].category === "armor")
+      .map((k) => MJ.ITEM_TEMPLATES[k].tier).sort((a, b) => a - b);
+    check(tiers[0] === 1, "C25: the armour ladder starts at 1");
+    for (let i = 1; i < tiers.length; i++) {
+      check(tiers[i] === tiers[i - 1] + 1,
+        "C25: the armour ladder may not skip a rating (" + tiers[i - 1] + " -> " + tiers[i] + ")");
+    }
+
+    // ── Defense reads the TYPICAL hit, and is reachable ──────────
+    // Every Defense demand the game can generate must be answerable
+    // by armour the player can actually buy. A demand nobody can ever
+    // meet is not a warning, it is wallpaper — and a chip that is red
+    // no matter what you do teaches you to stop reading it.
+    const topArmour = tiers[tiers.length - 1];
+    const guardLadder = MJ.OBSTACLE_TEMPLATES.guard.weaponByTier;
+    for (let rating = 1; rating <= 10; rating++) {
+      const typical = Math.max(1, Math.ceil(rating / 2));
+      const w = MJ.weaponProfile(MJ.weaponForTier(MJ.OBSTACLE_TEMPLATES.guard, typical));
+      const demandTypical = (w.power || 0) - (w.ap || 0);
+      check(demandTypical <= topArmour,
+        "C25: a Defense demand must be meetable with armour that exists (rating " +
+        rating + " wants " + demandTypical + ", best is " + topArmour + ")");
+      // And it must genuinely be the median, not the outlier.
+      const worst = MJ.weaponProfile(guardLadder[rating - 1]);
+      check(demandTypical <= (worst.power || 0) - (worst.ap || 0),
+        "C25: Defense reads the round you should EXPECT, never the worst gun on site");
+    }
+
+    // ── ICE IS NOT A FIREFIGHT ───────────────────────────────────
+    // Black ICE carries fights:true, armour and a weapon, and none of
+    // it is answerable with a coat or a gun — it burns a decker's
+    // brain and there is no Matrix attack verb to shoot back with.
+    // Both halves of the fight read must ignore anything that lives
+    // only on the wire. This caught two live bugs: a P4 site quoting
+    // a Defense demand of 8 off a Black Hammer, and a wired samurai
+    // reading Attack 0 because the "toughest thing that fights back"
+    // was code his rifle could not reach.
+    let sawIce = 0, sawBody = 0;
+    for (let i = 0; i < 120; i++) {
+      const s = MJ.mintSite("c25-ice", i);
+      MJ.initSecurityState(MJ.makeRNG("c25-ice-i" + i), s);
+      const axes = { physical: s.security.physical, astral: s.security.astral, matrix: s.security.matrix };
+      const fighters = MJ.siteObstacles(s).filter((o) => o.fights);
+      const ice = fighters.filter((o) => !(o.presence || []).some((p) => p !== "matrix"));
+      const bodies = fighters.filter((o) => (o.presence || []).some((p) => p !== "matrix"));
+      const d = MJ.laneDemands(s, axes, {});
+      if (ice.length) {
+        sawIce += 1;
+        check(!d._toughest || (d._toughest.presence || []).some((p) => p !== "matrix"),
+          "C25: the Attack gate must never point at something with no body (" +
+          (d._toughest && d._toughest.type) + ")");
+        if (!bodies.length) {
+          check(!d.defense, "C25: a site whose only fighters are ICE demands no Defense at all");
+        }
+      }
+      if (bodies.length) sawBody += 1;
+      if (d.defense) {
+        // Every Defense demand must be traceable to something that
+        // can actually stand in front of you.
+        const reachable = bodies.some((o) => {
+          const proj = o.projection || "physical";
+          const typical = Math.max(1, Math.ceil(Math.max(1, Math.min(10, axes[proj] || 1)) / 2));
+          const w = MJ.weaponProfile(MJ.weaponForTier(MJ.OBSTACLE_TEMPLATE(o.type) || {}, typical));
+          return (w.power || 0) + (w.useStrength ? 2 + Math.floor(typical / 3) : 0) - (w.ap || 0) >= d.defense.need;
+        });
+        check(reachable, "C25: a Defense demand must come from something that can be in the room with you");
+      }
+    }
+    check(sawIce > 5 && sawBody > 5, "C25: the ICE probe needs both kinds of site in its sample");
+
+    // ── The card admits which numbers are still a briefing ───────
+    const guessed = MJ.laneReport(crew, site, shown, {});
+    const known = MJ.laneReport(crew, site, shown, { physical: true, astral: true, matrix: true });
+    check(guessed.length === known.length, "C25: confirming an axis changes no lane's presence");
+    for (let i = 0; i < guessed.length; i++) {
+      check(guessed[i].need === known[i].need,
+        "C25: and confirming changes no NUMBER either — it only changes what may be claimed");
+      check(guessed[i].estimated === true && known[i].estimated === false,
+        "C25: an unconfirmed need must be marked as an estimate (" + guessed[i].lane + ")");
+    }
+
     // ── The Penetrate gate, asked before the pool ────────────────
     // A breaching charge is Power 14 and is placed against something
     // standing still. It is not an answer to a guard, and counting it

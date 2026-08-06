@@ -21,9 +21,9 @@ wins and this file is stale — verify before trusting a line here.
 > describing the harness. See `UNDERSTANDING.md` §1, §14 and §15.
 
 Last verified after the lane model landed. Suite: 25 classes,
-89,195 assertions, 0 failures, identical across consecutive runs.
+89,315 assertions, 0 failures, identical across three consecutive runs.
 
-**Baseline moved deliberately**, 95,109 → 89,195. Class 25 is new (102
+**Baseline moved deliberately**, 95,109 → 89,315. Class 25 is new (305
 assertions, the lane model's own probes). The drop is content drift, not lost
 coverage: `generateSkillSpread` now grants a Perception baseline and
 `generateObstacleInstance` picks a weapon off a tier ladder, so both consume the
@@ -192,6 +192,20 @@ js/models/lanes.js    340  THE REPORT CARD -- what a runner NEEDS TO BE.
                               each, capped at the lead's rank). Awareness is
                               max instead (you cannot help someone look);
                               Defense is min (nobody soaks for you).
+                           -- Defense reads the MEDIAN tier (attrition, not a
+                              gate); Attack keeps the WORST case (a guard you
+                              cannot scratch is a fight you cannot win).
+                           -- NEITHER half of the fight read may see ICE. It
+                              has fights:true and a weapon and no coat or gun
+                              answers it. Left in, it demanded armour 8 at a
+                              P4 site AND zeroed Attack for a samurai.
+                           -- `estimated` on a row: the "~" the card prints
+                              until the axis is confirmed. Changes no number.
+js/models/armory.js        -- ARMOUR LADDER IS CONTIGUOUS 1-8. Every rating a
+                              weapon can demand must be BUYABLE or the
+                              Penetrate gate has bands nobody can stand in.
+                              Was 1,2,3,6,8; the 4-5 hole left the best
+                              affordable coat one short of the softest site.
 js/models/lattice.js  330  THE ASTRAL PUZZLE. beginLattice latticePull
                            latticeAbandon latticeDone latticeRead latticeDrain
                            latticeMoveStrength latticeReadDepth

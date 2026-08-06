@@ -94,11 +94,23 @@
     // armour at all, 0% at ranks 1-2 and 100% from rank 3, which is a
     // threshold, not a curve. A decker and a mage turning up naked to
     // a firefight is not "lightly equipped", it is one SMG burst each.
-    paddedVest:   { label: "Padded Vest",            category: "armor", tier: 1, craftSkill: "electronics" },
-    linedCoat:    { label: "Lined Streetcoat",       category: "armor", tier: 2, craftSkill: "electronics" },
-    kevlarLong:   { label: "Kevlar Longcoat",        category: "armor", tier: 3, craftSkill: "electronics" },
-    riotCarapace: { label: "Riot Carapace",          category: "armor", tier: 6, craftSkill: "electronics" },
-    milspecSuit:  { label: "Milspec Hardsuit",       category: "armor", tier: 8, craftSkill: "electronics" },
+    // ── THE LADDER IS CONTIGUOUS, 1-8, AND THAT MATTERS ──────────
+    // It used to run 1, 2, 3, 6, 8, and the holes were not cosmetic.
+    // Armour is one side of the Penetrate gate (Power vs Armour), so
+    // every armour rating a weapon can demand has to be BUYABLE or
+    // the gate has bands nobody can ever stand in. With a hole at 4-5
+    // the best affordable coat left a crew one point short of the
+    // softest target in the game, and the next rung up was a 3.5x
+    // price jump — so "buy better armour" was not a decision, it was
+    // a wall with a door on the far side of it.
+    paddedVest:      { label: "Padded Vest",          category: "armor", tier: 1, craftSkill: "electronics" },
+    linedCoat:       { label: "Lined Streetcoat",     category: "armor", tier: 2, craftSkill: "electronics" },
+    kevlarLong:      { label: "Kevlar Longcoat",      category: "armor", tier: 3, craftSkill: "electronics" },
+    ballisticJacket: { label: "Ballistic Jacket",     category: "armor", tier: 4, craftSkill: "electronics" },
+    corpsecPlate:    { label: "Corpsec Plate",        category: "armor", tier: 5, craftSkill: "electronics" },
+    riotCarapace:    { label: "Riot Carapace",        category: "armor", tier: 6, craftSkill: "electronics" },
+    breacherRig:     { label: "Breacher Rig",         category: "armor", tier: 7, craftSkill: "electronics" },
+    milspecSuit:     { label: "Milspec Hardsuit",     category: "armor", tier: 8, craftSkill: "electronics" },
     // ── Decks & programs ─────────────────────────────────────────
     deckMk1:      { label: "Cyberdeck Mk1",          category: "deck", tier: 3, skill: "hacking", craftSkill: "computer" },
     deckMk2:      { label: "Cyberdeck Mk2",          category: "deck", tier: 6, skill: "hacking", craftSkill: "computer" },
@@ -203,7 +215,11 @@
     rigging:      ["hummingbird", "droneMk1"],
     sorcery:      ["wardingCharm", "sorceryFocus"],
   };
-  const PERSONAL_ARMOR = ["paddedVest", "linedCoat", "kevlarLong"];
+  // Personal armour tops out at the tier cap, same as every other kit
+  // list — a runner with a real combat record owns a jacket that
+  // stops a holdout round, and turning up in a padded vest at rank 8
+  // was never a statement about them, it was the list running out.
+  const PERSONAL_ARMOR = ["paddedVest", "linedCoat", "kevlarLong", "ballisticJacket"];
 
   function personalTierFor(rank) {
     return Math.max(1, Math.min(PERSONAL_TIER_CAP, Math.ceil(rank / 2)));
