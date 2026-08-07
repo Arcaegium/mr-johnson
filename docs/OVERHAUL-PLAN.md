@@ -240,8 +240,15 @@ Ordered by dependency. Do not skip ahead — later steps assume earlier ones.
   That is an ordinary skill-plus-attribute pairing; an earlier pass here talked
   itself into "the model structurally cannot express it" and then invented
   vocabulary to cover the confusion. **Rename to Enforcer. Nothing else
-  changes.** One thing to confirm before a presentation leans on it: whether
-  the resolver actually lets a runner *draw* an attack onto themselves.
+  changes.**
+
+  **Drawing the attack is a STATUS EFFECT, not a new system.** One row in the
+  effects table — a condition on the *enemy*, carrying a targeting behaviour
+  ("may only take physical attacks against the caster") rather than a numeric
+  channel. `combatAct` takes `choice.target` from its caller, so the row needs
+  exactly one read at wherever an NPC's target is chosen. **Locate that call
+  site before building** — it is the only unknown here, and if NPC targeting
+  turns out not to be a single place, that is the thing to fix first.
 
 - **`streetDoc` is the FIGHTER'S CRAFTER — RESOLVED, and it closes four gaps
   at once.** It was never homeless. Confirmed in the registry:
@@ -426,8 +433,63 @@ Two claimed exceptions, both of which failed on inspection:
   exist on, for a reason that only applies to the other three.**
 
 **Phase B action:** ungate `assensing` from mage-only to Awakened (any runner
-with Magic ≥ 1). Adept powers otherwise model as innate gear, not a second
-presentation axis.
+with Magic ≥ 1).
+
+### CORRECTION 2: adept powers are EFFECTS, not gear
+
+"Innate gear" was wrong too, and counterspell is what proves it. If a power can
+be *dispelled*, modelling it as gear means overlaying "unequip via counterspell"
+onto the gear system — messy, and wrong about what the thing is. Spells and
+adept powers are the same kind of object: **a magical effect on a combatant**,
+and the effects table already exists to hold them.
+
+**Adept powers are assigned exactly like mage spells.** Mirror
+`generateGrimoire`: a per-runner list, drawn at birth from a focus-weighted
+pool with the signature guaranteed, bounded by Magic, learnable afterwards
+through the same taught-first-paid-in-karma queue. `spellsFor` / `spellQueue` /
+`teachFormula` are the working model — copy the architecture, do not invent a
+parallel one.
+
+Most powers already map onto existing `channels` with no new machinery:
+
+| power | becomes |
+|---|---|
+| Improved Reflexes | `initiative +N, initiativeDice +1` — literally the existing `wired` row |
+| Improved Ability [skill] | an accuracy/skill channel bonus |
+| Combat Sense | the existing `combatSense` row |
+| Killing Hands | a weapon-profile change (unarmed becomes a real profile) |
+
+### THE LOAD-BEARING DETAIL: effects need PROVENANCE
+
+Counterspell has to tell a *magical* `combatSense` from a *chrome* `wired`. It
+cannot today — both are `kind: "boon"` with no record of where they came from,
+and `applyEffect(combatant, id, opts)` stores no source.
+
+So: **`applyEffect` records the source** (`magic` / `chrome` / `gear` /
+`mundane`), and counterspell strips only the magical ones. That single addition
+is what lets spells, adept powers and counterspell share one system instead of
+three, and it is why powers must not be gear.
+
+### COUNTERSPELL — a verb, not a class
+
+Earlier this plan cut Counterspeller as a *presentation* (D7). That still
+stands, and is a different thing from cutting the *ability*. **Anyone with
+Sorcery can counterspell.** It is a verb in **meatspace and astral**, in two
+modes:
+
+- **Dispel** — cast at an ongoing magical effect to cancel it.
+- **Hold** — cast and sustain against an *expected* incoming spell, spending
+  the readiness to cancel it when it lands. (SR5's reactive Counterspelling.)
+
+Holding is a sustained effect and therefore already costs −2 dice on everything
+else, which prices the decision without a new rule.
+
+**Phase B/C actions:**
+- add `source` to `applyEffect` and every call site
+- adept powers inject their rows the way `spells.js` already injects eight
+- `counterspell` verb, both planes, dispel + hold
+- Improved Ability is an effect, so it is dispellable — the intended
+  consequence, not a side effect
 
 ---
 
