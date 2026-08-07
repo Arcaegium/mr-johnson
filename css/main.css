@@ -193,9 +193,13 @@ a.navlink:hover { text-decoration: underline; }
 /* The run's frame: the crew down one side, the decision in the
    middle. The modal had empty gutters on both flanks and nowhere
    that said what the crew's own numbers were. */
+/* Three columns: the mission, the crew, the choice. A long fight's
+   log used to squeeze the options into a sliver at the bottom of one
+   stacked panel — the one part of the screen the player has to act
+   on. Now nothing competes for the same vertical space. */
 .modal-shell {
   display: flex; align-items: stretch; gap: 12px;
-  width: 100%; max-width: 1320px; max-height: 100%;
+  width: 100%; max-width: 1600px; max-height: 100%;
 }
 .modal {
   background: var(--panel); border: 1px solid var(--line);
@@ -203,6 +207,29 @@ a.navlink:hover { text-decoration: underline; }
   display: flex; flex-direction: column;
   font-family: var(--mono); font-size: 17px; color: var(--ink);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* The choice column. Scrolls on its own so a crowded room never
+   pushes the withdraw button off the bottom of the world. */
+.modal-side {
+  flex: 0 0 400px; max-height: 100%; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  display: flex; flex-direction: column;
+}
+.modal-side .modal-heading { border-bottom: 1px solid var(--line); }
+.modal-side .modal-options { flex: 1 1 auto; }
+
+/* What is in the room, pinned above the log. */
+.modal-room {
+  padding: 10px 22px; border-bottom: 1px solid var(--line);
+  font-size: 1.02rem;
+}
+
+@media (max-width: 1500px) { .modal-side { flex-basis: 340px; } }
+@media (max-width: 1280px) {
+  .modal-shell { flex-wrap: wrap; }
+  .modal-side { flex: 1 1 100%; }
 }
 
 /* ── The party column ───────────────────────────────────────────
@@ -230,6 +257,10 @@ a.navlink:hover { text-decoration: underline; }
 }
 .pp-row:first-of-type { border-top: none; }
 .pp-row.pp-down { opacity: 0.5; }
+/* The row is the selector: whose answers fill the choice column. */
+.pp-row[data-body] { cursor: pointer; padding-left: 7px; border-left: 3px solid transparent; }
+.pp-row[data-body]:hover { border-left-color: var(--line); }
+.pp-row.pp-sel { border-left-color: var(--accent); background: rgba(224, 150, 74, 0.06); }
 .pp-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .pp-name { color: var(--ink); font-size: 1.02rem; }
 .pp-hw { color: var(--dim); font-size: 0.86rem; white-space: nowrap; cursor: help; }
@@ -284,9 +315,13 @@ a.navlink:hover { text-decoration: underline; }
 .alert-box.a-costly { color: var(--accent); border-color: #b3763a; }
 .alert-box.a-short { color: #d4735e; border-color: #a85448; }
 .modal-transcript {
-  padding: 13px 22px; border-bottom: 1px solid var(--line);
-  /* The transcript IS the run. It gets room to be read. */
-  max-height: 46vh; overflow-y: auto; line-height: 1.8; font-size: 16px;
+  padding: 13px 22px;
+  /* The transcript IS the run, and it FILLS what is left of its own
+     column rather than growing the panel. It never competes with the
+     options any more — those live in their own column — so it can
+     simply take the remaining height and scroll inside it. */
+  flex: 1 1 auto; min-height: 140px; overflow-y: auto;
+  line-height: 1.8; font-size: 16px;
 }
 .modal-heading { padding: 15px 22px 6px; line-height: 1.55; }
 .modal-heading .ask { color: var(--dim); margin-top: 9px; font-size: 16px; }

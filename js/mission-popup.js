@@ -51,9 +51,12 @@
     host.style.display = "none";
     document.body.appendChild(host);
     host.addEventListener("click", (e) => {
-      const el = e.target.closest("[data-pick],[data-side]");
+      const el = e.target.closest("[data-pick],[data-side],[data-body]");
       if (!el || !current) return;
-      if (el.dataset.pick !== undefined) {
+      if (el.dataset.body !== undefined) {
+        // Selecting a body re-asks the question from THEIR side.
+        current.onSelectBody && current.onSelectBody(+el.dataset.body);
+      } else if (el.dataset.pick !== undefined) {
         const i = +el.dataset.pick;
         if (el.classList.contains("dead")) return;
         current.onChoose && current.onChoose(current.options[i], i);
@@ -100,9 +103,15 @@
       "</button>").join("");
     const acts = (s.actions || []).map((a) =>
       `<button class="sm${a.tone ? " " + a.tone : ""}" data-side="${esc(a.id)}">${esc(a.label)}</button>`).join(" ");
+    // ── THREE COLUMNS, so the log stops eating the decision ────────
+    // Everything used to stack in one panel, and a long fight's log
+    // squeezed the options into a sliver at the bottom — the one part
+    // of the screen the player actually has to act on. So the mission
+    // (what is happening), the crew (who is here), and the choice
+    // (what they do about it) each get their own column and stop
+    // competing for the same vertical space.
     host.innerHTML =
       '<div class="modal-shell">' +
-      (s.party ? `<aside class="modal-party">${s.party}</aside>` : "") +
       '<div class="modal" role="dialog" aria-modal="true">' +
         '<div class="modal-head">' +
           `<div class="modal-title">${s.title || ""}</div>` +
@@ -113,12 +122,19 @@
         // read, the route graph) without fighting the line breaks.
         (s.context && s.context.length
           ? `<div class="modal-context">${s.context.map((l) => `<div class="ctxline">${l}</div>`).join("")}</div>` : "") +
+        // What is in the room, held ABOVE the log so a scrolled-back
+        // transcript never hides what the crew is standing in front of.
+        (s.room ? `<div class="modal-room">${s.room}</div>` : "") +
         (s.transcript && s.transcript.length
           ? `<div class="modal-transcript">${s.transcript.join("<br>")}</div>` : "") +
+      "</div>" +
+      (s.party ? `<aside class="modal-party">${s.party}</aside>` : "") +
+      '<div class="modal-side">' +
         (s.heading ? `<div class="modal-heading">${s.heading}</div>` : "") +
         (opts ? `<div class="modal-options">${opts}</div>` : "") +
         (acts ? `<div class="modal-actions">${acts}</div>` : "") +
-      "</div></div>";
+      "</div>" +
+      "</div>";
     const t = host.querySelector(".modal-transcript");
     if (t) t.scrollTop = t.scrollHeight;
   }
@@ -290,7 +306,7 @@
   // both damage tracks, armour, the gun in their hand, and what they
   // are holding up (a sustained spell is −2 on everything else, so
   // it belongs where the player is choosing).
-  function partyPanel(run) {
+  function partyPanel(run, selectedIndex) {
     // BODIES, not runners: today that is the crew, and when drones
     // and spirits land (Phase D) they join this same list — each row
     // takes 1/N of the stripe by flex, so the panel resizes itself
@@ -312,7 +328,7 @@
         Array.from({ length: Math.max(1, max) }, (_, i) =>
           `<i class="${i < filled ? "on" : ""}"></i>`).join("") + "</span></div>";
     };
-    const rows = bodies.map((r) => {
+    const rows = bodies.map((r, i) => {
       const down = run.downed && run.downed.has(r);
       const loadout = MJ.combatLoadoutFor(r);
       const gun = MJ.weaponProfile(loadout.weaponId);
@@ -322,8 +338,11 @@
         .map((x) => (MJ.spellDef(x.spell) || {}).label || x.spell);
       // Name and hardware share the horizontal axis; the two tracks
       // stack under them — mixed axes so a row compresses without
-      // getting cryptic.
-      return `<div class="pp-row${down ? " pp-down" : ""}">` +
+      // getting cryptic. The row is the SELECTOR: clicking a body
+      // re-asks the room's question from their side.
+      return `<div class="pp-row${down ? " pp-down" : ""}` +
+        `${i === selectedIndex ? " pp-sel" : ""}"` +
+        `${down ? "" : ` data-body="${i}"`}>` +
         `<div class="pp-top"><span class="pp-name">${esc(r.identity.handle)}</span>` +
         (down ? '<span class="w-no">DOWN</span>'
           : `<span class="pp-hw" title="${esc(gun.label || "bare hands")}${gun.power ? " — Power " + gun.power + ", DV " + gun.dv : ""}">` +
@@ -849,6 +868,15 @@
       });
     }
 
+    // WHOSE TURN THE PLAYER IS THINKING ABOUT. Held across repaints
+    // by identity, not index — the roster order never changes mid-run
+    // but a downed runner should not stay selected.
+    let selected = null;
+
+    function selectableBodies() {
+      return (run.runners || []).filter((r) => !run.downed || !run.downed.has(r));
+    }
+
     function step() {
       absorb();
       const prompt = MJ.missionPrompt(run);
@@ -862,10 +890,44 @@
       // Spell verbs are FUNNELLED through the grimoire: the obstacle
       // menu shows one "cast a spell" per mage instead of a scatter of
       // per-shape entries, and the submenu is where the spells live.
-      const shown = prompt.options.filter((o) =>
-        (o.available || o.discovered) && SPELL_VERB_IDS.indexOf(o.verbId) === -1);
+      const bodies = selectableBodies();
+      if (!bodies.length) return finish();
+      // Default to whoever the model would have auto-picked — the
+      // best answer in the room — so the console opens on the useful
+      // body rather than on roster slot one.
+      if (!selected || bodies.indexOf(selected) === -1) {
+        const lead = prompt.options.find((o) => o.available && o.runner);
+        selected = (lead && lead.runner) || bodies[0];
+      }
+      const who = selected;
+
+      // ── THIS BODY'S ANSWERS ─────────────────────────────────────
+      // The menu asked "what is the crew's best answer" and named a
+      // runner. The console asks "what can THIS one do", which is the
+      // question a player with a selected body is actually holding.
+      // A verb nobody can front stays visible while it is LEARNED
+      // (paid for with an attempt); a verb this body simply cannot
+      // work is somebody else's row, not a dead line here.
+      const shown = prompt.options.filter((o) => {
+        if (SPELL_VERB_IDS.indexOf(o.verbId) !== -1) return false;
+        if (o.discovered) return true;                       // learned: keep, greyed
+        if (!o.available) return false;
+        if (o.noRoll) return true;                           // anyone can walk around
+        return (o.byRunner || []).some((c) => c.runner === who);
+      }).map((o) => {
+        // Re-point the row at the selected body: their skill, their
+        // pool, their label. Nothing about the verb changes.
+        const mine = (o.byRunner || []).find((c) => c.runner === who);
+        if (!mine) return o;
+        return Object.assign({}, o, {
+          runner: who, skill: mine.skill, pool: mine.pool,
+          verb: MJ.verbLabel ? MJ.verbLabel(MJ.VERBS[o.verbId], prompt.obstacle, who) : o.verb,
+        });
+      });
       const ctx = { run: run, obstacle: prompt.obstacle, options: prompt.options };
-      const casts = MJ.grimoire.castersIn(run).map((mage) => {
+      // Only THIS body's grimoire — the others are a click away in
+      // the crew column.
+      const casts = MJ.grimoire.castersIn(run).filter((m) => m === who).map((mage) => {
         const castable = MJ.grimoire.entriesFor(mage, ctx).filter((e) => e.available).length;
         return {
           mage: mage,
@@ -892,19 +954,23 @@
         subtitle: '<span class="dimmed">obstacle </span>' + num(prompt.index + 1) +
           '<span class="dimmed"> of </span>' + num(prompt.total),
         context: contextLines(run),
-        party: partyPanel(run),
-        transcript: transcript,
-        heading: nm(prompt.label) + " " + num("T" + prompt.tier) +
+        party: partyPanel(run, bodies.indexOf(who)),
+        // What the crew is standing in front of, above the log so a
+        // scrolled transcript never hides it.
+        room: nm(prompt.label) + " " + num("T" + prompt.tier) +
           (prompt.projection ? ' <span class="dimmed">(' + esc(prompt.projection) + ")</span>" : "") +
-          revealedLine +
+          revealedLine,
+        transcript: transcript,
+        heading: nm(who.identity.handle) +
           '<div class="ask">' + (stalled
             ? no("Nothing left to try here.")
-            : "How do you want to handle this?") + "</div>",
+            : "What do they do?") + "</div>",
         options: options,
         actions: [
           stalled ? { id: "push", label: "press on regardless", tone: "warn-btn" } : null,
           { id: "withdraw", label: "withdraw the crew", tone: "warn-btn" },
         ].filter(Boolean),
+        onSelectBody: (i) => { selected = bodies[i] || selected; step(); },
         onChoose: (opt, i) => {
           if (i >= shown.length) {
             const c = casts[i - shown.length];

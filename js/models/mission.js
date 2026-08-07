@@ -321,6 +321,41 @@
     return est;
   }
 
+  // ── ONE GRADE, DERIVED ONCE ─────────────────────────────────────
+  // What "~T5" means, for the board title, the leg lines and the
+  // board filter alike. A SITE's grade is its strongest axis as the
+  // player currently reads it — estimate until confirmed, and the
+  // site's CURRENT posture rather than its ceiling, because current
+  // is what the crew will actually walk into today (it ratchets under
+  // pressure and cools overnight inside the site's own min/max).
+  // A JOB's grade is its hardest leg: a two-leg job of T2 and T8 is
+  // an T8 problem wearing an average, and the hardest leg is what the
+  // crew has to survive.
+  //
+  // Everything that shows or filters on a threat number comes through
+  // here. A second calculation somewhere else is how a title and a
+  // filter start disagreeing about the same job.
+  function siteThreat(site, day) {
+    const v = MJ.siteIntelView(site, day);
+    const read = (a) => (a.confirmed ? a.confirmed.value : a.estimated);
+    return {
+      tier: Math.max(read(v.physical), read(v.astral), read(v.matrix)),
+      sure: !!(v.physical.confirmed && v.astral.confirmed && v.matrix.confirmed),
+      view: v,
+    };
+  }
+
+  function jobThreat(job, day) {
+    let tier = 0, sure = true;
+    for (const m of (job.missions || [])) {
+      if (!m.site) continue;
+      const t = siteThreat(m.site, day);
+      tier = Math.max(tier, t.tier);
+      if (!t.sure) sure = false;
+    }
+    return { tier: tier, sure: sure };
+  }
+
   function missionKind(mission) {
     return mission.kind || "jobObjective";
   }
@@ -809,6 +844,12 @@
         continue;
       }
       let best = null;
+      // EVERY runner who could front this, not only the best one. The
+      // menu used to auto-pick and show a single name, which is fine
+      // for a list and wrong for a console where the player selects a
+      // body and asks "what can THIS one do here" — so the candidates
+      // are kept and the UI decides whose numbers to show.
+      const byRunner = [];
       for (let ri = 0; ri < upright.length; ri++) {
         const runner = upright[ri];
         // Read per runner: `shoot` is whatever THEY are carrying, and
@@ -834,10 +875,12 @@
         if (verb.damaging && !obstacle.fights) {
           cand.through = penetrates(forceProfileFor(runner, verb), obstacle);
         }
+        byRunner.push(cand);
         if (!best) best = cand;
         else if (cand.through !== best.through) { if (cand.through) best = cand; }
         else if (cand.pool > best.pool) best = cand;
       }
+      option.byRunner = byRunner;
       if (best) {
         option.runner = best.runner;
         option.skill = best.skill;
@@ -2559,6 +2602,8 @@
   MJ.createSearchMission = createSearchMission;
   MJ.generateSecurityEstimate = generateSecurityEstimate;
   MJ.siteIntelView = siteIntelView;
+  MJ.siteThreat = siteThreat;
+  MJ.jobThreat = jobThreat;
   MJ.suppressionBonus = suppressionBonus;
   MJ.applySuppression = applySuppression;
   // The stepper — interactive resolution drives these directly;

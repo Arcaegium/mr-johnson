@@ -41,6 +41,7 @@
     pending: null,      // { mission, label } awaiting a crew
     crewTab: "hired",   // section of the dispatch dialog
     scout: "",          // market class filter
+    boardTier: "",      // job board threat filter — "" is any work
   };
 
   // A dispatch is four runners, whatever the roster holds. The design
@@ -109,16 +110,27 @@
       // they can already see — the strongest axis IS the building's
       // grade — so nothing is leaked, only summarised. "~" until the
       // axes behind it are confirmed on the ground.
-      `&nbsp;&nbsp;<span class="dk">threat</span> ${threatTag(v)} ` +
+      `&nbsp;&nbsp;<span class="dk">threat</span> ${threatTag(m.site)} ` +
       `<span class="muted">· est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</span></div>`;
   }
 
-  function threatTag(v) {
-    const read = (a) => a.confirmed ? a.confirmed.value : a.estimated;
-    const tier = Math.max(read(v.physical), read(v.astral), read(v.matrix));
-    const sure = v.physical.confirmed && v.astral.confirmed && v.matrix.confirmed;
-    const tone = tier <= 3 ? "good" : tier <= 5 ? "w-close" : tier <= 7 ? "w-warn" : "warn";
-    return `<span class="${tone}">${sure ? "" : "~"}T${tier}</span>`;
+  // The leg line, the job title and the board filter all read the SAME
+  // derivation — MJ.siteThreat / MJ.jobThreat, over in mission.js next
+  // to the intel view it is built from. The "~" clears only when every
+  // axis behind it has been confirmed on the ground, so reconning the
+  // legs sharpens the job's own grade for free.
+  const siteTier = (site) => MJ.siteThreat(site, S.day);
+  const jobTier = (job) => MJ.jobThreat(job, S.day);
+
+  const TIER_TONE = (t) => (t <= 3 ? "good" : t <= 5 ? "w-close" : t <= 7 ? "w-warn" : "warn");
+
+  function tierTag(tier, sure) {
+    return `<span class="${TIER_TONE(tier)}">${sure ? "" : "~"}T${tier}</span>`;
+  }
+
+  function threatTag(site) {
+    const t = siteTier(site);
+    return tierTag(t.tier, t.sure);
   }
 
   // BOTH TRACKS. A mage carrying six boxes of Drain is as unfit for
@@ -324,7 +336,13 @@
     const locs = locNums.length
       ? ` <span class="muted">·</span> <span class="warn">Loc${locNums.length === 1 ? "" : "s"} ${locNums.map((x) => "#" + x).join("/")}</span>`
       : "";
-    return jobNo + `<b class="w-num">¥${job.pay}</b> <span class="muted">·</span> ${n} Leg${n === 1 ? "" : "s"} ` +
+    // THE GRADE, WITHOUT EXPANDING. Same derivation as the leg lines
+    // — the hardest leg's strongest axis — so reconning a leg sharpens
+    // this number too, and it can never disagree with what the legs
+    // say underneath it.
+    const jt = jobTier(job);
+    const grade = jt.tier ? tierTag(jt.tier, jt.sure) + ' <span class="muted">·</span> ' : "";
+    return jobNo + grade + `<b class="w-num">¥${job.pay}</b> <span class="muted">·</span> ${n} Leg${n === 1 ? "" : "s"} ` +
       `<span class="muted">·</span> <span class="good">${esc(pillars)}</span>${locs} ` +
       `<span class="muted">·</span> <span class="w-warn">${clock}</span>`;
   }
@@ -513,7 +531,11 @@
           || emptyNote("no active contracts") },
       { id: "w-available", label: "Available", count: () => S.board.length,
         sum: () => "the job board",
-        body: () => `<div class="actionbar"><button class="sm" data-act="refresh-board">refresh the board</button></div>` +
+        body: () => `<div class="actionbar"><select id="board-tier"><option value="">any work</option>` +
+          [1,2,3,4,5,6,7,8,9,10].map((t) =>
+            `<option value="${t}"${UI.boardTier === String(t) ? " selected" : ""}>~T${t} work</option>`).join("") +
+          `</select> <button class="sm" data-act="refresh-board">refresh the board</button>` +
+          `<span class="muted">asking around narrows the deal — it does not guarantee it</span></div>` +
           (S.board.map((e) => entry(keyFor(e.job, "j"), jobTitle(e.job), esc(e.job.hiringFaction),
             () => jobDetail(e.job, false) +
               `<div class="actionbar"><button class="sm" data-act="accept" data-jk="${keyFor(e.job, "j")}">accept this contract</button></div>`
@@ -1053,7 +1075,11 @@
     const openBefore = UI.entry;
     const slot = openBefore ? entrySlot(openBefore) : null;
 
-    if (action === "refresh-board") MJ.game.refreshBoard(S);
+    if (action === "refresh-board") {
+      const sel = $("board-tier");
+      UI.boardTier = sel ? sel.value : "";
+      MJ.game.refreshBoard(S, null, UI.boardTier ? +UI.boardTier : null);
+    }
     else if (action === "refresh-market") {
       // The dialog's own selector wins while it is open — it is the
       // one in front of the player; the hub's sits behind a scrim.

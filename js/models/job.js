@@ -309,12 +309,23 @@
   // this mix shifts with Reputation (rep = access) is future
   // design, flagged in the build backlog.
   const BOARD_RUNG_DEAL = ["safe", "safe", "breadAndButter", "stretch"];
+  const boardRungFor = (i) => BOARD_RUNG_DEAL[i % BOARD_RUNG_DEAL.length];
 
+  // ── Fishing the board for your own lane ─────────────────────────
+  // `options.wantTier` (1-10) deals the whole board off the band that
+  // tier falls in, so a player who knows they can handle T1-T2 does
+  // not refresh fifty times looking for work. Bias here means bias —
+  // the street is not an order form, but the share of offers that
+  // come back off-request is game.js's call to make, because only the
+  // session can read the grade the PLAYER sees (a site's current
+  // posture) rather than the band it was minted into.
   function generateBoard(rng, sitePool, currentDay, count, options) {
+    options = options || {};
+    const want = options.wantTier ? tierForValue(options.wantTier) : null;
     const results = [];
     for (let i = 0; i < (count || 6); i++) {
-      const rung = BOARD_RUNG_DEAL[i % BOARD_RUNG_DEAL.length];
-      results.push(generateJob(rng, sitePool, currentDay, Object.assign({ tierBias: rung }, options || {})));
+      const rung = want || boardRungFor(i);
+      results.push(generateJob(rng, sitePool, currentDay, Object.assign({}, options, { tierBias: rung })));
     }
     return results;
   }
@@ -324,6 +335,7 @@
   MJ.JOB_FAMILIES = JOB_FAMILIES;
   MJ.TIER_BANDS = TIER_BANDS;
   MJ.tierForValue = tierForValue;
+  MJ.boardRungFor = boardRungFor;
   // Contract-layer helper: a job COMPLETES when its success criteria
   // are met — for the current "allMissions" criteria, every included
   // mission resolved (by the dispatch layer, models/mission.js).

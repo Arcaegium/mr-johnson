@@ -151,12 +151,40 @@
   }
 
   // ── The board (layer 3: arrivals) ───────────────────────────────
-  function refreshBoard(session, rngOverride) {
+  // Asking around for a lane biases the MINT, but the number on the
+  // card is MJ.jobThreat — the site's CURRENT posture, which starts
+  // below the ceiling the mint band set. Biasing alone therefore does
+  // not put the asked-for number on the card, so every offer is
+  // re-dealt until the grade the player will actually READ lands in
+  // its target band. Which band that is comes off a per-slot roll:
+  // ONE IN FOUR ignores the request and takes the normal deal, because
+  // the word going out is a request and not an order, and a lane with
+  // nothing above or below it is a lane with nothing to reach for.
+  const OFF_REQUEST_SHARE = 0.25;
+  const REDEAL_TRIES = 6;
+
+  function refreshBoard(session, rngOverride, wantTier) {
     const rng = rngOverride || MJ.makeRNG(session.universeSeed + "|board|" + Date.now() + "|" + Math.random());
-    session.board = MJ.generateBoard(rng, session.knownSites, session.day, session.save.johnson.boardCapacity, {
-      siteProvider: siteProviderFor(session),
-    });
-    logLine(session, "board refreshed — " + session.board.length + " offers (the old ones are gone for good)", "system", { offers: session.board.length });
+    const opts = { siteProvider: siteProviderFor(session), wantTier: wantTier || null };
+    session.board = MJ.generateBoard(rng, session.knownSites, session.day, session.save.johnson.boardCapacity, opts);
+    if (wantTier) {
+      const asked = MJ.tierForValue(wantTier);
+      for (let i = 0; i < session.board.length; i++) {
+        const rung = rng.chance(OFF_REQUEST_SHARE) ? MJ.boardRungFor(i) : asked;
+        const band = MJ.TIER_BANDS[rung];
+        const dealt = Object.assign({}, opts, { tierBias: rung });
+        const inLane = () => {
+          const t = MJ.jobThreat(session.board[i].job, session.day).tier;
+          return t >= band.min && t <= band.max;
+        };
+        for (let n = 0; n < REDEAL_TRIES && !inLane(); n++) {
+          session.board[i] = MJ.generateJob(rng, session.knownSites, session.day, dealt);
+        }
+      }
+    }
+    logLine(session, "board refreshed — " + session.board.length + " offers" +
+      (wantTier ? " — asked around for ~T" + wantTier + " work" : "") +
+      " (the old ones are gone for good)", "system", { offers: session.board.length });
     return session.board;
   }
 
