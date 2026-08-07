@@ -39,10 +39,13 @@
   // occupies one room at a time and has to get to the next one. So
   // the sequence IS the movement, and `leg` is how far along it the
   // crew has come.
-  function routeObstacles(site) {
+  // `forcedPath` — the player chose their way in. Without one the
+  // shortest route stands in, which is what the auto-resolver and
+  // every probe want; the popup's approach step passes the choice.
+  function routeObstacles(site, forcedPath) {
     const paths = MJ.findPaths(site);
     if (paths.length === 0) return { path: [], obstacles: [] };
-    const path = paths.reduce((a, b) => (a.length <= b.length ? a : b));
+    const path = forcedPath || paths.reduce((a, b) => (a.length <= b.length ? a : b));
     const roomById = {};
     for (const room of site.layout.rooms) roomById[room.id] = room;
     // Edges are undirected; index both ways so a step can find its

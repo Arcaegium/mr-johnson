@@ -106,7 +106,11 @@
           `<div class="modal-title">${s.title || ""}</div>` +
           (s.subtitle ? `<div class="modal-sub">${s.subtitle}</div>` : "") +
         "</div>" +
-        (s.context && s.context.length ? `<div class="modal-context">${s.context.join("<br>")}</div>` : "") +
+        // Each context entry is its own line-box rather than a <br>
+        // chain, so an entry can be a bordered SEGMENT (the security
+        // read, the route graph) without fighting the line breaks.
+        (s.context && s.context.length
+          ? `<div class="modal-context">${s.context.map((l) => `<div class="ctxline">${l}</div>`).join("")}</div>` : "") +
         (s.transcript && s.transcript.length
           ? `<div class="modal-transcript">${s.transcript.join("<br>")}</div>` : "") +
         (s.heading ? `<div class="modal-heading">${s.heading}</div>` : "") +
@@ -267,6 +271,104 @@
       '<span class="dimmed"> on the way in</span>';
   }
 
+  // ── The shape of the run ───────────────────────────────────────
+  // An abstract top-down: one geometric shape per room on the walk,
+  // connected in sequence but deliberately NOT on a straight line —
+  // the crew is moving through a building, not filling a progress
+  // bar. This is the fidelity rung the route model was built waiting
+  // for: mission-routes' own contract says walk order IS the movement.
+  //
+  // EARNED KNOWLEDGE ONLY. The shape of the route is free — the crew
+  // cased the building — but what is IN a room renders only once
+  // they have stood in it. Unreached rooms are dim outlines with a
+  // "?", the red dot is the crew, the gold dot is where the job is.
+  function roomHash(id) {
+    let h = 0; const s = String(id);
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+
+  function routeGraph(run, opts) {
+    const route = run.streetRoute;
+    if (!route || !route.path || route.path.length < 2) return "";
+    const path = route.path;
+    const outside = opts && opts.outside;
+
+    // The frontier: the furthest leg anyone has stood on. Outside,
+    // only the entry room shows its contents — the prep screen is
+    // already naming what waits there, so the graph agrees with it.
+    let frontier = 0;
+    if (!outside) {
+      const upto = Math.min(run.index, run.obstacles.length - 1);
+      for (let i = 0; i <= upto; i++) {
+        const o = run.obstacles[i];
+        if (o && o.leg !== undefined && o.leg > frontier) frontier = o.leg;
+      }
+      if (MJ.missionDone(run) && !run.failed) frontier = path.length - 1;
+    }
+    const knows = (i) => outside ? i === 0 : i <= frontier;
+
+    const W = Math.min(560, 44 + (path.length - 1) * 64), H = 84;
+    const stepX = (W - 56) / (path.length - 1);
+    const pos = path.map((rid, i) => ({
+      x: 28 + i * stepX,
+      // A stable per-room wobble, so the walk bends like a floor plan
+      // and the same site always draws the same way.
+      y: 46 + ((roomHash(rid) % 2 ? -1 : 1) * (7 + (roomHash(rid) % 9))),
+    }));
+
+    const bits = [];
+    // Doors between rooms: walked ground in teal, ground ahead dim.
+    for (let i = 0; i < path.length - 1; i++) {
+      const walked = !outside && i < frontier;
+      bits.push(`<line x1="${pos[i].x}" y1="${pos[i].y}" x2="${pos[i + 1].x}" y2="${pos[i + 1].y}"` +
+        ` stroke="${walked ? "var(--accent-2)" : "var(--line)"}" stroke-width="${walked ? 2 : 1.4}"/>`);
+    }
+    // Rooms. Shape varies by the room's own hash — a building, not a
+    // bar chart — and the outline says what the crew knows: teal for
+    // ground they hold, amber where something still stands, dim for
+    // rooms nobody has seen into.
+    for (let i = 0; i < path.length; i++) {
+      const p = pos[i], rid = path[i], h = roomHash(rid);
+      const here = run.obstacles.filter((o) =>
+        o.rooms && o.rooms.indexOf(rid) !== -1 && o.leg !== undefined && o.leg <= (outside ? 0 : frontier));
+      const up = here.filter((o) => !run.neutralized.has(o)).length;
+      const stroke = !knows(i) ? "var(--line)" : up > 0 ? "var(--accent)" : "var(--accent-2)";
+      const shape = h % 4;
+      if (shape === 0) bits.push(`<circle cx="${p.x}" cy="${p.y}" r="9" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
+      else if (shape === 1) bits.push(`<polygon points="${p.x},${p.y - 10} ${p.x + 10},${p.y} ${p.x},${p.y + 10} ${p.x - 10},${p.y}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
+      else if (shape === 2) bits.push(`<rect x="${p.x - 8}" y="${p.y - 8}" width="16" height="16" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
+      else bits.push(`<polygon points="${p.x - 9},${p.y} ${p.x - 4.5},${p.y - 9} ${p.x + 4.5},${p.y - 9} ${p.x + 9},${p.y} ${p.x + 4.5},${p.y + 9} ${p.x - 4.5},${p.y + 9}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
+      if (!knows(i)) {
+        bits.push(`<text x="${p.x}" y="${p.y + 3.5}" text-anchor="middle" font-size="10" fill="var(--dim)">?</text>`);
+      } else {
+        // What the crew has seen in this room: an amber tick per
+        // thing still standing, a dim tick per thing dealt with.
+        const marks = here.slice(0, 4);
+        marks.forEach((o, k) => {
+          const mx = p.x - ((marks.length - 1) * 5) / 2 + k * 5;
+          bits.push(`<rect x="${mx - 1.5}" y="${p.y + 14}" width="3" height="3"` +
+            ` fill="${run.neutralized.has(o) ? "var(--dim)" : "var(--accent)"}"/>`);
+        });
+      }
+    }
+    // The gold dot: where the job is. Skipped once the crew stands on
+    // it — the red dot has arrived and saying both would stutter.
+    const last = pos[path.length - 1];
+    const atGoal = !outside && frontier === path.length - 1;
+    if (!atGoal) bits.push(`<circle cx="${last.x}" cy="${last.y - 16}" r="4" fill="#d2b356"><title>the job is here</title></circle>`);
+    // The red dot: the crew — on the pavement before entry, in their
+    // furthest room once inside.
+    const at = outside ? { x: pos[0].x - 17, y: pos[0].y } : pos[frontier];
+    bits.push(`<circle cx="${at.x}" cy="${outside ? at.y : at.y - 16}" r="4" fill="#e05858"><title>the crew is here</title></circle>`);
+
+    return `<div class="routegraph"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${bits.join("")}</svg>` +
+      `<div class="rg-legend"><span style="color:#e05858">●</span> crew · ` +
+      `<span style="color:#d2b356">●</span> objective · ` +
+      `<span style="color:var(--accent)">▪</span> standing · ` +
+      `<span style="color:var(--dim)">▪</span> handled · ? unseen</div></div>`;
+  }
+
   function contextLines(run, opts) {
     const id = run.site ? run.site.identity : null;
     const lines = [];
@@ -275,6 +377,10 @@
         ' <span class="dimmed">· ' + esc(id.owningFaction) + " · " + esc(id.district) +
         (id.theme ? " · " + esc(id.theme) : "") + "</span>");
     }
+    // The shape of the walk, drawn — earned knowledge only.
+    const graph = routeGraph(run, opts);
+    if (graph) lines.push(graph);
+    let secLine = null;
     // WHAT THEY EXPECTED, and what they have now actually SEEN.
     // An axis ticks over from estimate to confirmed the moment the
     // crew has proof — either they met something rated at the top of
@@ -310,7 +416,19 @@
         return letter + ':<span class="dimmed">~' +
           (shown ? MJ.diceForSecurity(shown) + "d" : "?") + "</span>";
       }).join(" ");
-      lines.push('<span class="dimmed">security </span>' + axes);
+      secLine = '<span class="dimmed">security </span>' + axes;
+    }
+    // The security read and the alert ladder are ONE subject — what
+    // the site knows and how much room is left before it knows more —
+    // so they share a boxed segment instead of drifting apart in the
+    // line flow.
+    {
+      const meter = awarenessMeter(run, opts);
+      if (secLine || meter) {
+        lines.push('<div class="seg-sec"><span class="seg-k">site read</span>' +
+          (secLine ? "<div>" + secLine + "</div>" : "") +
+          (meter ? "<div>" + meter + "</div>" : "") + "</div>");
+      }
     }
     // WHERE they are. A street run walks the building room by room,
     // so the obstacle in front of the crew has a place, and the
@@ -335,8 +453,6 @@
         (run.tether <= Math.max(2, Math.ceil(run.tetherMax / 4))
           ? " " + no("— the pull is getting hard") : ""));
     }
-    const meter = awarenessMeter(run, opts);
-    if (meter) lines.push(meter);
     return lines;
   }
 
@@ -721,6 +837,45 @@
     //
     // Skipped silently when nobody can cast — a mundane crew should
     // never see a magic prompt.
+    // ── The way in ──────────────────────────────────────────────
+    // findPaths has always computed every distinct route to the
+    // objective; the run just silently took the shortest. Now the
+    // player picks the door. Choosing re-routes the run and repaints,
+    // so the graph redraws to the chosen shape before they commit —
+    // the shape of a route is free knowledge (the crew cased the
+    // building), what is IN the rooms stays earned.
+    //
+    // Skipped silently when there is only one way in.
+    function stepApproach() {
+      const apps = MJ.missionApproaches ? MJ.missionApproaches(run) : [];
+      if (apps.length <= 1) return stepPrep();
+      const rows = apps.map((a) => ({
+        html: nm(a.label) + '<span class="dimmed"> — </span>' + num(a.rooms) +
+          '<span class="dimmed"> room' + (a.rooms === 1 ? "" : "s") + " to the objective</span>",
+        meta: a.current ? ok("the current plan") : '<span class="dimmed">reroute</span>',
+      }));
+      MJ.decide.open({
+        title: esc(entry.label || run.kind),
+        subtitle: '<span class="dimmed">casing the approaches</span>',
+        context: contextLines(run, { outside: true }),
+        transcript: transcript,
+        heading: nm("The way in") + '<div class="ask">Which approach?</div>',
+        options: rows,
+        actions: [
+          { id: "holdOff", label: "hold off — not today" },
+          { id: "settled", label: "settled — gear up", tone: "warn-btn" },
+        ],
+        onChoose: (opt, i) => {
+          MJ.missionSetRoute(run, apps[i].path);
+          stepApproach(); // repaint: the graph redraws to the chosen route
+        },
+        onAction: (id) => {
+          if (id === "holdOff") { MJ.missionAbort(run, { atDoor: true }); return finish(); }
+          stepPrep();
+        },
+      });
+    }
+
     function stepPrep() {
       const casters = MJ.grimoire.castersIn(run);
       if (!casters.length) return step();
@@ -771,7 +926,7 @@
       });
     }
 
-    stepPrep();
+    stepApproach();
   }
 
   MJ.missionPopup = { play: play };

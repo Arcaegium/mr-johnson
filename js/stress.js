@@ -431,6 +431,42 @@
     }
     check(legsChecked > 500, "C2: walk probe needs real obstacle volume to mean anything (saw " + legsChecked + ")");
     check(mobileMet > 20, "C2: patrols and spirit zones must actually be walked into (saw " + mobileMet + ")");
+
+    // ── THE WAY IN IS A CHOICE, AND IT IS SPENT AT THE DOOR ───────
+    // findPaths always computed every route; the run silently took
+    // the shortest. missionApproaches surfaces them and
+    // missionSetRoute takes the pick — but only while the crew is
+    // still on the pavement. One step inside, the choice is spent:
+    // rerouting a half-walked building would teleport the crew.
+    {
+      let multi = null;
+      for (let i = 0; i < 200 && !multi; i++) {
+        const s = MJ.mintSite("stress-appr" + i, 2);
+        if (MJ.findPaths(s).length >= 2) multi = s;
+      }
+      check(!!multi, "C2: the world must offer sites with more than one way in");
+      const rngA = MJ.makeRNG("c2-appr");
+      MJ.initSecurityState(rngA.fork("i"), multi);
+      const crewA = [MJ.mintRunner("c2-appr", 1)];
+      crewA[0].market.hired = { tier: "permanent", missionsRemaining: 99, blockSize: 99 };
+      const runA = MJ.beginMission(rngA.fork("m"), { site: multi, kind: "jobObjective", objective: {} }, crewA, 1);
+      const apps = MJ.missionApproaches(runA);
+      check(apps.length >= 2, "C2: every distinct path is offered as an approach");
+      check(apps.filter((a) => a.current).length === 1, "C2: exactly one approach is the current plan");
+      const other = apps.find((a) => !a.current);
+      const set = MJ.missionSetRoute(runA, other.path);
+      check(set.ok && runA.streetRoute.path[0] === other.path[0],
+        "C2: choosing an approach re-routes the run through that door");
+      check(runA.obstacles === runA.streetRoute.obstacles,
+        "C2: and the run walks the rerouted obstacles, not the old ones");
+      // Step inside, then try to reroute — the door must refuse.
+      const p = MJ.missionPrompt(runA);
+      const live = (p.options || []).find((o) => o.available);
+      if (live) MJ.missionChoose(runA, { skill: live.skill, runner: live.runner, approach: live.approach });
+      else MJ.missionChoose(runA, null);
+      check(MJ.missionSetRoute(runA, apps[0].path).ok === false,
+        "C2: one step inside, the way in is spent");
+    }
   }
 
   // ── Class 3: timing / same-day communication ────────────────────

@@ -1927,6 +1927,53 @@
       gap.outclassed.slice(0, 3).join(", ") + ")";
   }
 
+  // ── The ways in, and choosing one ───────────────────────────────
+  // findPaths has always computed every distinct entry->objective
+  // route; the run just silently took the shortest. This surfaces
+  // the choice: one option per path, labelled by the entry it uses.
+  // Nothing here is new information — the crew cased the building
+  // (the path SHAPE is free), but what is IN the rooms stays earned.
+  const ENTRY_LABELS = {
+    door: "the front door", window: "a window", roof: "the roof",
+    vent: "a service vent", loadingDock: "the loading dock",
+  };
+
+  function missionApproaches(run) {
+    if (!run.site || !run.streetRoute) return [];
+    const paths = MJ.findPaths(run.site);
+    const entries = run.site.layout.entryPoints;
+    return paths.map((path) => {
+      const entry = entries.find((e) => e.roomId === path[0]);
+      return {
+        path: path,
+        rooms: path.length,
+        entryType: entry ? entry.type : "door",
+        label: ENTRY_LABELS[entry ? entry.type : "door"] || "a way in",
+        current: run.streetRoute.path === path ||
+          (run.streetRoute.path.length === path.length &&
+           run.streetRoute.path.every((r, i) => path[i] === r)),
+      };
+    });
+  }
+
+  // Only before anything has happened: the crew is still on the
+  // pavement, so walking to a different door costs nothing. The
+  // moment a task exists they are INSIDE a specific route and the
+  // choice is spent.
+  function missionSetRoute(run, path) {
+    if (run.kind === "recon" || run.kind === "matrixRun" || run.kind === "astralRun") {
+      return { ok: false, error: "only a street run walks rooms" };
+    }
+    if (run.index > 0 || (run.tasks || []).length > 0) {
+      return { ok: false, error: "already inside — the way in is spent" };
+    }
+    const route = MJ.streetRoute(run.site, path);
+    run.streetRoute = route;
+    run.obstacles = route.obstacles;
+    run.index = 0;
+    return { ok: true, rooms: route.path.length };
+  }
+
   function missionAbort(run, opts) {
     if (run.aborted) return run;
     run.aborted = true;
@@ -2422,6 +2469,8 @@
   // rather than re-deriving it with slightly different filtering.
   MJ.perceiversNear = perceiversNear;
   MJ.missionAbort = missionAbort;
+  MJ.missionApproaches = missionApproaches;
+  MJ.missionSetRoute = missionSetRoute;
   MJ.missionDone = missionDone;
   MJ.finishMission = finishMission;
   MJ.discoverResourceSite = discoverResourceSite;

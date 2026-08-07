@@ -201,6 +201,23 @@ a.navlink:hover { text-decoration: underline; }
 .modal-title { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; }
 .modal-sub { margin-top: 5px; font-size: 16px; }
 .modal-context { padding: 13px 22px; border-bottom: 1px solid var(--line); line-height: 1.7; }
+.ctxline { min-height: 1.2em; }
+
+/* The site-read segment: security and the alert ladder are one
+   subject, boxed together with the site's amber down the spine. */
+.seg-sec {
+  border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 2px; padding: 6px 10px; margin: 7px 0;
+}
+.seg-sec .seg-k {
+  color: var(--accent); font-size: 0.68rem; letter-spacing: 0.14em;
+  text-transform: uppercase; display: block; margin-bottom: 2px;
+}
+
+/* The shape of the run — the abstract walk, drawn. */
+.routegraph { margin: 7px 0 2px; }
+.routegraph svg { display: block; max-width: 100%; }
+.rg-legend { color: var(--dim); font-size: 0.68rem; margin-top: 1px; }
 .modal-transcript {
   padding: 13px 22px; border-bottom: 1px solid var(--line);
   /* The transcript IS the run. It gets room to be read. */
@@ -618,14 +635,15 @@ body.railed .framebar { left: 300px; }
 .lane .lv { font-variant-numeric: tabular-nums; }
 .lane .lsep { color: var(--dim); margin: 0 1px; }
 /* Four bands: a shortfall is a price, not a wall, and the colour says
-   how steep. Green covered, yellow close, orange costly, red
+   how steep — in the site's own palette. Teal (--accent-2) covered,
+   muted gold close, amber (--accent) costly, terracotta red
    outclassed — red is reserved for "this lane will not carry". */
 .lane.ok { border-color: var(--accent-2); }
 .lane.ok .lv { color: var(--accent-2); }
-.lane.close { border-color: #b8a04a; }
-.lane.close .lv { color: #d4c05e; }
-.lane.costly { border-color: #b87f3c; }
-.lane.costly .lv { color: #d4935e; }
+.lane.close { border-color: #a68d42; }
+.lane.close .lv { color: #d2b356; }
+.lane.costly { border-color: #b3763a; }
+.lane.costly .lv { color: var(--accent); }
 .lane.short { border-color: #a85448; }
 .lane.short .lv { color: #d4735e; }
 .lane-note { color: var(--dim); font-size: 0.7rem; margin-top: 3px; font-style: italic; }
