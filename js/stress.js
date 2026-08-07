@@ -4262,6 +4262,62 @@
     check(MJ.postureOf(first) === "fullDefence", "C13: the forfeited action still sets the actor's posture");
     check(MJ.postureOf(other) !== "fullDefence", "C13: one combatant's posture must not land on another");
     check(entry.actor === first.name, "C13: the hold must be logged against whoever actually acted");
+
+    // ── A FUTILE FIREFIGHT BREAKS OFF, NOT GRINDS ─────────────────
+    // Penetration is deterministic — Power against Armour, no dice —
+    // so once round one has proven that nothing the crew carries gets
+    // through, every further round is the house being slower than its
+    // own arithmetic while the crew stands in return fire. Measured
+    // before the fix: eleven rounds of BOUNCED, zero damage dealt,
+    // one runner carried out. Round one is still theirs to learn it
+    // in — a bounce is a fact learned by trying — but round two is
+    // where a crew that knows walks.
+    {
+      const stage = (arm) => {
+        const rngF = MJ.makeRNG("c13-futile-" + arm);
+        const site = MJ.mintSite("c13f" + arm, 2, { value: 4 });
+        MJ.initSecurityState(rngF.fork("i"), site);
+        const crew = [0, 1].map((k) => {
+          const r = MJ.generateRunner(rngF.fork("r" + k), { family: "fighter" });
+          MJ.watchRunner(r, rngF); MJ.hireRunner(r, "permanent");
+          r.skills.firearms = 5;
+          for (const g of (r.gear || []).slice()) {
+            const t = MJ.ITEM_TEMPLATES[g.templateId];
+            if (t && t.category === "weapon") MJ.reclaimItem(g);
+          }
+          const gun = MJ.makeItem(arm);
+          MJ.issueItem(gun, r);
+          return r;
+        });
+        const run = MJ.beginMission(rngF.fork("m"),
+          { site: site, kind: "jobObjective", objective: {} }, crew, 1);
+        const guard = MJ.generateObstacleInstance(rngF.fork("g"), "guard", 4, "physical");
+        guard.rooms = [7]; guard.leg = 0;
+        run.obstacles = [guard]; run.index = 0;
+        const p = MJ.missionPrompt(run);
+        const shoot = (p.options || []).find((o) => o.verbId === "shoot" && o.available);
+        if (!shoot) return null;
+        MJ.missionChoose(run, { skill: shoot.skill, runner: shoot.runner, approach: shoot.approach });
+        return run.tasks[run.tasks.length - 1];
+      };
+      // Holdouts (Power 4) against a T4 guard (armour 5): provably
+      // futile, so the fight must end at the top of round two.
+      const bounce = stage("holdout");
+      check(!!bounce && bounce.combat === true, "C13: the futility probe must actually reach a firefight");
+      if (bounce) {
+        check(bounce.futile === true, "C13: an unwinnable firefight must know it is unwinnable");
+        check(bounce.rounds <= 2, "C13: and must break off at round two, not grind ten (" + bounce.rounds + ")");
+        check(bounce.success === false && bounce.stalemate === true,
+          "C13: breaking off is a stalemate, never a win");
+      }
+      // The same crew with real guns (Longhorn, Power 7) is NOT
+      // futile — the fight runs on its own merits.
+      const armed = stage("longhornAR");
+      check(!!armed, "C13: the armed control must reach its firefight");
+      if (armed) {
+        check(armed.futile !== true, "C13: a crew that CAN penetrate is never futile-flagged");
+      }
+    }
   }
 
   // ── Runner ──────────────────────────────────────────────────────

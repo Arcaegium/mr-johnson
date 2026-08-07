@@ -551,7 +551,10 @@
       } else if (t.combat) {
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + (t.surprise ? "AMBUSH — " : "FIREFIGHT — ") +
           t.enemies.join(", ") + " — " + t.rounds + " round" + (t.rounds === 1 ? "" : "s") + ": " +
-          (t.success ? "crew held the ground" : t.stalemate ? "broke off — could not finish them" : "THE CREW WENT DOWN") + readNote(t.read));
+          (t.success ? "crew held the ground"
+            : t.futile ? "broke off — nothing they carry gets through its armour"
+            : t.stalemate ? "broke off — could not finish them"
+            : "THE CREW WENT DOWN") + readNote(t.read));
         for (const c of t.casualties || []) {
           logLine(session, "      " + c.runner + (c.died
             ? " was KILLED" : " went down — carried out with " + c.wounds + " box" + (c.wounds === 1 ? "" : "es")),

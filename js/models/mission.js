@@ -1065,8 +1065,43 @@
     // standing" was being scored as a WIN. A fight you cannot finish
     // is not a fight you won; it is one you have to walk away from.
     const MAX_ROUNDS = 10;
+
+    // Can this combatant hurt ANY standing foe — by the gun actually
+    // in their hand, or by a combat spell they genuinely cast? Same
+    // penetration arithmetic the spell-pick uses, because the two
+    // must agree on what "useless" means.
+    const canHurtSomeone = (c) => {
+      const w = MJ.weaponProfile(c.weaponId);
+      const p = (w.power || 0) + (c.weaponQuality || 0) +
+        (w.useStrength ? (c.attributes.strength || 0) : 0);
+      const byGun = foes.some((f) => !f.down && p > Math.max(0, f.armour + (w.ap || 0)));
+      if (byGun) return true;
+      const src = c.source;
+      return !!(src && MJ.bestCombatSpell && MJ.bestCombatSpell(src) &&
+        (MJ.getEffectiveSkills(src).sorcery || 0) > 0 &&
+        ((src.attributes || {}).magic || 0) > 0);
+    };
+
+    let futile = false;
+    let lastRound = 0;
     let guard = 0;
     while (!MJ.combatOver(combat) && combat.round <= MAX_ROUNDS && guard++ < 800) {
+      // ── A BOUNCE IS LEARNED BY TRYING — ONCE ─────────────────────
+      // The first round is theirs to discover it: every shot bounces,
+      // the fact is on the table. Grinding nine MORE rounds against
+      // armour nothing in their hands can beat was the house being
+      // slower than its own arithmetic — penetration is deterministic
+      // (Power against Armour, no dice), so from round two onward the
+      // crew knows, and a crew that knows breaks off rather than
+      // standing in return fire. Measured before this existed: eleven
+      // rounds of BOUNCED, zero damage dealt, one runner carried out.
+      if (combat.round !== lastRound) {
+        lastRound = combat.round;
+        if (combat.round >= 2 && !crew.some((c) => !c.down && canHurtSomeone(c))) {
+          futile = true;
+          break;
+        }
+      }
       const slot = MJ.combatActor(combat);
       if (!slot) break;
       const actor = slot.actor;
@@ -1136,7 +1171,7 @@
     if (won) for (const f of foes) if (f.sourceObstacle) run.neutralized.add(f.sourceObstacle);
 
     return {
-      won: won, stalemate: stalemate, rounds: combat.round,
+      won: won, stalemate: stalemate, futile: futile, rounds: combat.round,
       casualties: casualties, injured: injured,
       enemies: foes.map((f) => f.name),
       enemiesDown: foes.filter((f) => f.down).length,
@@ -1671,7 +1706,7 @@
         combat: true, surprise: fight.surprise, rounds: fight.rounds,
         enemies: fight.enemies, enemiesDown: fight.enemiesDown,
         casualties: fight.casualties, injured: fight.injured, loud: true,
-        stalemate: fight.stalemate,
+        stalemate: fight.stalemate, futile: fight.futile,
         // The blow-by-blow. A fight the player cannot watch is a fight
         // they have to take on trust, and "did that actually resolve
         // or did it flip a coin" is a fair question to be able to

@@ -195,7 +195,10 @@
       const head = (t.surprise ? no("AMBUSH") : no("FIREFIGHT")) + " — " +
         nm(t.enemies.join(", ")) + " — " + num(t.rounds) +
         '<span class="dimmed"> round' + (t.rounds === 1 ? "" : "s") + "</span>: " +
-        (t.success ? ok("crew held the ground") : t.stalemate ? no("broke off — could not finish them") : no("THE CREW WENT DOWN")) + readNote(t.read);
+        (t.success ? ok("crew held the ground")
+          : t.futile ? no("broke off — nothing they carry gets through its armour")
+          : t.stalemate ? no("broke off — could not finish them")
+          : no("THE CREW WENT DOWN")) + readNote(t.read);
       const fallen = (t.casualties || []).map((c) => "<br>&nbsp;&nbsp;" + nm(c.runner) +
         (c.died ? " " + no("was KILLED")
           : " went down — carried out with " + num(c.wounds) + " box" + (c.wounds === 1 ? "" : "es") +
