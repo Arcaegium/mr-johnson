@@ -236,7 +236,10 @@
           ? "<br>" + "&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
     }
     const bits = esc(t.skill) + " " + num(t.pool + "d") + (t.loud ? ", " + no("LOUD") : "") + (t.boosted ? ", +" + num(t.boosted) : "");
-    return nm(t.runner) + " (" + bits + ") vs " + nm(t.obstacle) + " " + num("T" + t.tier) + " — " +
+    // A group label already names each member with its tier —
+    // appending the primary's tier again would print "…T2 T3".
+    return nm(t.runner) + " (" + bits + ") vs " + nm(t.obstacle) +
+      (t.groupSize > 1 ? '<span class="dimmed"> — together</span>' : " " + num("T" + t.tier)) + " — " +
       num(t.hits) + " hits: " + (t.success ? ok("through") : no("MISSED")) +
       (t.criticalGlitch ? " " + no("CRITICAL GLITCH") + (t.guarded ? ' <span class="dimmed">(absorbed by ' + esc(t.guarded) + ")</span>" : "") :
         t.glitch ? " " + no("glitch") : "") +
@@ -647,7 +650,12 @@
     else if (!o.lands) meta = '<span class="dimmed">' + esc(o.why) + "</span>";
     else if (o.noRoll) meta = '<span class="dimmed">no roll — costs the time</span>';
     else if (!o.runner) meta = '<span class="dimmed">no ' + esc(o.skill) + " on this crew</span>";
-    else meta = esc(o.skill) + " " + num(o.pool + "d") + readsAsNote(o);
+    else meta = esc(o.skill) + " " + num(o.pool + "d") + readsAsNote(o) +
+      // The watch group, before the commit: one roll past the lot,
+      // and every extra pair of eyes raises the bar by one hit.
+      (o.group > 1
+        ? ' <span class="w-warn">· ' + o.group + " of them — one chance past all " + o.group + "</span>"
+        : "");
     return { html: main, meta: meta, dead: !o.available };
   }
 

@@ -498,6 +498,10 @@
       // hangs off. Clocking only for now — see PILLAR-PLAN.md §2.
       tempo: MJ.newTempo(),
       neutralized: new Set(),
+      // Watchers slipped past as part of a GROUP contest — spent
+      // ground the walk steps straight over, distinct from
+      // `neutralized` because these still have eyes for later acts.
+      groupPassed: new Set(),
       // Everything that hides the crew adds dice here: a spell,
       // darkness, a distraction, and eventually just standing where
       // the camera is not looking. Zero means they are relying on
@@ -609,6 +613,13 @@
   }
 
   function missionDone(run) {
+    // Spent ground is not remaining ground: if everything left was
+    // slipped as part of a group contest, the run is over. The skip
+    // lives HERE because every caller asks missionDone before asking
+    // for a prompt — skipping only inside missionPrompt let a run
+    // read "not done" and then hand back a null prompt (found as a
+    // crash in autoResolve the moment the group contest landed).
+    skipGroupPassed(run);
     return run.aborted || run.index >= run.obstacles.length;
   }
 
@@ -785,6 +796,9 @@
         lands: act.lands, why: act.why, discovered: null,
         tries: tries, readsAs: threatClassFor(verb, tries + 1),
         available: false,
+        // The watch group, said BEFORE the commit: one roll past all
+        // of them, and each extra pair of eyes raises the bar.
+        group: act.id === "sneak" ? sneakGroupFor(run, obstacle).length : 1,
       };
       // A skill-less way is a real approach, not filler: going around
       // costs a beat and needs nobody trained.
@@ -847,7 +861,38 @@
   }
 
   // What the crew is looking at, and every way they could take it.
+  // ── The watch group ─────────────────────────────────────────────
+  // Everything standing on the SAME ground as this watcher that also
+  // has eyes on the crew's plane and would be slipped past the same
+  // way. SR5 resolves sneaking past a group as ONE opposed test —
+  // ours had the crew evade three guards one at a time while the
+  // other two spectated, which was neither canon nor sense.
+  function sneakGroupFor(run, obstacle) {
+    if (!obstacle || !obstacle.rooms) return [obstacle];
+    const plane = runPlane(run);
+    if ((obstacle.senses || []).indexOf(plane) === -1) return [obstacle];
+    const group = [obstacle];
+    for (let i = run.index + 1; i < run.obstacles.length; i++) {
+      const o = run.obstacles[i];
+      if (run.neutralized.has(o) || (run.groupPassed && run.groupPassed.has(o))) continue;
+      if ((o.senses || []).indexOf(plane) === -1) continue;
+      if (!o.rooms || !o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1)) continue;
+      group.push(o);
+    }
+    return group;
+  }
+
+  // Ground already slipped as part of a group contest is spent ground
+  // — the crew walks straight past it rather than being asked again.
+  function skipGroupPassed(run) {
+    while (run.groupPassed && run.index < run.obstacles.length &&
+           run.groupPassed.has(run.obstacles[run.index])) {
+      run.index += 1;
+    }
+  }
+
   function missionPrompt(run) {
+    skipGroupPassed(run);
     if (missionDone(run)) return null;
     if (run.extended) return extendedPrompt(run);
     const obstacle = run.obstacles[run.index];
@@ -1624,6 +1669,7 @@
   }
 
   function missionChoose(run, choice) {
+    skipGroupPassed(run);
     if (missionDone(run)) return null;
     if (run.extended) return missionExtendedStep(run, choice !== null);
     const obstacle = run.obstacles[run.index];
@@ -1814,12 +1860,27 @@
       boostLabel = boostItem.label;
       MJ.consumeItem(boostItem);
     }
+    // ── THE WATCH GROUP: one roll past all of them ────────────────
+    // Slipping past a guard while his two friends stand on the same
+    // ground is ONE contest against three sets of eyes — SR5's group
+    // opposition — not three contests with an audience. Each extra
+    // watcher is one more hit the sneak must clear, and success is
+    // past the LOT: the others become spent ground the walk steps
+    // over. Only the sneak verb groups; a takedown is done to ONE
+    // body, and a con is a conversation with ONE mind.
+    const group = act.verbId === "sneak" ? sneakGroupFor(run, obstacle) : [obstacle];
+    const groupmates = group.slice(1);
+
     const outcome = MJ.resolveTask(run.rng, runner, obstacle, skill, {
       verb: act.verb, loud: act.loud,
+      extraThreshold: groupmates.length,
       bonusDice: run.intelBonus + MJ.gearBonusFor(runner, skill) + boostDice +
         suppressionBonus(run.site, obstacle.projection, run.day) +
         spellPoolMods(run, runner, skill),
     });
+    if (outcome.success && groupmates.length) {
+      for (const o of groupmates) run.groupPassed.add(o);
+    }
     if (act.loud) run.anyLoud = true;
     if (outcome.glitch) run.anyGlitch = true;
     let guarded = null;
@@ -1838,7 +1899,9 @@
     const tries = countTry(run, obstacle, act.verbId);
     let read = null;
     let tipped = false;
-    if (wasWitnessed(run, obstacle, act, outcome.success, runner)) {
+    // The group was IN the contest — beating them means none of them
+    // saw it, so they cannot also vote as bystander witnesses.
+    if (wasWitnessed(run, obstacle, act, outcome.success, runner, groupmates)) {
       const cls = threatClassFor(act.def, tries);
       if (cls !== MJ.THREAT.NORMAL) {
         const applied = MJ.witnessAct(run.state, run.day, cls);
@@ -1863,7 +1926,13 @@
     }
 
     const task = {
-      obstacle: obstacle.label, tier: obstacle.tier,
+      // A group contest names the group — "Guard T3 & Guard T2" is
+      // the honest record of what one roll went past.
+      obstacle: groupmates.length
+        ? group.map((o) => o.label + " T" + o.tier).join(" & ")
+        : obstacle.label,
+      tier: obstacle.tier,
+      groupSize: group.length,
       runner: runner.identity.handle, skill: skill, verb: act.verb,
       pool: outcome.poolSize,
       loud: act.loud, hits: outcome.hits, threshold: outcome.threshold,

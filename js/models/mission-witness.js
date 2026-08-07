@@ -59,11 +59,15 @@
   // worse to work under than a stationary post.
   const sensesPlane = (o, plane) => (o.senses || []).indexOf(plane) !== -1;
 
-  function perceiversNear(run, target, plane) {
+  // `exclude` — things that were IN the contest rather than beside
+  // it. A watch group beaten as a group did not see the act, so its
+  // members cannot also vote as bystanders on the same roll.
+  function perceiversNear(run, target, plane, exclude) {
     const here = target.rooms;
     if (!here) return [];
     return run.obstacles.filter((o) =>
       o !== target && sensesPlane(o, plane) && !run.neutralized.has(o) &&
+      (!exclude || exclude.indexOf(o) === -1) &&
       o.rooms && o.rooms.some((r) => here.indexOf(r) !== -1));
   }
 
@@ -125,8 +129,8 @@
 
   // Did anything ELSE on this ground both perceive this plane AND
   // actually catch it? Returns the watcher that did, or null.
-  function noticedBy(run, target, plane, runner) {
-    return caughtBy(run, perceiversNear(run, target, plane), runner);
+  function noticedBy(run, target, plane, runner, exclude) {
+    return caughtBy(run, perceiversNear(run, target, plane, exclude), runner);
   }
 
   // ── Who sees a cast — INCLUDING the thing standing in front of you
@@ -156,7 +160,7 @@
     return !!(runner && run.silencedRunners && run.silencedRunners.has(runner));
   }
 
-  function wasWitnessed(run, obstacle, act, succeeded, runner) {
+  function wasWitnessed(run, obstacle, act, succeeded, runner, exclude) {
     // Gunfire carries regardless — unless a silence spell is holding
     // the sound down, in which case the shot still has to be SEEN.
     if (act && act.loud && !actSilenced(run, runner)) return true;
@@ -178,7 +182,7 @@
     // just handled. Take down the one guard in the room and there is
     // nobody left to have an opinion; do it in front of a camera, or
     // his partner, and "silent" was never on the table.
-    if (succeeded) return !!noticedBy(run, obstacle, plane, runner);
+    if (succeeded) return !!noticedBy(run, obstacle, plane, runner, exclude);
     // It failed. The thing you fumbled registers it if it has eyes ON
     // THIS PLANE — fumbling a hack is witnessed by the host's
     // watchers, not by the guard leaning on the door outside. It
@@ -187,7 +191,7 @@
     // The obstacle itself perceives nothing — a lock forms no
     // opinions. So this only registers if something ELSE here both
     // can respond AND actually caught it.
-    if (noticedBy(run, obstacle, plane, runner)) return true;
+    if (noticedBy(run, obstacle, plane, runner, exclude)) return true;
     // Nothing here perceives — but if they are already suspicious
     // they are sweeping the place, not watching the equipment.
     const band = MJ.threatBand(run.state, run.day);

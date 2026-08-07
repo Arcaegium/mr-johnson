@@ -163,7 +163,12 @@
   // the readout's benefit; they are description, never a gate.
   function resolveTask(rng, runner, obstacle, skillId, opts) {
     opts = opts || {};
-    const threshold = thresholdForTier(obstacle.tier);
+    // `extraThreshold` — extra hits the situation demands beyond the
+    // obstacle's own tier. The watch-group contest uses it: slipping
+    // past three guards at once is ONE roll against MORE eyes, per
+    // SR5's group opposition, rather than three rolls with an
+    // audience.
+    const threshold = thresholdForTier(obstacle.tier) + (opts.extraThreshold || 0);
     const poolSize = dicePoolFor(runner, skillId, opts.bonusDice);
 
     if (poolSize <= 0) {

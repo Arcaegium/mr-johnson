@@ -605,7 +605,7 @@
         // Found out the hard way — that's what the attempt bought.
         logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " tried " + t.skill + " — " + t.rejected);
       } else {
-        logLine(session, "    " + t.obstacle + " T" + t.tier + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : "") + readNote(t.read));
+        logLine(session, "    " + t.obstacle + (t.groupSize > 1 ? " (together)" : " T" + t.tier) + ": " + t.runner + " (" + t.skill + (t.pool !== undefined ? " " + t.pool + "d" : "") + (t.loud ? ", LOUD" : "") + (t.boosted ? ", +" + t.boosted : "") + ") — " + t.hits + " hits vs " + t.threshold + " needed: " + (t.success ? "passed" : "MISSED") + (t.criticalGlitch ? " + CRITICAL GLITCH" + (t.guarded ? " (absorbed by " + t.guarded + ")" : "") : t.glitch ? " + glitch" : "") + readNote(t.read));
         if (t.drain && t.drain.damage > 0) {
           logLine(session, "      Drain: Force " + t.drain.force + (t.drain.overcast ? " (OVERCAST)" : "") +
             " — " + t.drain.damage + (t.drain.physical ? " physical" : " stun") +

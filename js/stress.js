@@ -481,6 +481,61 @@
         check(sM.market.length === 8, "C2: the nightly cycle tops the board back to eight");
       }
 
+      // ── THE WATCH GROUP: one roll past all of them ──────────────
+      // Three guards on the same ground is ONE sneak contest against
+      // more eyes (SR5 group opposition) — never three contests with
+      // an audience. Each extra watcher is one more hit needed;
+      // success is past the LOT; the others become spent ground the
+      // walk steps over WITHOUT being neutralized, because slipping
+      // past a guard leaves his eyes intact for later acts.
+      {
+        const rngG = MJ.makeRNG("c2-group");
+        const siteG = MJ.mintSite("c2-group-site", 2, { value: 3 });
+        MJ.initSecurityState(rngG.fork("i"), siteG);
+        const ghost = MJ.mintRunner("c2-group", 1);
+        ghost.market.hired = { tier: "permanent", missionsRemaining: 99, blockSize: 99 };
+        ghost.skills = { stealth: 14 };
+        const runG = MJ.beginMission(rngG.fork("m"),
+          { site: siteG, kind: "jobObjective", objective: {} }, [ghost], 1);
+        const trio = [0, 1, 2].map((k) => {
+          const g = MJ.generateObstacleInstance(rngG.fork("g" + k), "guard", 2, "physical");
+          g.rooms = [7]; g.leg = 0;
+          return g;
+        });
+        const lock = MJ.generateObstacleInstance(rngG.fork("l"), "maglock", 2, "physical");
+        lock.rooms = [7]; lock.leg = 0;
+        // A lock BETWEEN the guards, so passing the group must not
+        // teleport the crew over unrelated ground.
+        runG.obstacles = [trio[0], lock, trio[1], trio[2]];
+        runG.index = 0;
+        const p = MJ.missionPrompt(runG);
+        const sneak = (p.options || []).find((o) => o.verbId === "sneak");
+        check(!!sneak, "C2: a guard must offer the sneak verb");
+        check(sneak.group === 3, "C2: the option must name the whole watch group (saw " + (sneak && sneak.group) + ")");
+        // Force the success so the assertions are about bookkeeping,
+        // not dice: stealth 14 vs threshold(T2)+2 passes essentially
+        // always, but pin it anyway.
+        let task = null;
+        for (let i = 0; i < 20 && !task; i++) {
+          const t = MJ.missionChoose(runG, { skill: sneak.skill, runner: sneak.runner || ghost, approach: "sneak" });
+          if (t && t.success) task = t;
+          else if (runG.index !== 0) break;
+        }
+        check(!!task && task.groupSize === 3, "C2: the contest must be rolled once, against the group");
+        check(task.threshold === MJ.thresholdForTier(trio[0].tier) + 2,
+          "C2: each extra watcher raises the bar by one hit");
+        check(/&/.test(task.obstacle), "C2: the record names every member of the group");
+        check(runG.groupPassed.has(trio[1]) && runG.groupPassed.has(trio[2]),
+          "C2: success is past the LOT — the others are spent ground");
+        check(!runG.neutralized.has(trio[1]) && !runG.neutralized.has(trio[2]),
+          "C2: but slipping past never removes their eyes");
+        // The next thing faced is the LOCK — the group is stepped
+        // over, unrelated ground is not.
+        const p2 = MJ.missionPrompt(runG);
+        check(p2 && p2.obstacle === lock,
+          "C2: passing the group must not teleport the crew past the lock");
+      }
+
       // Step inside, then try to reroute — the door must refuse.
       const p = MJ.missionPrompt(runA);
       const live = (p.options || []).find((o) => o.available);
