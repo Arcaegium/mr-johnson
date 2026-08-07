@@ -518,46 +518,38 @@ weapon, so incoming Power was 6 at every rating and armour was worth the same
 everywhere. Guards now ladder holdout → pistol → SMG → rifle → machine gun
 across tiers 1–10, which is what gives Defense something to be a read *about*.
 
-**A RATING IS A SPREAD, AND NEITHER END IS THE ANSWER.** Obstacle tiers are
-drawn uniformly across `1..rating`, so a "~4" building is not four identical
-guards — it is a 2, a 3, a 5 and a 6, and they even out. Every number the card
-quotes has to pick a point on that spread, and **which** point is a design
-decision per lane.
+**A RATING IS A BAND: THE TIER, GIVE OR TAKE ONE.** *(Ruling, 2026-08-06 —
+replacing the uniform spread.)* The old model drew obstacle tiers uniformly
+across `1..rating`, so a "T8" tower fielded T1 mall cops as often as T8
+troopers, and then needed band mathematics stacked on top so every card could
+guess at its own building. Too convoluted and too random to decide which jobs
+to accept — which defeats the entire point of a job board.
 
-**Never the maximum.** That is the outlier, and a player standing outside has no
-way to know whether it is in there. Quoting their best armour is the same
-overclaim as quoting their best gun — or as reading the true tier. The
-upper-quarter formula is explicitly held one below the rating for exactly this
-reason (`ceil(3r/4)` lands *on* the max at rating 3).
+Now **what an axis fields sits in `[axis−1, axis+1]`**, clamped to 1–10, and
+the law lives in exactly one place (`tierBandMid` / `tierBandHigh` in
+`core/resolve.js` — mid *is* the rating, high is one over):
 
-| lane | reads | because |
+| lane | reads | meaning |
 |---|---|---|
-| Defense | the **median** tier | Absorbing hits is averaged over a whole firefight, so the ordinary round is what decides whether the crew comes home. |
-| Attack | the **upper quarter** | Failing to penetrate is *not* averaged. The guard you cannot scratch does not become scratchable because the last two were softer — he just stands there while the crew empties magazines into him. |
+| Defense | **mid** — the rating itself | what you should expect |
+| Attack | **high** — one over | what you should pack for; the band's top is *in* the promise the tier makes |
 
-**The card is a FLOOR, not a promise, and it is meant to be learned by playing.**
-A crew that packs exactly to it meets the half of the spread sitting above it and
-takes a beating. Measured over 300 generated sites: the building held something
-harder than the card's floor **33%** of the time, and the crew's best could not
-hurt that thing **28%** of the time. That is the lesson — bring a few points more
-than the card asks — and it is why the numbers are honest rather than padded.
-Padding them would just move the floor and teach nothing.
+Quoting T+1 is no longer an overclaim: the band is public knowledge the moment
+the tier is, which is the entire point of making sites legible. The estimates
+still carry error until confirmed on the ground — legible is not omniscient.
 
-**EVERY number quoted at the player is on this spread — including the header.**
-`diceForSecurity` reads the high band too, so `P:~12d` is the pool for the high
-end of typical, not for the site's hardest possible obstacle.
+**THE BOARD SHOWS THE THREAT BEFORE YOU ACCEPT.** Every job leg carries
+`threat ~T{n} · est P/A/M` where the tier tag is the site's **strongest axis**
+— the mint-time `value` is an internal budget knob; the player-facing grade is
+derived from what the axes actually hold, so a balanced "value 5" site whose
+physical axis landed at 8 is honestly sold as ~T8. Colour follows the lane
+band ladder (teal ≤3, gold ≤5, amber ≤7, red 8+).
 
-An earlier pass exempted the dice lanes on the grounds that you must clear
-*every* obstacle, so the hardest one sets the bar. **That argument is about
-mechanics and says nothing about information.** The player has no way to know
-where the maximum sits, so quoting the pool for it hands them a fact they never
-earned — the same overclaim as printing the true tier on the job card. The
-mechanical point is real, and the answer to it is that the number is a **floor**:
-bring exactly it and the top of the spread will still beat you sometimes. That is
-what recon is for.
-
-The scale moved: 3 → `4d` (was 8d), 5 → `8d` (was 12d), 7–8 → `12d` (was 16d),
-9–10 → `16d` (was 19d).
+**Consequence, flagged deliberately:** with high = T+1, `diceForSecurity`
+quotes rose roughly one tier across the whole game relative to the old
+upper-quarter read. The suite is green under the new law; whether the felt
+difficulty of the quotes needs re-tuning is a playtest question, not a
+consistency one.
 
 **The armour ladder is contiguous, 1–8, and that is load-bearing.** Armour is one
 side of the Penetrate gate, so every rating a weapon can demand has to be

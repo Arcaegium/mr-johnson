@@ -175,7 +175,19 @@
       // things that can fight turn a violent approach into an
       // actual exchange rather than target practice.
       fights: true,
-      armour: 3,
+      // BASE 2, BY RULING: the enemies are tamed to the starting
+      // position, never the other way round. At base 3 the tier
+      // formula (+floor(tier/2)) put a T2 rent-a-cop at armour 4 —
+      // one point past the starting holdout's Power 4 — so a fresh
+      // crew's guns were mathematically useless against the SECOND
+      // rung of the weakest lane, measured live as eleven rounds of
+      // BOUNCED and a runner carried out. At base 2 the ladder runs
+      // 2/3/3/4/4/5... — holdouts handle T1-3, a bought heavy pistol
+      // (Power 6) carries the mid tiers, and the top of the ladder
+      // still wants real hardware. Spirits keep their heavier plate
+      // on purpose: a pistol crew bouncing off a spirit is the
+      // bring-a-mage lesson, not a bug.
+      armour: 2,
       // TIER BUYS BETTER GUNS. mission.js's own note on tier says what
       // a rating actually purchases is "more of them, better armed and
       // better armoured" — armour and stats scaled and the gun never
@@ -526,6 +538,15 @@
     const staticWeighted = weightedTypes(staticTypes, cond);
     const mobileWeighted = weightedTypes(mobileTypes, cond);
 
+    // THE BAND, BY RULING: what a site fields fits its own threat
+    // level — the site's tier, give or take one, clamped to 1..10.
+    // The old uniform 1..rating draw put T1 mall cops in T8 towers
+    // and made the number on the job board mean nothing; band maths
+    // then had to guess around it everywhere a card spoke. Now the
+    // rating IS the promise, resolve.js's tierBandMid/High read the
+    // same law, and a player reading "T5" is reading the building.
+    const tierLo = Math.max(1, securityValue - 1);
+    const tierHi = Math.min(10, securityValue + 1);
     let guardLoop = 0;
     while (budget > 0 && guardLoop++ < 200) {
       const pass = rng.shuffle(allSlots);
@@ -533,7 +554,7 @@
         if (budget <= 0) break;
         const isMobile = mobileSlotSet.has(slot);
         const typeId = rng.weighted(isMobile ? mobileWeighted : staticWeighted);
-        slot[fieldName].push(generateObstacleInstance(rng, typeId, rng.int(1, securityValue), projection));
+        slot[fieldName].push(generateObstacleInstance(rng, typeId, rng.int(tierLo, tierHi), projection));
         budget--;
       }
     }

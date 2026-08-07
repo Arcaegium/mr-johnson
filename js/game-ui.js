@@ -103,7 +103,22 @@
       // no reason. Click it and you are standing at that location with
       // its card open, choosing what to do there.
       (m.site.identity.name ? `&nbsp;&nbsp;<a class="sitelink" data-act="goto-site" data-sk="${keyFor(m.site, "s")}">"${esc(m.site.identity.name)}"</a>${m.site.identity.theme ? ` <span class="muted">· ${esc(m.site.identity.theme)}</span>` : ""}<br>` : "") +
-      `&nbsp;&nbsp;<span class="muted">est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</span></div>`;
+      // THE THREAT TIER, up front, BY RULING: a site is T1-T10 and
+      // what is inside fits that band, so the board owes the player
+      // the tier before they accept. Derived from the same axis reads
+      // they can already see — the strongest axis IS the building's
+      // grade — so nothing is leaked, only summarised. "~" until the
+      // axes behind it are confirmed on the ground.
+      `&nbsp;&nbsp;<span class="dk">threat</span> ${threatTag(v)} ` +
+      `<span class="muted">· est P:${fmtAxis(v.physical)} A:${fmtAxis(v.astral)} M:${fmtAxis(v.matrix)}</span></div>`;
+  }
+
+  function threatTag(v) {
+    const read = (a) => a.confirmed ? a.confirmed.value : a.estimated;
+    const tier = Math.max(read(v.physical), read(v.astral), read(v.matrix));
+    const sure = v.physical.confirmed && v.astral.confirmed && v.matrix.confirmed;
+    const tone = tier <= 3 ? "good" : tier <= 5 ? "w-close" : tier <= 7 ? "w-warn" : "warn";
+    return `<span class="${tone}">${sure ? "" : "~"}T${tier}</span>`;
   }
 
   // BOTH TRACKS. A mage carrying six boxes of Drain is as unfit for

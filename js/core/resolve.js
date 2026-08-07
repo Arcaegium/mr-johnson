@@ -59,37 +59,27 @@
     return Math.max(1, Math.ceil(tier / 2));
   }
 
-  // ── A RATING IS A SPREAD, AND THE PLAYER CANNOT SEE INTO IT ─────
-  // A site's 1-10 value is a budget, and the obstacles it buys have
-  // tiers drawn uniformly across 1..rating. A "4" building is not four
-  // identical guards — it is a 2, a 3, a 5 and a 6.
+  // ── A RATING IS A BAND: THE TIER, GIVE OR TAKE ONE ──────────────
+  // BY RULING. The old model drew obstacle tiers uniformly across
+  // 1..rating — a "T8" site fielded T1 mall cops as often as T8
+  // troopers — and then needed band mathematics on top so a card
+  // could guess at its own building. Too convoluted to plan a job
+  // against, which defeats the entire point of a job board.
   //
-  // So every number quoted AT the player has to pick a point on that
-  // spread, and it may never be the maximum. Not because the maximum
-  // is not there — it often is — but because THE PLAYER HAS NO WAY TO
-  // KNOW WHERE IT IS. Quoting it hands them a fact they never earned,
-  // which is the same overclaim as printing the true tier on the job
-  // card. "You must clear every obstacle, so the hardest one sets the
-  // bar" is an argument about MECHANICS; it says nothing about what
-  // the crew standing outside the building has been told.
-  //
-  // Two bands, and which one a readout uses is a design decision:
-  //   mid   the median — for anything AVERAGED over an encounter
-  //         (soaking hits across a whole firefight).
-  //   high  the upper quarter — for anything PASS/FAIL, where being
-  //         under the bar once is not made up for by being over it
-  //         twice (clearing a lock, penetrating armour).
-  //
-  // `high` is capped one below the rating because ceil(3r/4) lands
-  // exactly ON the maximum at rating 3. Only a rating-1 site reads its
-  // own ceiling, and there the spread is a single tier wide.
+  // Now a site IS its tier. What is inside distributes across
+  // [T-1, T+1], clamped to 1..10, so a T5 building is T4-T6 problems
+  // and the number on the board MEANS something. The player still
+  // never sees exact truth — estimates carry error until confirmed,
+  // and the ±1 keeps every quote honest rather than exact:
+  //   mid   what you should expect: the rating itself.
+  //   high  what you should pack for: one over.
+  // These two stay the ONLY way any readout converts a rating to a
+  // tier, so the band law lives in one place.
   function tierBandMid(rating) {
-    const r = Math.max(1, Math.min(10, Math.round(rating || 1)));
-    return Math.max(1, Math.ceil(r / 2));
+    return Math.max(1, Math.min(10, Math.round(rating || 1)));
   }
   function tierBandHigh(rating) {
-    const r = Math.max(1, Math.min(10, Math.round(rating || 1)));
-    return Math.max(1, Math.min(r > 1 ? r - 1 : r, Math.ceil((r * 3) / 4)));
+    return Math.min(10, tierBandMid(rating) + 1);
   }
 
   // ── A security rating, stated in DICE ───────────────────────────

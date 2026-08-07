@@ -207,7 +207,14 @@
     session.roster.push(runner);
     logLine(session, "watching " + runner.identity.handle + " (" + MJ.describeDiscipline(runner) + ")",
       "roster", { runners: [runner.identity.handle], watched: true });
-    fillMarket(session);
+    // NO BACKFILL. Taking someone off the board just shortens the
+    // board — sweep mages, watch one, and seven mages remain. This
+    // used to refill the slot immediately with an UNFILTERED draw,
+    // which is how a Leader Face materialised inside a paid mage
+    // sweep with no day passing (found live). The board only ever
+    // fills three ways now: the day-one list, a PAID sweep, and the
+    // nightly cycle — which is the free any-class refresh that tops
+    // the street back up to eight while the shelf clocks turn over.
     return { ok: true, runner: runner };
   }
 

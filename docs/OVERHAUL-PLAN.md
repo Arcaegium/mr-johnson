@@ -362,6 +362,27 @@ day must bank exactly one morning, before it resolves.
 
 ---
 
+## 5b. RULINGS FROM PLAYTEST (2026-08-06, all implemented unless noted)
+
+- **The band law.** A site axis fields `[axis−1, axis+1]`, the shown site
+  grade is the strongest axis, the board says `threat ~T · est P/A/M` before
+  accepting. Uniform 1..rating spread repealed; `tierBandMid` = rating,
+  `tierBandHigh` = rating+1, one place only. **Open playtest question:** dice
+  quotes rose ~one tier with the new "pack for T+1" read.
+- **Tame the enemies, never inflate the player.** Guard base armour 3 → 2 so
+  the ladder runs under the starting holdout (T1–3 penetrable at Power 4),
+  heavy pistol carries the mid tiers. Spirits stay armoured on purpose.
+- **The market only shrinks during the day.** No backfill on watch/hire; a
+  paid sweep fills eight; the nightly cycle is the free any-class refresh that
+  tops the street back to eight. (Root cause of the "face in a mage sweep".)
+- **A futile firefight breaks off at round two.** Penetration is
+  deterministic; round one is theirs to learn it in.
+- **Routes (NOT yet implemented — queued with the popup stack):** alternate
+  approaches are EARNED (recon/casing reveals them), and the tradeoff mirrors
+  the astral/matrix balance: the long way is quieter but costs time, gear and
+  ammo; the short way is cheap and fast but risks more noise. Both halves
+  ruled together — neither alone.
+
 ## 6. OPEN QUESTIONS
 
 - **Growth vs birth attribute priority.** Presentation drives it at birth (B2).

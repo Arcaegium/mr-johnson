@@ -459,6 +459,28 @@
         "C2: choosing an approach re-routes the run through that door");
       check(runA.obstacles === runA.streetRoute.obstacles,
         "C2: and the run walks the rerouted obstacles, not the old ones");
+      // ── THE BOARD ONLY SHRINKS DURING THE DAY ─────────────────
+      // A paid sweep buys a board of eight; watching someone off it
+      // leaves seven. The old behaviour backfilled the slot at once
+      // with an UNFILTERED draw — which is how a Leader Face
+      // materialised inside a mage sweep with no day passing (found
+      // live by the player). The nightly cycle is the free any-class
+      // refresh, and it alone tops the street back up to eight.
+      {
+        const sM = MJ.game.newGame("c2-market-shrink");
+        sM.save.johnson.money = 99999;
+        MJ.game.refreshMarket(sM, "mage");
+        check(sM.market.length === 8 && sM.market.every((r) => r.classification.family === "mage"),
+          "C2: a paid mage sweep fills eight mages");
+        MJ.game.watchFromMarket(sM, 0, MJ.makeRNG("c2ms"));
+        check(sM.market.length === 7, "C2: watching one leaves seven — no backfill");
+        check(sM.market.every((r) => r.classification.family === "mage"),
+          "C2: and nobody off the street is injected into the paid sweep");
+        const dayM = MJ.game.beginDay(sM, MJ.makeRNG("c2msd"));
+        MJ.game.settleDay(sM, dayM);
+        check(sM.market.length === 8, "C2: the nightly cycle tops the board back to eight");
+      }
+
       // Step inside, then try to reroute — the door must refuse.
       const p = MJ.missionPrompt(runA);
       const live = (p.options || []).find((o) => o.available);
@@ -1283,12 +1305,13 @@
     check(q2.ok === false && q2.error.indexOf("already committed") !== -1, "C10: double-booking a runner must refuse at queue time");
     s4.queue = [];
 
-    // Market refresh: new faces, same slot count, indices advance.
-    const beforeCount = s4.market.length;
+    // Market refresh: new faces, a FULL board, indices advance. The
+    // board may be short when the sweep is paid for — watching only
+    // shrinks it now — so the promise is eight, not "same as before".
     const beforeFaces = snap(s4.market.map((r) => r.identity.universeIndex));
     const beforeMint = s4.runnerMintIndex;
     MJ.game.refreshMarket(s4);
-    check(s4.market.length === beforeCount && s4.runnerMintIndex > beforeMint, "C10: market refresh must keep slot count and advance the mint");
+    check(s4.market.length === 8 && s4.runnerMintIndex > beforeMint, "C10: a paid sweep fills the board to eight and advances the mint");
     check(snap(s4.market.map((r) => r.identity.universeIndex)) !== beforeFaces, "C10: market refresh left the same crowd");
 
     // Round-4 mechanics: contract numbering, search-as-dispatch,
@@ -2682,34 +2705,30 @@
         "C25: Defense reads the round you should EXPECT, never the worst gun on site");
     }
 
-    // ── A RATING IS A SPREAD, AND NEITHER END IS THE ANSWER ──────
-    // Obstacle tiers are drawn uniformly across 1..rating, so a "~4"
-    // building is a 2, a 3, a 5 and a 6. Every number the card quotes
-    // picks a point on that spread, and the two fight reads pick
-    // DIFFERENT points on purpose:
+    // ── A RATING IS A BAND: THE TIER, GIVE OR TAKE ONE ───────────
+    // BY RULING, replacing the uniform 1..rating spread. A site IS
+    // its tier and what it fields sits in [T-1, T+1] — a "T5"
+    // building is T4-T6 problems, and the number on the board means
+    // something a player can plan against. The two fight reads:
     //
-    //   Defense — the median. Absorbing hits is averaged over a whole
-    //     firefight, so the ordinary round is what decides it.
-    //   Attack  — the upper quarter. Failing to penetrate is NOT
-    //     averaged: the guard you cannot scratch does not become
-    //     scratchable because the last two were softer.
+    //   Defense — mid: the rating itself. What you should expect.
+    //   Attack  — high: one over. What you should pack for, because
+    //     the band's top is IN the promise the tier makes.
     //
-    // Neither may ever be the maximum. You no more know their best
-    // armour than their best gun, and quoting the outlier is the same
-    // overclaim as reading the true tier.
+    // Quoting T+1 is not an overclaim any more — the band is public
+    // knowledge the moment the tier is, which is the entire point of
+    // making sites legible.
     for (let rating = 1; rating <= 10; rating++) {
       const mid = MJ.tierBandMid(rating);
       const high = MJ.tierBandHigh(rating);
-      check(mid >= 1 && high >= 1, "C25: a tier band is never below 1 (rating " + rating + ")");
-      check(high >= mid, "C25: Attack must never read BELOW Defense on the spread (rating " + rating + ")");
-      check(high <= rating, "C25: and never above the rating itself (rating " + rating + ")");
-      if (rating >= 2) {
-        check(high < rating,
-          "C25: the Attack read is the high end of TYPICAL, never the best they have (rating " + rating + ")");
-      }
-      if (rating >= 4) {
+      check(mid === Math.max(1, Math.min(10, rating)),
+        "C25: the typical read IS the rating (rating " + rating + ")");
+      check(high === Math.min(10, mid + 1),
+        "C25: the pack-for read is one over, capped at the scale (rating " + rating + ")");
+      check(high >= mid, "C25: Attack must never read BELOW Defense (rating " + rating + ")");
+      if (rating < 10) {
         check(high > mid,
-          "C25: and it must actually sit above the median, or it is just Defense again (rating " + rating + ")");
+          "C25: below the cap the two reads must differ, or Attack is just Defense again (rating " + rating + ")");
       }
     }
 
@@ -2756,7 +2775,11 @@
         // can actually stand in front of you.
         const reachable = bodies.some((o) => {
           const proj = o.projection || "physical";
-          const typical = Math.max(1, Math.ceil(Math.max(1, Math.min(10, axes[proj] || 1)) / 2));
+          // Through the band law, never a copy of it — this probe
+          // used to inline the old ceil(rating/2) median and broke
+          // the moment the law changed, which is the exact drift the
+          // one-place rule exists to prevent.
+          const typical = MJ.tierBandMid(axes[proj] || 1);
           const w = MJ.weaponProfile(MJ.weaponForTier(MJ.OBSTACLE_TEMPLATE(o.type) || {}, typical));
           return (w.power || 0) + (w.useStrength ? 2 + Math.floor(typical / 3) : 0) - (w.ap || 0) >= d.defense.need;
         });
@@ -2936,19 +2959,16 @@
         "C23: the stated pool must beat the high end of typical (v=" + v + ", " + dice + "d)");
       check(rate(dice - 1, band) < rate(dice, band),
         "C23: and it must be the LINE, not a number above it (v=" + v + ")");
-      // ...and it must NOT quietly cover the outlier as well, or the
-      // "floor" is a ceiling wearing a hat and nothing is being
-      // withheld from the player at all.
-      if (MJ.thresholdForTier(v) > MJ.thresholdForTier(band)) {
-        check(rate(dice, v) < 0.75,
-          "C23: the number is a FLOOR — it must not silently cover the site's worst (v=" + v + ")");
-      }
+      // Under the band ruling the quote covers the band's own top —
+      // that is the promise the tier makes, so nothing is withheld
+      // and nothing is overclaimed. The old floor-not-ceiling probe
+      // policed a uniform 1..rating spread that no longer exists.
     }
     check(MJ.diceForSecurity(10) > MJ.diceForSecurity(1),
       "C23: the top of the scale must demand more than the bottom");
-    for (let v = 2; v <= 10; v++) {
-      check(MJ.tierBandHigh(v) < v,
-        "C23: no number quoted at the player may be read off the site's maximum (v=" + v + ")");
+    for (let v = 1; v <= 10; v++) {
+      check(MJ.tierBandHigh(v) === Math.min(10, Math.max(1, Math.min(10, v)) + 1),
+        "C23: every quote reads the BAND — the tier plus one, never past the scale (v=" + v + ")");
     }
 
     // ── A RESPONSE SQUAD PROVES CAPABILITY ───────────────────────

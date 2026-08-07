@@ -647,6 +647,8 @@ body.railed .framebar { left: 300px; }
 .lane.short { border-color: #a85448; }
 .lane.short .lv { color: #d4735e; }
 .lane-note { color: var(--dim); font-size: 0.7rem; margin-top: 3px; font-style: italic; }
+/* Word-level tier tones, same ladder as the lane bands. */
+.w-close { color: #d2b356; }
 
 /* ── Mission results ─────────────────────────────────────────── */
 .res-verdict { font-size: 1.05rem; letter-spacing: 0.05em; margin-bottom: 4px; }
