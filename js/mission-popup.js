@@ -291,11 +291,20 @@
     return Math.abs(h);
   }
 
+  // `opts.path` — draw THIS route instead of the run's current one:
+  // the approach screen draws every candidate side by side, red dot
+  // at each door, so "the roof is 4 rooms, the window is 2" is seen
+  // rather than read. `opts.mini` shrinks it to fit an option row.
   function routeGraph(run, opts) {
-    const route = run.streetRoute;
+    opts = opts || {};
+    const route = opts.path ? { path: opts.path } : run.streetRoute;
     if (!route || !route.path || route.path.length < 2) return "";
     const path = route.path;
-    const outside = opts && opts.outside;
+    const outside = opts.outside || !!opts.path;
+    const mini = !!opts.mini;
+    const S = mini
+      ? { stepX: 46, cap: 380, h: 58, y: 32, r: 6, wob: 5, wobm: 5, font: 8, dot: 3.5, lift: 11, tick: 2.5 }
+      : { stepX: 84, cap: 660, h: 112, y: 60, r: 12, wob: 9, wobm: 11, font: 12, dot: 5, lift: 21, tick: 4 };
 
     // The frontier: the furthest leg anyone has stood on. Outside,
     // only the entry room shows its contents — the prep screen is
@@ -311,13 +320,13 @@
     }
     const knows = (i) => outside ? i === 0 : i <= frontier;
 
-    const W = Math.min(560, 44 + (path.length - 1) * 64), H = 84;
+    const W = Math.min(S.cap, 44 + (path.length - 1) * S.stepX), H = S.h;
     const stepX = (W - 56) / (path.length - 1);
     const pos = path.map((rid, i) => ({
       x: 28 + i * stepX,
       // A stable per-room wobble, so the walk bends like a floor plan
       // and the same site always draws the same way.
-      y: 46 + ((roomHash(rid) % 2 ? -1 : 1) * (7 + (roomHash(rid) % 9))),
+      y: S.y + ((roomHash(rid) % 2 ? -1 : 1) * (S.wob + (roomHash(rid) % S.wobm))),
     }));
 
     const bits = [];
@@ -325,32 +334,35 @@
     for (let i = 0; i < path.length - 1; i++) {
       const walked = !outside && i < frontier;
       bits.push(`<line x1="${pos[i].x}" y1="${pos[i].y}" x2="${pos[i + 1].x}" y2="${pos[i + 1].y}"` +
-        ` stroke="${walked ? "var(--accent-2)" : "var(--line)"}" stroke-width="${walked ? 2 : 1.4}"/>`);
+        ` stroke="${walked ? "var(--accent-2)" : "var(--line)"}" stroke-width="${walked ? 2.4 : 1.6}"/>`);
     }
     // Rooms. Shape varies by the room's own hash — a building, not a
     // bar chart — and the outline says what the crew knows: teal for
     // ground they hold, amber where something still stands, dim for
-    // rooms nobody has seen into.
+    // rooms nobody has seen into. A mini graph (the approach picker)
+    // draws SHAPE only: nothing about contents is known from the
+    // pavement, and the picker must not pretend otherwise.
+    const r = S.r, r2 = Math.round(r * 0.5);
     for (let i = 0; i < path.length; i++) {
       const p = pos[i], rid = path[i], h = roomHash(rid);
-      const here = run.obstacles.filter((o) =>
+      const here = mini ? [] : run.obstacles.filter((o) =>
         o.rooms && o.rooms.indexOf(rid) !== -1 && o.leg !== undefined && o.leg <= (outside ? 0 : frontier));
       const up = here.filter((o) => !run.neutralized.has(o)).length;
-      const stroke = !knows(i) ? "var(--line)" : up > 0 ? "var(--accent)" : "var(--accent-2)";
+      const stroke = mini || !knows(i) ? "var(--line)" : up > 0 ? "var(--accent)" : "var(--accent-2)";
       const shape = h % 4;
-      if (shape === 0) bits.push(`<circle cx="${p.x}" cy="${p.y}" r="9" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
-      else if (shape === 1) bits.push(`<polygon points="${p.x},${p.y - 10} ${p.x + 10},${p.y} ${p.x},${p.y + 10} ${p.x - 10},${p.y}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
-      else if (shape === 2) bits.push(`<rect x="${p.x - 8}" y="${p.y - 8}" width="16" height="16" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
-      else bits.push(`<polygon points="${p.x - 9},${p.y} ${p.x - 4.5},${p.y - 9} ${p.x + 4.5},${p.y - 9} ${p.x + 9},${p.y} ${p.x + 4.5},${p.y + 9} ${p.x - 4.5},${p.y + 9}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.6"/>`);
-      if (!knows(i)) {
-        bits.push(`<text x="${p.x}" y="${p.y + 3.5}" text-anchor="middle" font-size="10" fill="var(--dim)">?</text>`);
-      } else {
+      if (shape === 0) bits.push(`<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
+      else if (shape === 1) bits.push(`<polygon points="${p.x},${p.y - r - 1} ${p.x + r + 1},${p.y} ${p.x},${p.y + r + 1} ${p.x - r - 1},${p.y}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
+      else if (shape === 2) bits.push(`<rect x="${p.x - r + 1}" y="${p.y - r + 1}" width="${2 * r - 2}" height="${2 * r - 2}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
+      else bits.push(`<polygon points="${p.x - r},${p.y} ${p.x - r2},${p.y - r} ${p.x + r2},${p.y - r} ${p.x + r},${p.y} ${p.x + r2},${p.y + r} ${p.x - r2},${p.y + r}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
+      if (!mini && !knows(i)) {
+        bits.push(`<text x="${p.x}" y="${p.y + S.font / 2 - 1}" text-anchor="middle" font-size="${S.font}" fill="var(--dim)">?</text>`);
+      } else if (!mini) {
         // What the crew has seen in this room: an amber tick per
         // thing still standing, a dim tick per thing dealt with.
-        const marks = here.slice(0, 4);
+        const marks = here.slice(0, 4), t = S.tick, gap = t + 3;
         marks.forEach((o, k) => {
-          const mx = p.x - ((marks.length - 1) * 5) / 2 + k * 5;
-          bits.push(`<rect x="${mx - 1.5}" y="${p.y + 14}" width="3" height="3"` +
+          const mx = p.x - ((marks.length - 1) * gap) / 2 + k * gap;
+          bits.push(`<rect x="${mx - t / 2}" y="${p.y + r + 6}" width="${t}" height="${t}"` +
             ` fill="${run.neutralized.has(o) ? "var(--dim)" : "var(--accent)"}"/>`);
         });
       }
@@ -359,17 +371,18 @@
     // it — the red dot has arrived and saying both would stutter.
     const last = pos[path.length - 1];
     const atGoal = !outside && frontier === path.length - 1;
-    if (!atGoal) bits.push(`<circle cx="${last.x}" cy="${last.y - 16}" r="4" fill="#d2b356"><title>the job is here</title></circle>`);
+    if (!atGoal) bits.push(`<circle cx="${last.x}" cy="${last.y - S.lift}" r="${S.dot}" fill="#d2b356"><title>the job is here</title></circle>`);
     // The red dot: the crew — on the pavement before entry, in their
     // furthest room once inside.
-    const at = outside ? { x: pos[0].x - 17, y: pos[0].y } : pos[frontier];
-    bits.push(`<circle cx="${at.x}" cy="${outside ? at.y : at.y - 16}" r="4" fill="#e05858"><title>the crew is here</title></circle>`);
+    const at = outside ? { x: pos[0].x - S.lift, y: pos[0].y } : pos[frontier];
+    bits.push(`<circle cx="${at.x}" cy="${outside ? at.y : at.y - S.lift}" r="${S.dot}" fill="#e05858"><title>the crew is here</title></circle>`);
 
-    return `<div class="routegraph"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${bits.join("")}</svg>` +
+    const legend = mini ? "" :
       `<div class="rg-legend"><span style="color:#e05858">●</span> crew · ` +
       `<span style="color:#d2b356">●</span> objective · ` +
       `<span style="color:var(--accent)">▪</span> standing · ` +
-      `<span style="color:var(--dim)">▪</span> handled · ? unseen</div></div>`;
+      `<span style="color:var(--dim)">▪</span> handled · ? unseen</div>`;
+    return `<div class="routegraph${mini ? " rg-mini" : ""}"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${bits.join("")}</svg>` + legend + `</div>`;
   }
 
   function contextLines(run, opts) {
@@ -380,9 +393,6 @@
         ' <span class="dimmed">· ' + esc(id.owningFaction) + " · " + esc(id.district) +
         (id.theme ? " · " + esc(id.theme) : "") + "</span>");
     }
-    // The shape of the walk, drawn — earned knowledge only.
-    const graph = routeGraph(run, opts);
-    if (graph) lines.push(graph);
     let secLine = null;
     // WHAT THEY EXPECTED, and what they have now actually SEEN.
     // An axis ticks over from estimate to confirmed the moment the
@@ -419,20 +429,25 @@
         return letter + ':<span class="dimmed">~' +
           (shown ? MJ.diceForSecurity(shown) + "d" : "?") + "</span>";
       }).join(" ");
-      secLine = '<span class="dimmed">security </span>' + axes;
+      secLine = '<span class="dk">Security:</span> ' + axes;
     }
-    // The security read and the alert ladder are ONE subject — what
-    // the site knows and how much room is left before it knows more —
-    // so they share a boxed segment instead of drifting apart in the
-    // line flow.
+    // The site read, compact and high: security, the one-word alert
+    // box, and the observer count/names — one subject, one segment,
+    // three short lines. The GRAPH gets the room this used to take.
     {
-      const meter = awarenessMeter(run, opts);
-      if (secLine || meter) {
-        lines.push('<div class="seg-sec"><span class="seg-k">site read</span>' +
+      const alert = alertBox(run);
+      const watchers = watcherLine(run, opts);
+      if (secLine || alert || watchers) {
+        lines.push('<div class="seg-sec">' +
           (secLine ? "<div>" + secLine + "</div>" : "") +
-          (meter ? "<div>" + meter + "</div>" : "") + "</div>");
+          (alert ? "<div>" + alert + "</div>" : "") +
+          (watchers ? "<div>" + watchers + "</div>" : "") + "</div>");
       }
     }
+    // The shape of the walk, drawn — earned knowledge only, and the
+    // most prominent thing on the screen below the title.
+    const graph = routeGraph(run, opts);
+    if (graph) lines.push(graph);
     // WHERE they are. A street run walks the building room by room,
     // so the obstacle in front of the crew has a place, and the
     // route has a length they are some way along. The placeholder
@@ -471,28 +486,27 @@
   // visual layer arrives this is the same state a rotating camera arc
   // renders; the watchers below are the text stand-in for "what can
   // see you from where you are standing."
-  const BAND_TONE = { normal: "w-ok", awkward: "w-warn", questionable: "w-warn", threatening: "w-no" };
 
-  function awarenessMeter(run, opts) {
+  // ── The alert, as ONE box ───────────────────────────────────────
+  // The whole ladder used to print every band with the current one
+  // highlighted. The player only ever needs the word that is TRUE
+  // right now — so it is one box whose word and colour change as the
+  // site's read of the crew moves, on the reverse of the readiness
+  // ladder: NORMAL teal (their green is your green), AWKWARD gold,
+  // QUESTIONABLE amber, THREATENING red.
+  const ALERT_TONE = { normal: "a-ok", awkward: "a-close", questionable: "a-costly", threatening: "a-short" };
+  function alertBox(run) {
     if (!run.site || !run.site.securityState || !MJ.awarenessRead) return null;
     const a = MJ.awarenessRead(run.site.securityState, run.day);
-    const ladder = a.bands.map((b, i) => {
-      if (i === a.rank) return '<span class="' + (BAND_TONE[b] || "w-warn") + '">[' + esc(b.toUpperCase()) + "]</span>";
-      return '<span class="dimmed">' + esc(b) + "</span>";
-    }).join('<span class="dimmed"> › </span>');
-
     let room = "";
-    if (a.band === "threatening") {
-      room = " " + no("— they are responding in force");
-    } else if (a.band === "questionable") {
-      room = ' <span class="w-warn">— one more odd moment tips it</span>';
-    } else if (a.toNext !== null) {
-      room = '<span class="dimmed"> — room for </span>' + num(a.toNext) +
-        '<span class="dimmed"> more odd moment' + (a.toNext === 1 ? "" : "s") + "</span>";
+    if (a.band === "threatening") room = " " + no("responding in force");
+    else if (a.band === "questionable") room = ' <span class="w-warn">one more odd moment tips it</span>';
+    else if (a.toNext !== null) {
+      room = '<span class="dimmed">room for ' + a.toNext + " more odd moment" +
+        (a.toNext === 1 ? "" : "s") + "</span>";
     }
-
-    const watchers = watcherLine(run, opts);
-    return ladder + room + (watchers ? "<br>" + watchers : "");
+    return '<span class="alert-box ' + (ALERT_TONE[a.band] || "a-costly") + '">' +
+      esc(a.band.toUpperCase()) + "</span> " + room;
   }
 
   // What can actually perceive the crew on this ground, right now.
@@ -507,6 +521,11 @@
   // and the two flatly contradicted each other on one screen. Same
   // data, and only one of the two readings is true at a time, so the
   // wording has to know which side of the door everyone is on.
+  // Observers: a COUNT from outside, NAMES once inside. Standing on
+  // the pavement you can count silhouettes at the way in, not read
+  // badges; standing in the room, you can see what is in the room
+  // with you — that is what having eyes means, and it is the same
+  // earned-knowledge line the route graph draws.
   function watcherLine(run, opts) {
     const obstacle = run.obstacles && run.obstacles[run.index];
     if (!obstacle || !obstacle.rooms) return "";
@@ -519,14 +538,15 @@
       here.push(o.label + (o.fights ? "" : " (eyes only)"));
     }
     const outside = opts && opts.outside;
-    if (!here.length) {
-      return '<span class="dimmed">' +
-        (outside ? "nothing has eyes on the way in" : "nothing else here has eyes on this") +
-        "</span>";
+    if (outside) {
+      return '<span class="dk">Observers:</span> ' +
+        (here.length ? num(here.length) + '<span class="dimmed"> at the way in</span>'
+          : '<span class="dimmed">none visible</span>');
     }
-    return '<span class="dimmed">' +
-      (outside ? "waiting where you come in: " : "watching from the same ground: ") + "</span>" +
-      here.map((h) => '<span class="w-warn">' + esc(h) + "</span>").join('<span class="dimmed">, </span>');
+    return '<span class="dk">Observers:</span> ' +
+      (here.length
+        ? here.map((h) => '<span class="w-warn">' + esc(h) + "</span>").join('<span class="dimmed">, </span>')
+        : '<span class="dimmed">nothing else here has eyes on this</span>');
   }
 
   // What this attempt would look like to anything watching. Nothing
@@ -852,9 +872,15 @@
     function stepApproach() {
       const apps = MJ.missionApproaches ? MJ.missionApproaches(run) : [];
       if (apps.length <= 1) return stepPrep();
+      // Every candidate route DRAWN, red dot at its own door, gold at
+      // the shared objective — "the roof is 4 rooms, the window is 2"
+      // is seen, not read. Shape only: nothing about a room's
+      // contents is knowable from the pavement, and the picker must
+      // not pretend otherwise.
       const rows = apps.map((a) => ({
         html: nm(a.label) + '<span class="dimmed"> — </span>' + num(a.rooms) +
-          '<span class="dimmed"> room' + (a.rooms === 1 ? "" : "s") + " to the objective</span>",
+          '<span class="dimmed"> room' + (a.rooms === 1 ? "" : "s") + " to the objective</span>" +
+          routeGraph(run, { path: a.path, mini: true }),
         meta: a.current ? ok("the current plan") : '<span class="dimmed">reroute</span>',
       }));
       MJ.decide.open({

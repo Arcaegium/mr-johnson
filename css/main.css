@@ -214,10 +214,23 @@ a.navlink:hover { text-decoration: underline; }
   text-transform: uppercase; display: block; margin-bottom: 2px;
 }
 
-/* The shape of the run — the abstract walk, drawn. */
-.routegraph { margin: 7px 0 2px; }
+/* The shape of the run — the abstract walk, drawn. The most
+   prominent thing under the title, by ruling. */
+.routegraph { margin: 9px 0 4px; }
 .routegraph svg { display: block; max-width: 100%; }
+.routegraph.rg-mini { margin: 4px 0 0; }
 .rg-legend { color: var(--dim); font-size: 0.68rem; margin-top: 1px; }
+
+/* The alert, as one box: the word that is true right now, on the
+   reverse of the readiness ladder — their NORMAL is your green. */
+.alert-box {
+  display: inline-block; border: 1px solid; border-radius: 2px;
+  padding: 1px 8px; font-size: 0.74rem; letter-spacing: 0.1em;
+}
+.alert-box.a-ok { color: var(--accent-2); border-color: var(--accent-2); }
+.alert-box.a-close { color: #d2b356; border-color: #a68d42; }
+.alert-box.a-costly { color: var(--accent); border-color: #b3763a; }
+.alert-box.a-short { color: #d4735e; border-color: #a85448; }
 .modal-transcript {
   padding: 13px 22px; border-bottom: 1px solid var(--line);
   /* The transcript IS the run. It gets room to be read. */
