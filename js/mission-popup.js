@@ -267,7 +267,7 @@
       '<span class="dimmed"> on the way in</span>';
   }
 
-  function contextLines(run) {
+  function contextLines(run, opts) {
     const id = run.site ? run.site.identity : null;
     const lines = [];
     if (id) {
@@ -335,7 +335,7 @@
         (run.tether <= Math.max(2, Math.ceil(run.tetherMax / 4))
           ? " " + no("— the pull is getting hard") : ""));
     }
-    const meter = awarenessMeter(run);
+    const meter = awarenessMeter(run, opts);
     if (meter) lines.push(meter);
     return lines;
   }
@@ -354,7 +354,7 @@
   // see you from where you are standing."
   const BAND_TONE = { normal: "w-ok", awkward: "w-warn", questionable: "w-warn", threatening: "w-no" };
 
-  function awarenessMeter(run) {
+  function awarenessMeter(run, opts) {
     if (!run.site || !run.site.securityState || !MJ.awarenessRead) return null;
     const a = MJ.awarenessRead(run.site.securityState, run.day);
     const ladder = a.bands.map((b, i) => {
@@ -372,7 +372,7 @@
         '<span class="dimmed"> more odd moment' + (a.toNext === 1 ? "" : "s") + "</span>";
     }
 
-    const watchers = watcherLine(run);
+    const watchers = watcherLine(run, opts);
     return ladder + room + (watchers ? "<br>" + watchers : "");
   }
 
@@ -380,7 +380,15 @@
   // Witnessing is per-plane and co-located (§07), so this is the list
   // a vision arc eventually draws: the things whose attention is the
   // reason time costs anything.
-  function watcherLine(run) {
+  // `opts.outside` — the crew has not gone in yet. The list below is
+  // built around `run.obstacles[run.index]`, which before entry is the
+  // FIRST obstacle: things standing next to something the crew has not
+  // reached. Saying they are "watching from the same ground" then put
+  // a Guard on top of the prep step's own "nothing is watching yet",
+  // and the two flatly contradicted each other on one screen. Same
+  // data, and only one of the two readings is true at a time, so the
+  // wording has to know which side of the door everyone is on.
+  function watcherLine(run, opts) {
     const obstacle = run.obstacles && run.obstacles[run.index];
     if (!obstacle || !obstacle.rooms) return "";
     const plane = run.kind === "astralRun" ? "astral" : run.kind === "matrixRun" ? "matrix" : "physical";
@@ -391,8 +399,14 @@
       if (!o.rooms || !o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1)) continue;
       here.push(o.label + (o.fights ? "" : " (eyes only)"));
     }
-    if (!here.length) return '<span class="dimmed">nothing else here has eyes on this</span>';
-    return '<span class="dimmed">watching from the same ground: </span>' +
+    const outside = opts && opts.outside;
+    if (!here.length) {
+      return '<span class="dimmed">' +
+        (outside ? "nothing has eyes on the way in" : "nothing else here has eyes on this") +
+        "</span>";
+    }
+    return '<span class="dimmed">' +
+      (outside ? "waiting where you come in: " : "watching from the same ground: ") + "</span>" +
       here.map((h) => '<span class="w-warn">' + esc(h) + "</span>").join('<span class="dimmed">, </span>');
   }
 
@@ -728,7 +742,10 @@
       MJ.decide.open({
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">before you go in</span>',
-        context: contextLines(run),
+        // Outside, so the watcher line has to name what is WAITING
+        // rather than what is watching — otherwise it contradicts the
+        // heading directly below it.
+        context: contextLines(run, { outside: true }),
         transcript: transcript,
         heading: nm("Outside") + '<span class="dimmed"> — nothing is watching yet</span>' +
           (holding.length ? '<div class="dimmed">✦ holding: ' + holding.join(", ") + "</div>" : "") +
