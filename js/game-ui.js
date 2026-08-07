@@ -129,7 +129,14 @@
     const c = r.classification;
     const fam = c.family.charAt(0).toUpperCase() + c.family.slice(1);
     const trade = c.focusLabel.toLowerCase() === c.family.toLowerCase() ? fam : `${c.focusLabel} ${fam}`;
-    return `<b>${esc(r.identity.handle)}</b> <span class="good">${esc(trade)}</span>`;
+    // THE PRESENTATION NEVER LIES, so it goes on the headline where
+    // the player reads it first. Two Conjuring Mages are a Summoner
+    // and a Banisher and want opposite attributes; the trade alone
+    // could never say which. What may still mislead is the
+    // Specialist/Generalist claim further down the card.
+    const shown = c.presentationLabel
+      ? ` <span class="muted">·</span> <span class="good">${esc(c.presentationLabel)}</span>` : "";
+    return `<b>${esc(r.identity.handle)}</b> <span class="good">${esc(trade)}</span>${shown}`;
   }
 
   function runnerDetail(r) {

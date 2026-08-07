@@ -588,9 +588,24 @@
   // gets bought — growth stays thematic by construction rather than
   // by a rule that says so.
   function attributePriority(runner) {
-    const tiers = runner.classification.skillTiers;
-    const order = [runner.classification.focusKeySkill, tiers.primary, ...tiers.secondary, ...tiers.tertiary];
-    const seen = [];
+    // PRESENTATION FIRST, because skills cannot answer this question.
+    // Every magic skill maps to Magic, so a Puppeteer (Charisma), a
+    // Banisher (Willpower) and an Analyst (Intelligence) derive an
+    // IDENTICAL order from an identical skill sheet while being three
+    // different professions. The presentation carries the truth; the
+    // skill-derived order below is the fallback for anyone generated
+    // before presentations existed, and for focuses with no table.
+    const c = runner.classification;
+    const shown = c.presentation && MJ.presentationDef
+      ? MJ.presentationDef(c.focusId, c.presentation)
+      : null;
+    const seen = shown ? shown.attrs.slice() : [];
+
+    // Whatever the presentation did not name still matters if a skill
+    // uses it — a Puppeteer's Charisma leads, but their Magic is not
+    // therefore worthless.
+    const tiers = c.skillTiers;
+    const order = [c.focusKeySkill, tiers.primary, ...tiers.secondary, ...tiers.tertiary];
     for (const skill of order) {
       const attr = attributeFor(skill);
       if (attr && seen.indexOf(attr) === -1) seen.push(attr);
@@ -1116,6 +1131,14 @@
     const trueArchetype = r.chance(0.5) ? "specialist" : "generalist";
     const disciplineLabel = generateDiscipline(r, trueArchetype);
 
+    // A decker's affinity has been rolled since the beginning and
+    // never meant anything; it now decides the presentation, so the
+    // two can never contradict each other.
+    const deckerAffinity = focus.family === "decker" ? generateDeckerAffinity(r) : null;
+    const presentation = MJ.pickPresentation
+      ? MJ.pickPresentation(r, focus, { affinity: deckerAffinity })
+      : null;
+
     const attrs = applyMagic(r, generateAttributes(r, metatypeId, focus.family), focus.family, origin);
     const essence = generateEssence(r, origin);
     const skillTiers = buildSkillTiers(r, focus, trueArchetype, origin);
@@ -1129,7 +1152,13 @@
         focusLabel: focus.label,
         focusKeySkill: focus.keySkill,
         origin: origin,
-        deckerAffinity: focus.family === "decker" ? generateDeckerAffinity(r) : null,
+        deckerAffinity: deckerAffinity,
+        // WHAT KIND OF <FOCUS> THIS ONE IS, and it never lies. The
+        // visible claim that CAN mislead is disciplineLabel below —
+        // people misjudge their own breadth. Nobody misreports being
+        // a Banisher.
+        presentation: presentation ? presentation.id : null,
+        presentationLabel: presentation ? presentation.label : null,
         // Spell IDS into MJ.SPELLS — the grimoire is what you hired.
         spellsKnown: generateGrimoire(r, focus, attrs, skills),
         // The adept's half of the same idea — powers into MJ.POWERS,

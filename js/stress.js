@@ -2261,6 +2261,76 @@
         "C24: an adept's Magic must change their price — an inert defining trait is the bug");
     }
 
+    // ── PRESENTATION: NEVER LIES, AND SAYS WHAT SKILLS CANNOT ─────
+    // A focus says what they trained in; a presentation says what
+    // they became. It carries its own attribute order because skills
+    // genuinely cannot express one: every magic skill maps to Magic,
+    // so a Puppeteer, a Banisher and an Analyst derive an IDENTICAL
+    // priority from an identical sheet while being three different
+    // professions. Unlike disciplineLabel this claim is always true —
+    // people misjudge their own breadth, they do not misreport being
+    // a Banisher.
+    {
+      let n = 0, unnamed = 0, mismatched = 0, badAttrs = 0;
+      const kinds = new Set();
+      for (let i = 0; i < 1200; i++) {
+        const r = MJ.generateRunner(MJ.makeRNG("c24-pres-" + i), {});
+        const c = r.classification;
+        n += 1;
+        if (!c.presentation || !c.presentationLabel) { unnamed += 1; continue; }
+        kinds.add(c.focusId + ":" + c.presentation);
+        // The label must name a real presentation OF THIS FOCUS —
+        // a Summoner cannot turn up on a decker.
+        const def = MJ.presentationDef(c.focusId, c.presentation);
+        if (!def || def.label !== c.presentationLabel) { mismatched += 1; continue; }
+        // Its attribute order must be real attributes, in order, and
+        // must actually front the runner's priority.
+        const priority = MJ.attributePriority(r);
+        if (def.attrs.some((a, idx) => priority[idx] !== a)) badAttrs += 1;
+      }
+      check(n > 1000, "C24: the presentation sample needs runners in it");
+      check(unnamed === 0, "C24: every runner has a presentation");
+      check(mismatched === 0, "C24: a presentation label must name a real one for that focus");
+      check(badAttrs === 0,
+        "C24: the presentation's attribute order must FRONT attributePriority — it is the whole point");
+      check(kinds.size >= 40, "C24: the world must actually produce many presentations (" + kinds.size + ")");
+    }
+
+    // Same focus, same skills, DIFFERENT profession — the case that
+    // proves presentation cannot be derived from a skill sheet.
+    {
+      const drawn = {};
+      for (let i = 0; i < 6000 && Object.keys(drawn).length < 3; i++) {
+        const r = MJ.generateRunner(MJ.makeRNG("c24-mm-" + i), { focusId: "manipulationMage" });
+        const p = r.classification.presentation;
+        if (["puppeteer", "telekinetic", "warder"].indexOf(p) !== -1 && !drawn[p]) drawn[p] = r;
+      }
+      check(Object.keys(drawn).length === 3, "C24: need all three manipulation shapes drawn");
+      const lead = (p) => MJ.attributePriority(drawn[p])[0];
+      check(lead("puppeteer") === "charisma", "C24: a Puppeteer leads on Charisma — spirits of a sort, negotiated with");
+      check(lead("telekinetic") === "intelligence", "C24: a Telekinetic leads on Intelligence");
+      check(lead("warder") === "willpower", "C24: a Warder leads on Willpower");
+      check(new Set(["puppeteer", "telekinetic", "warder"].map(lead)).size === 3,
+        "C24: three professions off one skill list must want three different attributes");
+    }
+
+    // A decker's affinity has been generated since the beginning and
+    // meant nothing. It is now the presentation, so the two can never
+    // disagree.
+    {
+      let checked = 0, conflict = 0;
+      const want = { masking: "ghost", attack: "icebreaker", search: "datamancer" };
+      for (let i = 0; i < 1500; i++) {
+        const r = MJ.generateRunner(MJ.makeRNG("c24-aff-" + i), { family: "decker" });
+        const c = r.classification;
+        if (!c.deckerAffinity) continue;
+        checked += 1;
+        if (c.presentation !== want[c.deckerAffinity] && c.presentation !== "coder") conflict += 1;
+      }
+      check(checked > 100, "C24: need deckers with an affinity");
+      check(conflict === 0, "C24: a decker's affinity IS their presentation — they cannot disagree");
+    }
+
     // The cap is permanent, and the karma prices are whole numbers —
     // Power Points are the abstraction we deliberately do not model.
     for (const id of Object.keys(MJ.POWERS)) {
