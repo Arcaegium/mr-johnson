@@ -187,8 +187,14 @@ a.navlink:hover { text-decoration: underline; }
 .modal-scrim {
   position: fixed; inset: 0; z-index: 50;
   background: rgba(6, 9, 13, 0.82);
-  display: flex; align-items: center; justify-content: center;
-  padding: 18px 14px;
+  /* flex-start + `margin: auto` on the shell, NOT align-items:center:
+     centred flex content taller than the viewport overflows past the
+     TOP edge, and nothing can scroll back to it — on a narrow window
+     the wrapped layout put the title and the site read somewhere the
+     player could not reach. This centres when it fits and scrolls
+     from the top when it does not. */
+  display: flex; align-items: flex-start; justify-content: center;
+  overflow-y: auto; padding: 14px 12px;
 }
 /* The run's frame: the crew down one side, the decision in the
    middle. The modal had empty gutters on both flanks and nowhere
@@ -197,38 +203,94 @@ a.navlink:hover { text-decoration: underline; }
    log used to squeeze the options into a sliver at the bottom of one
    stacked panel — the one part of the screen the player has to act
    on. Now nothing competes for the same vertical space. */
+/* THE CONSOLE USES ITS WINDOW. It was a small cramped box floating in
+   a dark field, and the answer to "too much information" was never a
+   smaller font — it was fewer things fighting for the same inch. So:
+   the shell takes the screen, the type is large enough to read
+   without leaning in, and the values are chipped (see .vchip) so a
+   dozen of them fit on two lines. The space that buys is deliberate
+   headroom — portraits and the visual layer land in it. */
 .modal-shell {
-  display: flex; align-items: stretch; gap: 12px;
-  width: 100%; max-width: 1600px; max-height: 100%;
+  display: flex; align-items: stretch; gap: 14px;
+  width: 100%; max-width: 2100px; height: 100%;
+  margin: auto; /* centres when it fits; see .modal-scrim */
 }
 .modal {
   background: var(--panel); border: 1px solid var(--line);
   flex: 1 1 auto; min-width: 0; max-height: 100%;
   display: flex; flex-direction: column;
-  font-family: var(--mono); font-size: 17px; color: var(--ink);
+  font-family: var(--mono); font-size: 18px; color: var(--ink);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
 }
 
 /* The choice column. Scrolls on its own so a crowded room never
    pushes the withdraw button off the bottom of the world. */
 .modal-side {
-  flex: 0 0 400px; max-height: 100%; overflow-y: auto;
+  flex: 0 0 440px; max-height: 100%; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--line);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
   display: flex; flex-direction: column;
+  font-size: 18px;
 }
 .modal-side .modal-heading { border-bottom: 1px solid var(--line); }
 .modal-side .modal-options { flex: 1 1 auto; }
 
-/* What is in the room, pinned above the log. */
-.modal-room {
-  padding: 10px 22px; border-bottom: 1px solid var(--line);
-  font-size: 1.02rem;
+/* ── The value chip ─────────────────────────────────────────────
+   A label over a number, boxed. The console is a lot of small facts,
+   and prose runs of "key: value · key: value" read as one sentence
+   nobody parses. Chipped, a dozen values sit on two lines and the eye
+   finds any one of them in a single jump. */
+.vrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.vchip {
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 5px 11px 6px; min-width: 74px;
+  background: rgba(255, 255, 255, 0.015);
+}
+.vchip .vk {
+  display: block; color: var(--dim);
+  font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.vchip .vv { display: block; font-size: 1.12rem; line-height: 1.15; }
+.vchip.v-sure { border-color: #2f5c52; }
+.vchip.v-warn { border-color: #7a4f2e; }
+
+/* ── The three tenses, down the mission column ──────────────────
+   site (standing facts) · FUTURE (the route) · PRESENT (this room)
+   · PAST (the log). Each is labelled and boxed off, because the whole
+   complaint was that everything looked like everything else. */
+.pane-k {
+  color: var(--accent); font-size: 0.64rem; letter-spacing: 0.18em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.modal-site { padding: 14px 26px 16px; border-bottom: 1px solid var(--line); }
+.site-name { font-size: 1.06rem; line-height: 1.5; }
+.site-alert { margin-top: 10px; }
+.modal-future { padding: 14px 26px 10px; border-bottom: 1px solid var(--line); }
+.modal-present {
+  padding: 14px 26px 16px; border-bottom: 1px solid var(--line);
+  /* The present never scrolls away: it is what the player is deciding
+     about, so it is pinned between the route and the log. */
+  flex: 0 0 auto;
+}
+.ob-name { font-size: 1.2rem; line-height: 1.4; }
+.ob-learned, .ob-eyes, .ob-where, .ob-revealed {
+  margin-top: 9px; font-size: 0.96rem; line-height: 1.6;
+}
+.ob-revealed { color: var(--dim); }
+
+/* THE PAST IS BOUNDED. The log used to take every pixel the column
+   had, which is how it crushed first the options and then the
+   debrief. It gets a share and scrolls inside it — always readable,
+   never in charge. */
+.modal-past {
+  flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column;
+  padding: 12px 26px 0; overflow: hidden;
 }
 
-@media (max-width: 1500px) { .modal-side { flex-basis: 340px; } }
+@media (max-width: 1500px) { .modal-side { flex-basis: 360px; } }
 @media (max-width: 1280px) {
-  .modal-shell { flex-wrap: wrap; }
+  .modal-shell { flex-wrap: wrap; height: auto; }
   .modal-side { flex: 1 1 100%; }
 }
 
@@ -239,21 +301,21 @@ a.navlink:hover { text-decoration: underline; }
    when they land), so four runners get a quarter each and a lone
    decker gets the whole column. */
 .modal-party {
-  flex: 0 0 268px; overflow-y: auto;
+  flex: 0 0 320px; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--line);
-  padding: 12px 14px; font-size: 0.92rem;
+  padding: 14px 18px; font-size: 1rem;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
   display: flex; flex-direction: column;
 }
 .pp-head {
-  color: var(--accent); font-size: 0.7rem; letter-spacing: 0.14em;
-  text-transform: uppercase; margin-bottom: 8px; flex: 0 0 auto;
+  color: var(--accent); font-size: 0.64rem; letter-spacing: 0.18em;
+  text-transform: uppercase; margin-bottom: 10px; flex: 0 0 auto;
 }
 .pp-rows { flex: 1 1 auto; display: flex; flex-direction: column; }
 .pp-row {
-  border-top: 1px solid var(--line); padding: 9px 0;
+  border-top: 1px solid var(--line); padding: 12px 0;
   flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
-  justify-content: center; gap: 5px;
+  justify-content: center; gap: 7px;
 }
 .pp-row:first-of-type { border-top: none; }
 .pp-row.pp-down { opacity: 0.5; }
@@ -262,47 +324,40 @@ a.navlink:hover { text-decoration: underline; }
 .pp-row[data-body]:hover { border-left-color: var(--line); }
 .pp-row.pp-sel { border-left-color: var(--accent); background: rgba(224, 150, 74, 0.06); }
 .pp-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.pp-name { color: var(--ink); font-size: 1.02rem; }
-.pp-hw { color: var(--dim); font-size: 0.86rem; white-space: nowrap; cursor: help; }
-.pp-line { display: flex; align-items: center; gap: 7px; cursor: help; }
-.pp-k { color: var(--dim); font-size: 0.72rem; width: 0.9em; }
+.pp-name { color: var(--ink); font-size: 1.12rem; }
+.pp-hw { color: var(--dim); font-size: 0.94rem; white-space: nowrap; cursor: help; }
+/* Armour is a NUMBER THAT MOVES: cast Armor and it goes up, and it
+   turns teal so the spell is visibly the reason. Reading the gear
+   rating here meant a mage could cast, watch nothing change, and
+   conclude the spell had done nothing. */
+.pp-arm { cursor: help; }
+.pp-arm.lifted { color: var(--accent-2); }
+.pp-line { display: flex; align-items: center; gap: 8px; cursor: help; }
+.pp-k { color: var(--dim); font-size: 0.78rem; width: 0.9em; }
 /* Tracks as pips, no numbers: the ticks are the truth and the colour
    is the urgency — teal fine, gold concern, red trouble. */
-.pp-bar { display: inline-flex; gap: 2px; flex-wrap: wrap; }
+.pp-bar { display: inline-flex; gap: 3px; flex-wrap: wrap; }
 .pp-bar i {
-  width: 9px; height: 13px; background: var(--line);
+  width: 10px; height: 15px; background: var(--line);
   border-radius: 1px; display: block;
 }
 .pp-bar.u0 i.on { background: var(--accent-2); }
 .pp-bar.u1 i.on { background: #d2b356; }
 .pp-bar.u2 i.on { background: #d4735e; }
-.pp-held { color: var(--accent); font-size: 0.78rem; cursor: help; }
+.pp-held { color: var(--accent); font-size: 0.88rem; cursor: help; }
 .pp-held.pp-on { color: var(--accent-2); }
 
 @media (max-width: 1100px) { .modal-party { display: none; } }
-.modal-head { padding: 16px 22px 12px; border-bottom: 1px solid var(--line); }
-.modal-title { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; }
-.modal-sub { margin-top: 5px; font-size: 16px; }
-.modal-context { padding: 13px 22px; border-bottom: 1px solid var(--line); line-height: 1.7; }
-.ctxline { min-height: 1.2em; }
-
-/* The site-read segment: security and the alert ladder are one
-   subject, boxed together with the site's amber down the spine. */
-.seg-sec {
-  border: 1px solid var(--line); border-left: 3px solid var(--accent);
-  border-radius: 2px; padding: 6px 10px; margin: 7px 0;
-}
-.seg-sec .seg-k {
-  color: var(--accent); font-size: 0.68rem; letter-spacing: 0.14em;
-  text-transform: uppercase; display: block; margin-bottom: 2px;
-}
+.modal-head { padding: 18px 26px 14px; border-bottom: 1px solid var(--line); }
+.modal-title { color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; font-size: 16px; }
+.modal-sub { margin-top: 6px; font-size: 17px; }
 
 /* The shape of the run — the abstract walk, drawn. The most
    prominent thing under the title, by ruling. */
-.routegraph { margin: 9px 0 4px; }
+.routegraph { margin: 4px 0 2px; }
 .routegraph svg { display: block; max-width: 100%; }
 .routegraph.rg-mini { margin: 4px 0 0; }
-.rg-legend { color: var(--dim); font-size: 0.68rem; margin-top: 1px; }
+.rg-legend { color: var(--dim); font-size: 0.7rem; margin-top: 2px; }
 
 /* The alert, as one box: the word that is true right now, on the
    reverse of the readiness ladder — their NORMAL is your green. */
@@ -315,29 +370,25 @@ a.navlink:hover { text-decoration: underline; }
 .alert-box.a-costly { color: var(--accent); border-color: #b3763a; }
 .alert-box.a-short { color: #d4735e; border-color: #a85448; }
 .modal-transcript {
-  padding: 13px 22px;
-  /* The transcript IS the run, and it FILLS what is left of its own
-     column rather than growing the panel. It never competes with the
-     options any more — those live in their own column — so it can
-     simply take the remaining height and scroll inside it. */
-  flex: 1 1 auto; min-height: 140px; overflow-y: auto;
-  line-height: 1.8; font-size: 16px;
+  padding-bottom: 14px;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  line-height: 1.85; font-size: 16.5px;
 }
-.modal-heading { padding: 15px 22px 6px; line-height: 1.55; }
-.modal-heading .ask { color: var(--dim); margin-top: 9px; font-size: 16px; }
-.modal-options { padding: 8px 22px 14px; overflow-y: auto; }
-.modal-actions { padding: 13px 22px; border-top: 1px solid var(--line); text-align: right; }
+.modal-heading { padding: 18px 26px 8px; line-height: 1.55; }
+.modal-heading .ask { color: var(--dim); margin-top: 10px; font-size: 17px; }
+.modal-options { padding: 10px 26px 16px; overflow-y: auto; }
+.modal-actions { padding: 15px 26px; border-top: 1px solid var(--line); text-align: right; }
 
 button.opt {
   display: block; width: 100%; text-align: left;
-  margin: 5px 0; padding: 11px 14px;
+  margin: 7px 0; padding: 13px 16px;
   background: #0d131a; border: 1px solid var(--line); color: var(--ink);
-  font-family: var(--mono); font-size: 17px; letter-spacing: 0; cursor: pointer;
+  font-family: var(--mono); font-size: 18px; letter-spacing: 0; cursor: pointer;
   /* The panel shouts its buttons in caps; prose options must not. */
   text-transform: none;
 }
 button.opt:hover { background: #18222d; border-color: var(--accent-2); color: var(--ink); }
-button.opt .opt-meta { display: block; margin-top: 5px; font-size: 15px; }
+button.opt .opt-meta { display: block; margin-top: 6px; font-size: 15.5px; }
 button.opt.dead { opacity: 0.45; cursor: not-allowed; }
 button.opt.dead:hover { background: #0d131a; border-color: var(--line); }
 button.warn-btn { border-color: #d4735e; color: #d4735e; }
@@ -751,9 +802,29 @@ body.railed .framebar { left: 300px; }
 .w-close { color: #d2b356; }
 
 /* ── Mission results ─────────────────────────────────────────── */
-.res-verdict { font-size: 1.05rem; letter-spacing: 0.05em; margin-bottom: 4px; }
-.res-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
-.res-cell { border: 1px solid var(--line); border-radius: 2px; padding: 7px 9px; }
+/* THE DEBRIEF IS THE POINT OF THE SCREEN. The verdict used to be a
+   heading in the narrow choice column while the log had the whole
+   main panel — the one thing the player came to read was the smallest
+   thing on it. Now it sits in the mission column WITH the log, and
+   the two split what is left: what happened, and what it was worth,
+   without moving your eyes off one panel. */
+/* An even split, each scrolling inside its own half — the verdict
+   never shrinks because the fight was long, and the log never
+   disappears because the haul was big. */
+.modal-result {
+  flex: 1 1 0; min-height: 0; overflow-y: auto;
+  padding: 18px 26px 20px; border-bottom: 1px solid var(--line);
+}
+.modal-result + .modal-past { flex: 1 1 0; }
+.res-verdict { font-size: 1.5rem; letter-spacing: 0.06em; margin-bottom: 14px; }
+.res-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px; margin-top: 10px;
+}
+.res-cell {
+  border: 1px solid var(--line); border-radius: 3px; padding: 11px 14px;
+  line-height: 1.6;
+}
 .res-cell .rk {
   font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
   color: var(--dim); display: block; margin-bottom: 3px;

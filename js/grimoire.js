@@ -239,7 +239,8 @@
     function pickSpell() {
       MJ.decide.open({
         title: chrome.title, subtitle: chrome.subtitle || dim("the grimoire"),
-        context: chrome.context, party: chrome.party, transcript: chrome.transcript,
+        site: chrome.site, future: chrome.future, present: chrome.present,
+        party: chrome.party, transcript: chrome.transcript,
         heading: opts.heading || (nm(caster.identity.handle) + dim(" — what they know") +
           '<div class="ask">Cast which?</div>'),
         options: entries.map((e) => ({ html: e.html, meta: e.meta, dead: e.dead })),
@@ -278,7 +279,8 @@
       }));
       MJ.decide.open({
         title: chrome.title, subtitle: dim("on whom?"),
-        context: chrome.context, party: chrome.party, transcript: chrome.transcript,
+        site: chrome.site, future: chrome.future, present: chrome.present,
+        party: chrome.party, transcript: chrome.transcript,
         heading: nm(caster.identity.handle) + dim(" casting ") + nm(entry.def.label) +
           '<div class="ask">On whom?</div>',
         options: rows,
@@ -295,7 +297,8 @@
       const rows = forceRows(caster, entry.def);
       MJ.decide.open({
         title: chrome.title, subtitle: dim("how hard?"),
-        context: chrome.context, party: chrome.party, transcript: chrome.transcript,
+        site: chrome.site, future: chrome.future, present: chrome.present,
+        party: chrome.party, transcript: chrome.transcript,
         heading: nm(caster.identity.handle) + dim(" casting ") + nm(entry.def.label) +
           (entry.target && entry.target !== caster ? dim(" on ") + nm(entry.target.identity.handle) : "") +
           '<div class="ask">How hard are they pushing?</div>',

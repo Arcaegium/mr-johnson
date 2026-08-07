@@ -103,13 +103,22 @@
       "</button>").join("");
     const acts = (s.actions || []).map((a) =>
       `<button class="sm${a.tone ? " " + a.tone : ""}" data-side="${esc(a.id)}">${esc(a.label)}</button>`).join(" ");
-    // ── THREE COLUMNS, so the log stops eating the decision ────────
-    // Everything used to stack in one panel, and a long fight's log
-    // squeezed the options into a sliver at the bottom — the one part
-    // of the screen the player actually has to act on. So the mission
-    // (what is happening), the crew (who is here), and the choice
-    // (what they do about it) each get their own column and stop
-    // competing for the same vertical space.
+    // ── COLUMNS, AND THREE TENSES ──────────────────────────────────
+    // Across: the mission (what is going on), the crew (who is here),
+    // the choice (what they do about it). A long fight's log used to
+    // squeeze the options into a sliver at the bottom of one stacked
+    // panel — the one part of the screen the player has to act on.
+    //
+    // DOWN the mission column, the run is laid out in tenses, because
+    // that is how the information actually divides:
+    //   site      the standing facts — whose building, how hard
+    //   FUTURE    the route ahead, drawn: where they are going
+    //   PRESENT   the thing in front of them and what is known of it
+    //   PAST      the transcript
+    // The log is bounded so it can never eat the other two again; it
+    // is the tense you can always scroll back into, and the only one
+    // that never changes.
+    const side = s.side !== false && (opts || s.heading);
     host.innerHTML =
       '<div class="modal-shell">' +
       '<div class="modal" role="dialog" aria-modal="true">' +
@@ -117,23 +126,32 @@
           `<div class="modal-title">${s.title || ""}</div>` +
           (s.subtitle ? `<div class="modal-sub">${s.subtitle}</div>` : "") +
         "</div>" +
-        // Each context entry is its own line-box rather than a <br>
-        // chain, so an entry can be a bordered SEGMENT (the security
-        // read, the route graph) without fighting the line breaks.
-        (s.context && s.context.length
-          ? `<div class="modal-context">${s.context.map((l) => `<div class="ctxline">${l}</div>`).join("")}</div>` : "") +
-        // What is in the room, held ABOVE the log so a scrolled-back
-        // transcript never hides what the crew is standing in front of.
-        (s.room ? `<div class="modal-room">${s.room}</div>` : "") +
-        (s.transcript && s.transcript.length
-          ? `<div class="modal-transcript">${s.transcript.join("<br>")}</div>` : "") +
+        (s.site ? `<div class="modal-site">${s.site}</div>` : "") +
+        (s.future ? `<div class="modal-future">${s.future}</div>` : "") +
+        (s.present ? `<div class="modal-present">${s.present}</div>` : "") +
+        (s.result ? `<div class="modal-result">${s.result}</div>` : "") +
+        // ALWAYS RENDERED, empty or not. Dropping the pane when the
+        // log was empty left the whole bottom half of the column as
+        // dead space on the first beat of every run, and then made
+        // the layout jump the moment the first line landed.
+        (s.transcript
+          ? '<div class="modal-past"><div class="pane-k">the run so far</div>' +
+            '<div class="modal-transcript">' +
+            (s.transcript.length ? s.transcript.join("<br>")
+              : '<span class="dimmed">nothing yet — this is where the night gets written down</span>') +
+            "</div></div>" : "") +
+        // With no choice column, the way out belongs at the foot of
+        // the column that IS on screen.
+        (!side && acts ? `<div class="modal-actions">${acts}</div>` : "") +
       "</div>" +
       (s.party ? `<aside class="modal-party">${s.party}</aside>` : "") +
-      '<div class="modal-side">' +
-        (s.heading ? `<div class="modal-heading">${s.heading}</div>` : "") +
-        (opts ? `<div class="modal-options">${opts}</div>` : "") +
-        (acts ? `<div class="modal-actions">${acts}</div>` : "") +
-      "</div>" +
+      (side
+        ? '<div class="modal-side">' +
+          (s.heading ? `<div class="modal-heading">${s.heading}</div>` : "") +
+          (opts ? `<div class="modal-options">${opts}</div>` : "") +
+          (acts ? `<div class="modal-actions">${acts}</div>` : "") +
+          "</div>"
+        : "") +
       "</div>";
     const t = host.querySelector(".modal-transcript");
     if (t) t.scrollTop = t.scrollHeight;
@@ -328,10 +346,19 @@
         Array.from({ length: Math.max(1, max) }, (_, i) =>
           `<i class="${i < filled ? "on" : ""}"></i>`).join("") + "</span></div>";
     };
+    // The crew as the FIGHT sees them — gear on, held spells applied.
+    // Armor is a spell whose entire job is a number going up, so the
+    // number the panel prints is the one the armour gate will use.
+    // Reading the gear rating here meant a mage could cast Armor, watch
+    // the sheet not move, and have no way to tell it had worked.
+    const asFought = MJ.crewCombatants ? MJ.crewCombatants(run) : [];
     const rows = bodies.map((r, i) => {
       const down = run.downed && run.downed.has(r);
       const loadout = MJ.combatLoadoutFor(r);
       const gun = MJ.weaponProfile(loadout.weaponId);
+      const c = asFought.find((x) => x.source === r);
+      const armour = c && MJ.effectiveArmour ? MJ.effectiveArmour(c) : loadout.armour;
+      const lifted = armour - loadout.armour;
       const held = sustaining.filter((x) => x.caster === r)
         .map((x) => (MJ.spellDef(x.spell) || {}).label || x.spell);
       const on = sustaining.filter((x) => x.target === r && x.caster !== r)
@@ -346,7 +373,10 @@
         `<div class="pp-top"><span class="pp-name">${esc(r.identity.handle)}</span>` +
         (down ? '<span class="w-no">DOWN</span>'
           : `<span class="pp-hw" title="${esc(gun.label || "bare hands")}${gun.power ? " — Power " + gun.power + ", DV " + gun.dv : ""}">` +
-            `🛡${loadout.armour}${gun.power ? ' <span class="dimmed">·</span> P' + gun.power : ""}</span>`) +
+            `<span class="pp-arm${lifted > 0 ? " lifted" : ""}"` +
+            ` title="armour ${armour}${lifted > 0 ? ` — ${loadout.armour} worn +${lifted} held` : " worn"}">` +
+            `🛡${armour}</span>` +
+            (gun.power ? ' <span class="dimmed">·</span> P' + gun.power : "") + "</span>") +
         "</div>" +
         bar(r.wounds || 0, MJ.physicalTrack(r), "P") +
         bar(r.stun || 0, MJ.stunTrack(r), "S") +
@@ -468,93 +498,150 @@
     return `<div class="routegraph${mini ? " rg-mini" : ""}"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${bits.join("")}</svg>` + legend + `</div>`;
   }
 
-  function contextLines(run, opts) {
+  // ── The value chip ─────────────────────────────────────────────
+  // A label and a number, stacked, in a small box. The console is a
+  // lot of small facts, and a wall of "key: value · key: value" prose
+  // reads as one long sentence nobody parses — chips let a dozen
+  // numbers sit on two lines and still be found by eye in one jump.
+  // Same component everywhere a value is shown, so the security read,
+  // the obstacle and the clocks all look like the same instrument.
+  function chip(k, v, tone) {
+    return `<div class="vchip${tone ? " " + tone : ""}">` +
+      `<span class="vk">${esc(k)}</span><span class="vv">${v}</span></div>`;
+  }
+  const chips = (list) => '<div class="vrow">' + list.filter(Boolean).join("") + "</div>";
+
+  // ── The site: the standing facts ───────────────────────────────
+  // Whose building this is and how hard it is — true all night, and
+  // therefore not part of any tense. Observers used to live in here
+  // and do not any more: what can see you RIGHT NOW is a fact about
+  // the room the crew is standing in, not about the address.
+  function siteStrip(run) {
     const id = run.site ? run.site.identity : null;
-    const lines = [];
+    const out = [];
     if (id) {
-      lines.push(nm(id.name || ("site #" + id.universeIndex)) +
+      out.push('<div class="site-name">' + nm(id.name || ("site #" + id.universeIndex)) +
         ' <span class="dimmed">· ' + esc(id.owningFaction) + " · " + esc(id.district) +
-        (id.theme ? " · " + esc(id.theme) : "") + "</span>");
+        (id.theme ? " · " + esc(id.theme) : "") + "</span></div>");
     }
-    let secLine = null;
-    // WHAT THEY EXPECTED, and what they have now actually SEEN.
-    // An axis ticks over from estimate to confirmed the moment the
-    // crew has proof — either they met something rated at the top of
-    // what the place can field, or they faced enough of it that the
-    // density says so on its own. Standing in the building and
-    // watching your guess get confirmed is the payoff for going.
+    const cells = [];
     if (run.site && run.state) {
       // ONLY THE PLANES THIS RUN WALKS. An astral projection has no
       // opinion about the corridor's cameras and no way to learn one,
       // so reciting a Matrix rating at it is quoting a number the
       // crew can neither use nor confirm — the same fault the
       // dispatch header had.
-      const axes = (MJ.missionPlanes(run) || ["physical", "astral", "matrix"]).map((a) => {
+      for (const a of MJ.missionPlanes(run) || ["physical", "astral", "matrix"]) {
         const p = MJ.axisProven(run, a);
         const est = run.site.estimatedSecurity ? run.site.estimatedSecurity[a] : null;
-        const letter = a[0].toUpperCase();
-        // TWO STATES ONLY: a guess, or a fact. `~4` while it is still
-        // an estimate, `4` with a tick once the crew has earned it.
-        //
-        // Nothing about "how much more looking" belongs on screen —
-        // knowing what counts as a big enough sample requires knowing
-        // the size of the population you are sampling, and the crew
-        // has no more access to that than they do to the number
-        // itself. The math decides WHEN the tick appears; it is not
-        // something to narrate at the player.
-        if (p && p.proven) return letter + ":" + ok(MJ.diceForSecurity(run.state.axes[a].current) + "d✓");
-        // Still guessing — but contact corrects the guess upward as it
-        // happens. Meet a tier-5 on a place pencilled at ~3 and it
-        // reads ~5, because you have MET a five. Only the site's own
-        // security counts; a response squad's rating is a fact about
-        // the noise you made.
-        const shown = Math.max(est === null ? 0 : est, (p && p.maxTier) || 0);
-        return letter + ':<span class="dimmed">~' +
-          (shown ? MJ.diceForSecurity(shown) + "d" : "?") + "</span>";
-      }).join(" ");
-      secLine = '<span class="dk">Security:</span> ' + axes;
-    }
-    // The site read, compact and high: security, the one-word alert
-    // box, and the observer count/names — one subject, one segment,
-    // three short lines. The GRAPH gets the room this used to take.
-    {
-      const alert = alertBox(run);
-      const watchers = watcherLine(run, opts);
-      if (secLine || alert || watchers) {
-        lines.push('<div class="seg-sec">' +
-          (secLine ? "<div>" + secLine + "</div>" : "") +
-          (alert ? "<div>" + alert + "</div>" : "") +
-          (watchers ? "<div>" + watchers + "</div>" : "") + "</div>");
+        // TWO STATES ONLY: a guess, or a fact. `~4d` while it is still
+        // an estimate, `4d✓` once the crew has earned it. Nothing about
+        // "how much more looking" belongs on screen — the math decides
+        // WHEN the tick appears; it is not something to narrate.
+        if (p && p.proven) {
+          cells.push(chip(a, ok(MJ.diceForSecurity(run.state.axes[a].current) + "d✓"), "v-sure"));
+        } else {
+          // Contact corrects the guess upward as it happens: meet a
+          // tier-5 on a place pencilled at ~3 and it reads ~5, because
+          // you have MET a five.
+          const shown = Math.max(est === null ? 0 : est, (p && p.maxTier) || 0);
+          cells.push(chip(a, '<span class="dimmed">~</span>' +
+            (shown ? num(MJ.diceForSecurity(shown) + "d") : '<span class="dimmed">?</span>')));
+        }
       }
     }
-    // The shape of the walk, drawn — earned knowledge only, and the
-    // most prominent thing on the screen below the title.
+    if (cells.length) out.push(chips(cells));
+    const alert = alertBox(run);
+    if (alert) out.push('<div class="site-alert">' + alert + "</div>");
+    return out.join("");
+  }
+
+  // ── THE FUTURE: the ground ahead ───────────────────────────────
+  // The walk, drawn — earned knowledge only. This is the tense that
+  // says where this is going, and it is deliberately the only place
+  // that speaks about rooms nobody has stood in yet.
+  function futurePanel(run, opts) {
     const graph = routeGraph(run, opts);
-    if (graph) lines.push(graph);
-    // WHERE they are. A street run walks the building room by room,
-    // so the obstacle in front of the crew has a place, and the
-    // route has a length they are some way along. The placeholder
-    // prints it as a sentence; a drawn top-down puts the crew on
-    // that room and animates the crossing. Same data either way.
+    return graph ? '<div class="pane-k">the way in</div>' + graph : "";
+  }
+
+  // ── THE PRESENT: what is in front of the crew ──────────────────
+  // The third tense, and the one that was missing. The log said what
+  // had happened and the graph said what was coming, and the thing
+  // the player was actually deciding about had one line naming it.
+  //
+  // Everything here is about THIS ROOM, THIS BEAT: the obstacle and
+  // what is known of it, what else can see the crew from the same
+  // ground, and the clocks running against them. Observers moved in
+  // here out of the site read for exactly that reason — what can see
+  // you is a fact about where you are standing, not about the
+  // address.
+  //
+  // KNOWLEDGE IS MARKED, NEVER ASSUMED. What looking tells you is
+  // plain; what an attempt bought is marked as learned; armour reads
+  // `~3` until something has actually bounced off it and then `3✓`.
+  function presentPanel(run, prompt, opts) {
+    const outside = opts && opts.outside;
+    const out = ['<div class="pane-k">' + (outside ? "on the pavement" : "the room") + "</div>"];
+    const ob = prompt && prompt.obstacle;
+    const k = ob && MJ.obstacleKnowledge ? MJ.obstacleKnowledge(run, ob) : null;
+
+    if (k) {
+      out.push('<div class="ob-name">' + nm(k.label) + " " + num("T" + k.tier) +
+        (k.projection ? ' <span class="dimmed">(' + esc(k.projection) + ")</span>" : "") + "</div>");
+      // The gate that decides whether the guns in the room matter at
+      // all, and what it can do back. Both readable by looking, except
+      // armour — an estimate until it has been tested.
+      out.push(chips([
+        chip("armour", k.armour.sure ? ok(k.armour.value + "✓")
+          : '<span class="dimmed">~</span>' + num(k.armour.value)),
+        k.fights
+          ? chip("armed", '<span class="w-warn">' + esc((MJ.weaponProfile(k.weapon) || {}).label || k.weapon || "yes") + "</span>", "v-warn")
+          : chip("armed", '<span class="dimmed">no</span>'),
+        chip("watches", k.senses.length
+          ? '<span class="w-warn">' + k.senses.map(esc).join(", ") + "</span>"
+          : '<span class="dimmed">nothing</span>'),
+        k.bypassable ? chip("ground", '<span class="dimmed">can be gone around</span>') : null,
+        k.repairs ? chip("closes", '<span class="dimmed">behind you</span>') : null,
+        k.tries ? chip("tried", num(k.tries)) : null,
+      ]));
+      // Bought with attempts, one at a time — the only thing on this
+      // panel the crew could not simply see.
+      if (k.learned.length) {
+        out.push('<div class="ob-learned"><span class="dk">learned:</span> ' +
+          k.learned.map((l) => '<span class="w-no">' + esc(l.skill) + "</span>" +
+            '<span class="dimmed"> — ' + esc(l.reason) + "</span>").join("<br>") + "</div>");
+      }
+    }
+    // What detection magic already bought about the ground ahead —
+    // paid for in Drain, so it belongs on the screen every beat.
+    if (prompt && prompt.revealed) {
+      out.push(Object.keys(prompt.revealed).map((key) =>
+        '<div class="ob-revealed">✦ ' + esc(prompt.revealed[key]) + "</div>").join(""));
+    }
+    // Everything else on this ground that has eyes, and the patrol
+    // whose circuit runs through it.
+    const watchers = watcherLine(run, opts);
+    if (watchers) out.push('<div class="ob-eyes">' + watchers + "</div>");
     const here = whereLine(run);
-    if (here) lines.push(here);
+    if (here) out.push('<div class="ob-where">' + here + "</div>");
     if (run.walkedIntoResponse && run.walkedIntoResponse.length) {
-      lines.push(no("Already up from earlier: ") + run.walkedIntoResponse.map(esc).join(", ") + no(" — waiting at the door"));
+      out.push('<div class="ob-where">' + no("Already up from earlier: ") +
+        run.walkedIntoResponse.map(esc).join(", ") + no(" — waiting at the door") + "</div>");
     }
-    // The tether only exists on an astral run, and when it does it
-    // is the most urgent number on the screen — it is how long until
-    // they are ripped back into their body.
+    // The tether only exists on an astral run, and when it does it is
+    // the most urgent number on the screen — how long until they are
+    // ripped back into their body.
     if (run.tether !== null && run.tether !== undefined) {
-      lines.push('<span class="dimmed">tether </span>' + num(run.tether) +
-        '<span class="dimmed"> of </span>' + num(run.tetherMax) +
-        '<span class="dimmed"> turns left</span>' +
-        // Warn on the last quarter rather than a flat 2 — the budget
-        // scales with Magic now, so a fixed number would shout at a
-        // weak projector and never reach a strong one.
-        (run.tether <= Math.max(2, Math.ceil(run.tetherMax / 4))
-          ? " " + no("— the pull is getting hard") : ""));
+      // Warn on the last quarter rather than a flat 2 — the budget
+      // scales with Magic now, so a fixed number would shout at a weak
+      // projector and never reach a strong one.
+      const hard = run.tether <= Math.max(2, Math.ceil(run.tetherMax / 4));
+      out.push(chips([chip("tether",
+        (hard ? no(run.tether) : num(run.tether)) + '<span class="dimmed">/' + run.tetherMax + "</span>",
+        hard ? "v-warn" : "")]));
     }
-    return lines;
+    return out.length > 1 ? out.join("") : "";
   }
 
   // ── The awareness meter ────────────────────────────────────────
@@ -762,21 +849,30 @@
       if (res.gap) cells.push(cell("what was missing", no(esc(res.gap.needs ? res.gap.needs.join(", ") : ""))));
       if (!cells.length) cells.push(cell("outcome", '<span class="dimmed">nothing changed hands</span>'));
 
+      // THE VERDICT IS THE POINT OF THE SCREEN. It used to be a
+      // heading in the narrow choice column while the log had the
+      // whole main panel to itself — so the one thing the player came
+      // to read was the smallest thing on it. Now the card sits in
+      // the mission column WITH the log, each taking half: read what
+      // happened and what it was worth without moving your eyes off
+      // the same panel. Nothing is being decided any more, so the
+      // choice column closes and the two that remain get the room.
       MJ.decide.open({
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">debrief</span>',
-        context: contextLines(run),
+        site: siteStrip(run),
+        future: futurePanel(run),
         party: partyPanel(run),
         transcript: transcript,
-        heading: '<div class="res-verdict">' + verdict + '</div>' +
+        result: '<div class="res-verdict">' + verdict +
           // `obstaclesFaced` is the route INDEX — how many they got
           // PAST, not how many they met. A crew that cleared two and
           // died on the third met three, and "2 obstacles faced"
           // quietly loses the one that killed them.
-          '<span class="dimmed">' + num(res.obstaclesFaced || 0) + " of " +
-          num((run.obstacles || []).length) + " cleared</span>" +
+          ' <span class="dimmed">· ' + num(res.obstaclesFaced || 0) + " of " +
+          num((run.obstacles || []).length) + " cleared</span></div>" +
           '<div class="res-grid">' + cells.join("") + "</div>",
-        options: [],
+        side: false,
         actions: [{ id: "close", label: "back to the hub", tone: "warn-btn" }],
         onAction: () => { MJ.decide.close(); done(res); },
       });
@@ -793,7 +889,9 @@
         subtitle: '<span class="dimmed">obstacle </span>' + num(prompt.index + 1) +
           '<span class="dimmed"> of </span>' + num(prompt.total) +
           '<span class="dimmed"> · working</span>',
-        context: contextLines(run),
+        site: siteStrip(run),
+        future: futurePanel(run),
+        present: presentPanel(run, prompt),
         party: partyPanel(run),
         transcript: transcript,
         heading: nm(prompt.runner.identity.handle) + '<span class="dimmed"> is working on </span>' +
@@ -837,7 +935,12 @@
         ctx: ctx,
         chrome: {
           title: esc(entry.label || run.kind),
-          context: contextLines(run),
+          site: siteStrip(run),
+          future: futurePanel(run),
+          // No obstacle in the context means the crew is still outside
+          // — the watcher line has to say what is WAITING, not what is
+          // watching, or it contradicts the prep step it opened from.
+          present: presentPanel(run, { obstacle: ctx.obstacle }, { outside: !ctx.obstacle }),
           party: partyPanel(run),
           transcript: transcript,
         },
@@ -943,23 +1046,14 @@
       // included) — the funnel changes where spells are clicked, not
       // whether they count as ways through.
       const stalled = !prompt.options.some((o) => o.available);
-      // What detection magic already bought about the ground ahead —
-      // paid for in Drain, so it belongs on the screen every beat.
-      const revealedLine = prompt.revealed
-        ? Object.keys(prompt.revealed).map((k) =>
-            '<div class="dimmed">✦ ' + esc(prompt.revealed[k]) + "</div>").join("")
-        : "";
       MJ.decide.open({
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">obstacle </span>' + num(prompt.index + 1) +
           '<span class="dimmed"> of </span>' + num(prompt.total),
-        context: contextLines(run),
+        site: siteStrip(run),
+        future: futurePanel(run),
+        present: presentPanel(run, prompt),
         party: partyPanel(run, bodies.indexOf(who)),
-        // What the crew is standing in front of, above the log so a
-        // scrolled transcript never hides it.
-        room: nm(prompt.label) + " " + num("T" + prompt.tier) +
-          (prompt.projection ? ' <span class="dimmed">(' + esc(prompt.projection) + ")</span>" : "") +
-          revealedLine,
         transcript: transcript,
         heading: nm(who.identity.handle) +
           '<div class="ask">' + (stalled
@@ -1025,7 +1119,13 @@
       MJ.decide.open({
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">casing the approaches</span>',
-        context: contextLines(run, { outside: true }),
+        site: siteStrip(run),
+        // The plan as it stands, full size — the thing each candidate
+        // in the option list is being compared AGAINST. Shape only:
+        // nothing about a room's contents is knowable from the
+        // pavement, and the picker must not pretend otherwise.
+        future: futurePanel(run, { outside: true }),
+        present: presentPanel(run, null, { outside: true }),
         party: partyPanel(run),
         transcript: transcript,
         heading: nm("The way in") + '<div class="ask">Which approach?</div>',
@@ -1066,10 +1166,12 @@
       MJ.decide.open({
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">before you go in</span>',
+        site: siteStrip(run),
+        future: futurePanel(run, { outside: true }),
         // Outside, so the watcher line has to name what is WAITING
         // rather than what is watching — otherwise it contradicts the
         // heading directly below it.
-        context: contextLines(run, { outside: true }),
+        present: presentPanel(run, null, { outside: true }),
         party: partyPanel(run),
         transcript: transcript,
         heading: nm("Outside") + '<span class="dimmed"> — nothing is watching yet</span>' +

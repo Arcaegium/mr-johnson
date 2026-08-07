@@ -216,6 +216,15 @@
       // does not announce having been switched off.
       senses: ["physical"],
       bypassable: false,
+      // A CAMERA CANNOT BE AIR-GAPPED. Its entire function is putting
+      // what it sees in front of somebody somewhere; cut it off the
+      // network and it is a box recording evidence for a case nobody
+      // has filed, not a thing standing between the crew and the
+      // objective. The template already says so two fields up
+      // (`presence` includes matrix — it lives on the host that runs
+      // it), so rolling "air-gapped" against it contradicted the
+      // obstacle's own definition rather than hardening it.
+      neverImmune: ["hacking"],
     },
     // Astral idiom — the same two structural roles (barrier, sentry)
     // recast in magic's terms, not a reskin of the meatspace verbs.
@@ -381,6 +390,25 @@
   // any tier and at any future obstacle type this scales to.
   const MIN_NONLOUD_WAYS = 2;
 
+  // ── How often a thing is hardened, per skill, per tier ──────────
+  // This was 0.1 × tier, which at the mid tiers most jobs actually
+  // sit in meant roughly HALF of every skill was blocked on every
+  // obstacle: measured over 400 sites, a guard averaged 1.75
+  // immunities, a camera 2.40, a spirit 2.88. The floor kept two
+  // non-loud ACTS alive, but two surviving acts are not two acts THIS
+  // crew can perform, so the practical result was a menu where the
+  // quiet answers were gone and the gun was the only thing left —
+  // playtested as "I end up having to fight through everything no
+  // matter what."
+  //
+  // An immunity has to be a SURPRISE about one thing, not the
+  // default state of every thing. At 0.035 a T1 rent-a-cop is
+  // essentially never exotic, a mid-tier obstacle carries about half
+  // an immunity, and a T10 corp fixture is hardened against roughly
+  // a third of what you might try — which is where "this one is
+  // different" belongs.
+  const IMMUNITY_CHANCE_PER_TIER = 0.035;
+
   // What this thing is holding at this tier. A ladder if it has one,
   // its fixed weapon otherwise — a spirit's claws do not improve
   // because the building got a bigger budget.
@@ -445,8 +473,12 @@
 
     const ways = nonLoudWaysFor(thing);
     const blocked = new Set();
+    // Skills whose immunity reason would contradict what the thing IS
+    // never roll at all — see the camera's `neverImmune` note.
+    const never = new Set(template.neverImmune || []);
     for (const skill of ways.skills) {
-      if (rng.chance(0.1 * tier)) blocked.add(skill);
+      if (never.has(skill)) continue;
+      if (rng.chance(IMMUNITY_CHANCE_PER_TIER * tier)) blocked.add(skill);
     }
     while (survivingWays(ways, blocked) < MIN_NONLOUD_WAYS && blocked.size > 0) {
       blocked.delete(rng.pick([...blocked]));

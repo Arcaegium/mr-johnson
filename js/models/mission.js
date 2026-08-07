@@ -356,6 +356,53 @@
     return { tier: tier, sure: sure };
   }
 
+  // ── THE PRESENT: what the crew knows about the thing in front of
+  //    them ────────────────────────────────────────────────────────
+  // The console has a tense for the past (the log) and one for the
+  // future (the route graph). This is the third: what is TRUE of the
+  // obstacle right now, split by how the crew came to know it.
+  //
+  // Reads existing run state only — nothing here is a new kind of
+  // knowledge, it is the knowledge the run already tracks, gathered
+  // into one answer instead of scattered across five call sites.
+  //
+  //   SEEN     what looking at it tells you. A camera's lens points
+  //            somewhere, a guard is holding a gun or is not, and a
+  //            spirit is obviously not a man. Free.
+  //   LEARNED  the Watsonian immunities, from run.discovered — bought
+  //            with an attempt, one at a time, and never readable off
+  //            a card.
+  //   ARMOUR   estimated from the tier the crew can already read,
+  //            and CONFIRMED the moment something bounced off it and
+  //            printed a real number. That is the gate that decides
+  //            whether the guns in the room matter at all, so it is
+  //            worth a line of its own.
+  function obstacleKnowledge(run, obstacle) {
+    if (!obstacle) return null;
+    const learned = [];
+    const disc = run.discovered && run.discovered.get(obstacle);
+    if (disc) for (const skill of Object.keys(disc)) learned.push({ skill: skill, reason: disc[skill] });
+
+    // Has anything actually MET this armour and reported a figure?
+    let seenArmour = null;
+    for (const t of run.tasks || []) {
+      if (t.force && t.obstacle === obstacle.label && t.armour !== undefined) seenArmour = t.armour;
+      for (const e of (t.log || [])) {
+        if (e.event === "attack" && e.target === obstacle.label && e.armour !== undefined) seenArmour = e.armour;
+      }
+    }
+    const attempts = run.attempts && run.attempts.get(obstacle);
+    return {
+      label: obstacle.label, tier: obstacle.tier, projection: obstacle.projection,
+      fights: !!obstacle.fights, senses: (obstacle.senses || []).slice(),
+      bypassable: !!obstacle.bypassable, repairs: !!obstacle.repairs,
+      weapon: obstacle.fights ? obstacle.weapon : null,
+      armour: { value: seenArmour === null ? (obstacle.armour || 0) : seenArmour, sure: seenArmour !== null },
+      learned: learned,
+      tries: attempts ? Object.values(attempts).reduce((a, b) => a + b, 0) : 0,
+    };
+  }
+
   function missionKind(mission) {
     return mission.kind || "jobObjective";
   }
@@ -2604,6 +2651,7 @@
   MJ.siteIntelView = siteIntelView;
   MJ.siteThreat = siteThreat;
   MJ.jobThreat = jobThreat;
+  MJ.obstacleKnowledge = obstacleKnowledge;
   MJ.suppressionBonus = suppressionBonus;
   MJ.applySuppression = applySuppression;
   // The stepper — interactive resolution drives these directly;
@@ -2637,6 +2685,11 @@
   MJ.discoverResourceSite = discoverResourceSite;
   MJ.missionKind = missionKind;
   MJ.missionPlanes = missionPlanes;
+  // The crew AS THE FIGHT WOULD SEE THEM — gear on, held spells
+  // applied. The party panel reads these so the armour it prints is
+  // the armour the gate will use, not the gear rating with the magic
+  // quietly missing from it.
+  MJ.crewCombatants = crewCombatants;
   MJ.autoResolve = autoResolve;
   MJ.openDispatch = openDispatch;
   MJ.closeDispatch = closeDispatch;

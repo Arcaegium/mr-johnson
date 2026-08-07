@@ -588,8 +588,17 @@
   // hit lands and does nothing but noise. Anything that gets
   // through is soaked with Body + remaining armour, one point of
   // damage removed per hit.
+  // What this body is ACTUALLY wearing: the gear rating plus whatever
+  // is riding on them. Exported, because the crew panel shows this
+  // number and a panel that computes its own would be a panel that
+  // disagrees with the gate — cast Armor and the sheet has to move,
+  // or the spell did nothing as far as the player can tell.
+  function effectiveArmour(defender, ap) {
+    return Math.max(0, defender.armour + modifier(defender, "armour") + (ap || 0));
+  }
+
   function resolveDamage(combat, attacker, defender, weapon, netHits) {
-    const armour = Math.max(0, defender.armour + modifier(defender, "armour") + (weapon.ap || 0));
+    const armour = effectiveArmour(defender, weapon.ap);
     const power = (weapon.power || 0) + (attacker.weaponQuality || 0) + modifier(attacker, "power") +
       (weapon.useStrength ? (attacker.attributes.strength || 0) : 0);
     if (power <= armour) {
@@ -789,6 +798,7 @@
   MJ.actionsFor = actionsFor;
   MJ.weaponProfile = weaponProfile;
   MJ.makeCombatant = makeCombatant;
+  MJ.effectiveArmour = effectiveArmour;
   MJ.initiativeScore = initiativeScore;
   MJ.buildRound = buildRound;
   MJ.beginCombat = beginCombat;
