@@ -312,8 +312,20 @@
     // last and in amber because it is the one that is running.
     const left = job.expiryDay - S.day;
     const clock = left <= 0 ? "expired" : left === 1 ? "today" : left + "d left";
-    return `<b class="w-num">¥${job.pay}</b> <span class="muted">·</span> ${n} Leg${n === 1 ? "" : "s"} ` +
-      `<span class="muted">·</span> <span class="good">${esc(pillars)}</span> ` +
+    // The other end of the Locations link: an accepted job carries its
+    // number, and every job names WHERE by the location numbers the
+    // Locations tab already uses — closed, the title alone says which
+    // dots on the map this contract is about.
+    const jobNo = job.contractNumber
+      ? `<span class="good">Job #${job.contractNumber}</span> <span class="muted">·</span> ` : "";
+    const locNums = [...new Set(job.missions
+      .map((m) => m.site && m.site.identity.universeIndex)
+      .filter((x) => x !== undefined && x !== null))];
+    const locs = locNums.length
+      ? ` <span class="muted">·</span> <span class="warn">Loc${locNums.length === 1 ? "" : "s"} ${locNums.map((x) => "#" + x).join("/")}</span>`
+      : "";
+    return jobNo + `<b class="w-num">¥${job.pay}</b> <span class="muted">·</span> ${n} Leg${n === 1 ? "" : "s"} ` +
+      `<span class="muted">·</span> <span class="good">${esc(pillars)}</span>${locs} ` +
       `<span class="muted">·</span> <span class="w-warn">${clock}</span>`;
   }
 
@@ -326,6 +338,19 @@
 
   // ── Armory: buy, MAKE, and assign, all in one place ─────────────
   function itemEffectText(t) {
+    // A WEAPON'S PRODUCT IS ITS PROFILE. The hover used to say only
+    // "+1d firearms" — which a ¥300 holdout and a ¥1,800 heavy pistol
+    // both earn, so the price ladder read as noise. What the extra
+    // money buys is Power (the Penetrate gate) and DV (what lands),
+    // and the hover now leads with them. Same disease the armor
+    // ladder had; same cure.
+    if (t.category === "weapon" && t.combat) {
+      const w = MJ.weaponProfile(t.combat);
+      if (w && w.power) {
+        return `Power ${w.power} · DV ${w.dv}${w.ap ? ` · AP ${w.ap}` : ""}` +
+          ` · ${(w.modes || []).join("/")} · +${MJ.gearBonusForTier(t.tier)}d ${t.skill}`;
+      }
+    }
     if (t.category === "cyberware") return Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + ` · −${t.essenceCost} ess (implant)`;
     // ARMOUR'S FIRST JOB IS THE RATING — the Penetrate gate, Power
     // against Armour, the number the Defense lane reads. The hover
@@ -394,10 +419,23 @@
   }
 
   // ── Locations ───────────────────────────────────────────────────
+  // THE LINK READS THE SAME FROM BOTH TABS. A contract names its
+  // locations by number; a location names the jobs it is the target
+  // of, by job number and leg — "Job #2 Target 1" here, "Loc #7" over
+  // there, and CHAINED said wherever it is true, because a chained
+  // job's legs are a sequence and the player planning from the map
+  // needs to know this stop has an order to it.
   const targetMarks = (site) => {
-    const nums = S.jobs.filter((j) => !j.paid && !j.expired && j.missions.some((m) => m.site === site))
-      .map((j) => "[" + j.contractNumber + "]");
-    return nums.length ? ` <span class="warn">target ${nums.join("")}</span>` : "";
+    const marks = [];
+    for (const j of S.jobs) {
+      if (j.paid || j.expired) continue;
+      j.missions.forEach((m, k) => {
+        if (m.site !== site) return;
+        marks.push(`Job #${j.contractNumber} Target ${k + 1}` +
+          (j.chained ? ' <span class="w-warn">· CHAINED</span>' : ""));
+      });
+    }
+    return marks.length ? ` <span class="warn">${marks.join(" · ")}</span>` : "";
   };
 
   // RUN IS CONTRACTS ONLY. An astral projection or a host crawl is how

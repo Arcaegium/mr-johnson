@@ -109,10 +109,16 @@
   const DEFAULT_CRAFT_TIER = 3;      // until the armory gives items real tiers
   // First-hand estimates: the numbers a site gets handed to the
   // player with. ESTIMATE_ACCURACY of them are dead-on (user spec:
-  // 60-70%); the rest miss by up to ±ESTIMATE_MAX_ERROR — small
-  // lies and huge ones both, so recon stays load-bearing.
+  // 60-70%); the rest miss by ±1 tier, no more. ±5 was calibrated
+  // for the old uniform 1..rating scatter, where every number was
+  // vague by construction — under the band ruling a site IS its
+  // tier, and a "~4d" card on what is actually an 8-dice building
+  // is not an estimate, it is a lie the legible board cannot carry.
+  // Found live: a "T2 mission" fielding a T5 guard and a T4 door.
+  // Recon stays load-bearing as the thing that removes the ± and
+  // pins the number down, not as the thing that catches wild lies.
   const ESTIMATE_ACCURACY = 0.65;
-  const ESTIMATE_MAX_ERROR = 5;
+  const ESTIMATE_MAX_ERROR = 1;
   // A route carries everything the site put on it. The site's own
   // security budget is the bound that matters — it already decides
   // how much gets bought and placed, so a second cap on top of it
@@ -585,6 +591,12 @@
       const projection = axis === "astral" ? "astral" : axis === "matrix" ? "matrix" : "physical";
       const ob = MJ.generateObstacleInstance(run.rng, typeId, Math.min(10, tier), projection);
       ob.responder = axis;
+      // Named as what they ARE, at the source, so every line that
+      // ever prints them says so — the player who was told "they are
+      // coming" then met a plain "Guard T4" two doors later had no
+      // way to know that WAS them, and read it as the response never
+      // arriving (found live).
+      ob.label = "Response " + ob.label;
       spawned.push(ob);
     }
     // They come to where the crew actually is, so they witness the

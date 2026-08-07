@@ -288,44 +288,51 @@
   // are holding up (a sustained spell is −2 on everything else, so
   // it belongs where the player is choosing).
   function partyPanel(run) {
-    const crew = run.runners || [];
-    if (!crew.length) return "";
+    // BODIES, not runners: today that is the crew, and when drones
+    // and spirits land (Phase D) they join this same list — each row
+    // takes 1/N of the stripe by flex, so the panel resizes itself
+    // to however many the player is responsible for.
+    const bodies = run.runners || [];
+    if (!bodies.length) return "";
     const sustaining = run.sustaining || [];
-    const rows = crew.map((r) => {
+    // NO NUMBERS ON THE TRACKS — the ticks are the truth and their
+    // colour is the urgency: teal while it is fine, gold when it is
+    // a concern, red when it is trouble. The exact figures ride on
+    // the hover for anyone who wants arithmetic.
+    const bar = (val, max, label) => {
+      const frac = val / Math.max(1, max);
+      const tone = frac >= 0.67 ? "u2" : frac >= 0.34 ? "u1" : "u0";
+      const filled = Math.round(frac * max);
+      return `<div class="pp-line" title="${label} ${val} of ${max}">` +
+        `<span class="pp-k">${label}</span>` +
+        `<span class="pp-bar ${tone}">` +
+        Array.from({ length: Math.max(1, max) }, (_, i) =>
+          `<i class="${i < filled ? "on" : ""}"></i>`).join("") + "</span></div>";
+    };
+    const rows = bodies.map((r) => {
       const down = run.downed && run.downed.has(r);
-      const w = r.wounds || 0, s = r.stun || 0;
-      const wMax = MJ.physicalTrack(r), sMax = MJ.stunTrack(r);
       const loadout = MJ.combatLoadoutFor(r);
       const gun = MJ.weaponProfile(loadout.weaponId);
       const held = sustaining.filter((x) => x.caster === r)
         .map((x) => (MJ.spellDef(x.spell) || {}).label || x.spell);
       const on = sustaining.filter((x) => x.target === r && x.caster !== r)
         .map((x) => (MJ.spellDef(x.spell) || {}).label || x.spell);
-      // A bar per track, because "7 of 11" is arithmetic and a bar is
-      // a glance — and glance is what a fight allows.
-      const bar = (val, max, cls) => {
-        const pips = Math.max(1, Math.min(10, max));
-        const filled = Math.round((val / Math.max(1, max)) * pips);
-        return `<span class="pp-bar ${cls}">` +
-          Array.from({ length: pips }, (_, i) =>
-            `<i class="${i < filled ? "on" : ""}"></i>`).join("") + "</span>";
-      };
+      // Name and hardware share the horizontal axis; the two tracks
+      // stack under them — mixed axes so a row compresses without
+      // getting cryptic.
       return `<div class="pp-row${down ? " pp-down" : ""}">` +
-        `<div class="pp-name">${esc(r.identity.handle)}` +
-        (down ? '<span class="w-no"> — down</span>' : "") + "</div>" +
-        `<div class="pp-line">${bar(w, wMax, "pp-p")}<span class="pp-n">${w}/${wMax}</span>` +
-        `<span class="dimmed">P</span></div>` +
-        `<div class="pp-line">${bar(s, sMax, "pp-s")}<span class="pp-n">${s}/${sMax}</span>` +
-        `<span class="dimmed">S</span></div>` +
-        `<div class="pp-kit"><span class="dimmed">armour</span> ${num(loadout.armour)}` +
-        `<span class="dimmed"> · </span>${esc(gun.label || "bare hands")}` +
-        (gun.power ? `<span class="dimmed"> P${gun.power}</span>` : "") + "</div>" +
-        (held.length ? `<div class="pp-held">✦ holding ${esc(held.join(", "))}` +
-          `<span class="dimmed"> · −2</span></div>` : "") +
+        `<div class="pp-top"><span class="pp-name">${esc(r.identity.handle)}</span>` +
+        (down ? '<span class="w-no">DOWN</span>'
+          : `<span class="pp-hw" title="${esc(gun.label || "bare hands")}${gun.power ? " — Power " + gun.power + ", DV " + gun.dv : ""}">` +
+            `🛡${loadout.armour}${gun.power ? ' <span class="dimmed">·</span> P' + gun.power : ""}</span>`) +
+        "</div>" +
+        bar(r.wounds || 0, MJ.physicalTrack(r), "P") +
+        bar(r.stun || 0, MJ.stunTrack(r), "S") +
+        (held.length ? `<div class="pp-held" title="sustaining costs −2 on everything else">✦ ${esc(held.join(", "))}<span class="dimmed"> −2</span></div>` : "") +
         (on.length ? `<div class="pp-held pp-on">✦ ${esc(on.join(", "))}</div>` : "") +
         "</div>";
     }).join("");
-    return `<div class="pp-head">the crew</div>${rows}`;
+    return `<div class="pp-head">the crew</div><div class="pp-rows">${rows}</div>`;
   }
 
   // ── The shape of the run ───────────────────────────────────────
