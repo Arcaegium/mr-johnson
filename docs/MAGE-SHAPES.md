@@ -99,7 +99,7 @@ different attributes (Agility vs Charisma).
 |---|---|---|---|---|---|---|---|
 | **Puppeteer** | the guard opens the door himself | sorcery | **con**, leadership | **Charisma**, Willpower, Magic | Influence, Control Thoughts, Control Actions, Mob Mind | **Face** | only works on minds — a drone or a lock is immune |
 | **Telekinetic** | never touches anything | sorcery | **larceny**, electronics | **Intelligence**, Magic | Magic Fingers, Levitate, Fling | Tech, Sneak | fine motor work at range is slow and loud in the astral |
-| **Warder** | the crew survives the exchange | sorcery | assensing | **Willpower**, Magic, Body | Mana Barrier, Physical Barrier, Armor | **Defense** | barriers buy time, never a result |
+| **Bulwark** | the crew survives the exchange | sorcery | assensing | **Willpower**, Magic, Body | Mana Barrier, Physical Barrier, Armor | **Defense** | barriers buy time, never a result |
 | **Controller** | shapes the fight before it starts | sorcery | perception, athletics | Magic, Willpower, Intelligence | Physical Barrier + Fling + Levitate | Defense, Attack | needs a *fight* — worthless on a quiet job |
 
 ## 6. `conjuringMage` — the class the collapsed skill hides most
@@ -151,7 +151,7 @@ and everyone else's. That closes the bootstrap loop without any auto-unlock.
    non-spell verbs or they are not really implemented.
 
 4. **Several presentations are force multipliers with no verb of their own**
-   (Sentry, Force Multiplier, Warder, Showman). The lane model reads what a
+   (Sentry, Force Multiplier, Bulwark, Showman). The lane model reads what a
    runner can *do*, so it currently scores these near zero. They are not weak;
    they are unreadable.
 

@@ -2326,14 +2326,14 @@
       for (let i = 0; i < 6000 && Object.keys(drawn).length < 3; i++) {
         const r = MJ.generateRunner(MJ.makeRNG("c24-mm-" + i), { focusId: "manipulationMage" });
         const p = r.classification.presentation;
-        if (["puppeteer", "telekinetic", "warder"].indexOf(p) !== -1 && !drawn[p]) drawn[p] = r;
+        if (["puppeteer", "telekinetic", "bulwark"].indexOf(p) !== -1 && !drawn[p]) drawn[p] = r;
       }
       check(Object.keys(drawn).length === 3, "C24: need all three manipulation shapes drawn");
       const lead = (p) => MJ.attributePriority(drawn[p])[0];
       check(lead("puppeteer") === "charisma", "C24: a Puppeteer leads on Charisma — spirits of a sort, negotiated with");
       check(lead("telekinetic") === "intelligence", "C24: a Telekinetic leads on Intelligence");
-      check(lead("warder") === "willpower", "C24: a Warder leads on Willpower");
-      check(new Set(["puppeteer", "telekinetic", "warder"].map(lead)).size === 3,
+      check(lead("bulwark") === "willpower", "C24: a Bulwark leads on Willpower");
+      check(new Set(["puppeteer", "telekinetic", "bulwark"].map(lead)).size === 3,
         "C24: three professions off one skill list must want three different attributes");
     }
 

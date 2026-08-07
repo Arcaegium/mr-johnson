@@ -161,7 +161,7 @@ Consequences:
 - **Everything that contributes must be counted.** Magic *and* gear. The Armor
   spell must reach the armour rating. Buffs, barriers, heals, and issued gear
   all move the numbers they actually move.
-- Force-multiplier presentations (Sentry, Warder, Force Multiplier, Showman)
+- Force-multiplier presentations (Sentry, Bulwark, Force Multiplier, Showman)
   currently score near zero because the lane model reads *verbs*. They are not
   weak, they are **unreadable** — same class of bug as the mute mage.
 - Under-counting is as much a violation as over-counting: a false red teaches
@@ -200,7 +200,7 @@ Presentations, after D7 cuts:
 - **illusionMage** — Infiltrator (Agility + Stealth), Showman (Charisma),
   Impersonator (Charisma + Con), Tormentor (debuff).
 - **manipulationMage** — Puppeteer (Charisma + Willpower), Telekinetic
-  (Intelligence), Warder (Willpower, barriers), Controller.
+  (Intelligence), Bulwark (Willpower, barriers), Controller.
 - **conjuringMage** — Summoner/Binder (Charisma — spirits are negotiated with),
   Banisher (Willpower — spirits are overpowered), Astral Intruder
   (Intelligence).

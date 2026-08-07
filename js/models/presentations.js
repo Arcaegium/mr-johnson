@@ -200,7 +200,13 @@
         "the guard opens the door himself"),
       P("telekinetic", "Telekinetic", ["intelligence", "magic", "agility"], ["sorcery", "larceny"],
         "never touches anything"),
-      P("warder", "Warder", ["willpower", "magic", "body"], ["sorcery", "assensing"],
+      // NOT "Warder" — a ward is an obstacle type on a site, an astral
+      // barrier somebody else built. This presentation casts Mana
+      // Barrier and Physical Barrier, which are Manipulation SPELLS:
+      // one action, then sustained. Two different things, and one name
+      // between them would have read as though this mage made the
+      // scenery.
+      P("bulwark", "Bulwark", ["willpower", "magic", "body"], ["sorcery", "assensing"],
         "the crew survives the exchange"),
       P("controller", "Controller", ["magic", "willpower", "intelligence"], ["sorcery", "perception"],
         "shapes the fight before it starts"),
