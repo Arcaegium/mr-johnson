@@ -58,9 +58,16 @@
       effect: "combatSense",
       note: "reads the attack before it lands",
     },
+    // ARMOUR THAT IS ALWAYS ON belongs in the base rating, not in the
+    // effects table. A spell is CAST — it costs an action and Drain,
+    // so it is an effect and the lane forecasts it as a maybe. This
+    // is simply part of the person: it is there before anybody moves,
+    // exactly like a coat. Putting it in `armourRatingFor` means the
+    // Penetrate gate and the capability card read ONE number, and
+    // neither can be right while the other is wrong.
     mysticArmor: {
       label: "Mystic Armor", pp: 0.5, karma: 3,
-      effect: "mysticArmor",
+      armour: 2,
       note: "armour that is not worn and cannot be taken off",
     },
     painResistance: {
@@ -118,9 +125,12 @@
   // and is reused rather than duplicated — the ROW says what happens,
   // the `source` on the applied effect says who did it, which is what
   // lets counterspell strip the magical one and leave the wired one.
+  // Mystic Armor is deliberately NOT here — see its entry above. It
+  // is always-on and lives in `armourRatingFor`, so putting a row
+  // here too would armour an adept twice in a fight and once on the
+  // card, which is the exact disagreement this pass exists to end.
   const POWER_EFFECTS = {
     quickened:      { label: "quickened",      kind: "boon", channels: { initiative: 4, initiativeDice: 1 } },
-    mysticArmor:    { label: "mystic armour",  kind: "boon", channels: { armour: 2 }, maxStacks: 3 },
     painResistance: { label: "pain resistance", kind: "boon", channels: { soak: 2 } },
   };
 
@@ -199,6 +209,15 @@
     return powersFor(runner).some((id) => POWERS[id].grants === flag);
   }
 
+  // Armour that is part of the person. Read by armory.js's
+  // armourRatingFor, which is the ONE number the Penetrate gate and
+  // the capability card both consult — so an adept's mystic armour
+  // protects them in the fight and shows on the card, and cannot be
+  // true in one place and absent in the other.
+  function powerArmourFor(runner) {
+    return powersFor(runner).reduce((sum, id) => sum + (POWERS[id].armour || 0), 0);
+  }
+
   // Combat effects a power puts up. Sourced by POWER ID, which is how
   // anything asking "was this magic?" gets a truthful answer without
   // a second field — the same trick spells.js uses.
@@ -233,6 +252,7 @@
   MJ.canAffordPower = canAffordPower;
   MJ.powerSkillMods = powerSkillMods;
   MJ.powerGrants = powerGrants;
+  MJ.powerArmourFor = powerArmourFor;
   MJ.applyPowerEffects = applyPowerEffects;
   MJ.isMagicalEffect = isMagicalEffect;
   MJ.registerPowerEffects = registerPowerEffects;

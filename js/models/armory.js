@@ -509,7 +509,17 @@
       const t = ITEM_TEMPLATES[item.templateId];
       if (t && t.category === "armor") best = Math.max(best, effectiveTier(item));
     }
-    return best;
+    // ARMOUR THAT IS NOT WORN STILL STOPS BULLETS. An adept's mystic
+    // armour is always on — no action, no Drain, nothing to cast —
+    // so it belongs to the person the way a coat belongs to the coat.
+    // It ADDS rather than competing for the best-coat slot, because
+    // it is not a garment and does not go on over anything.
+    //
+    // This is the one number the Penetrate gate and the capability
+    // card both read, which is the point: before this, an adept's
+    // mystic armour was invisible to BOTH, and the card cannot be
+    // honest about a defence the fight does not honour.
+    return best + (MJ.powerArmourFor ? MJ.powerArmourFor(runner) : 0);
   }
 
   // ── Consumables: find and burn ──────────────────────────────────

@@ -2363,12 +2363,68 @@
         "C24: power " + id + " must cost whole karma, not Power Points");
       check(def.karma === Math.round(def.pp * (MJ.MAGIC_KARMA_PER_UNIT || 5)),
         "C24: power " + id + " must price as its SR5 cost x 5");
-      const reach = !!(def.effect || def.skillMods || def.grants);
+      // FOUR ways a power reaches the game and no fifth: a combat
+      // effect row, a skill modifier, a capability grant, or armour
+      // that is simply part of the person. A power matching none of
+      // them is the inert-adept-Magic bug wearing a name.
+      const reach = !!(def.effect || def.skillMods || def.grants || def.armour);
       check(reach, "C24: power " + id + " must actually reach the game");
+      // Always-on armour lives in armourRatingFor, never in the
+      // effects table — a row as well would armour an adept twice in
+      // a fight and once on the card.
+      if (def.armour) {
+        check(!def.effect && !MJ.COMBAT_EFFECTS[id],
+          "C24: " + id + " is always-on armour and must NOT also be an effect row");
+      }
       if (def.effect) {
         check(!!MJ.COMBAT_EFFECTS[def.effect],
           "C24: power " + id + " names an effect row that exists (" + def.effect + ")");
       }
+    }
+
+    // ── THE GREEN LIGHT INVARIANT ─────────────────────────────────
+    // If the card reports a lane COVERED from current information,
+    // the crew must genuinely be able to do that thing. The only
+    // permitted cause of a wrong green is STALE intel — something
+    // that was true when it was gathered and has since changed.
+    //
+    // Under-counting violates this as surely as over-counting. A
+    // false red teaches the player to distrust the one instrument
+    // they have, and the whole card stops being worth reading.
+    //
+    // The specific bug this locks out: a number that is true on the
+    // card and absent in the fight. Armour is where that hid — the
+    // capability card, the Penetrate gate and the combat loadout must
+    // all read ONE number for a runner.
+    {
+      const rngG = MJ.makeRNG("c24-green");
+      let checked = 0, disagreed = 0;
+      for (let i = 0; i < 200; i++) {
+        const r = MJ.generateRunner(MJ.makeRNG("c24-g" + i), {});
+        MJ.watchRunner(r, rngG); MJ.hireRunner(r, "permanent");
+        const rating = MJ.armourRatingFor(r);
+        const loadout = MJ.combatLoadoutFor(r).armour;
+        checked += 1;
+        if (rating !== loadout) disagreed += 1;
+      }
+      check(checked > 150, "C24: the armour-agreement probe needs runners");
+      check(disagreed === 0,
+        "C24: armourRatingFor and the combat loadout must never disagree — " +
+        "a defence the card counts and the fight ignores is a false green");
+
+      // And an always-on power must move all three together, which is
+      // the thing that was broken: mystic armour was invisible to the
+      // card AND to the gate, so an adept was quietly less armoured
+      // than the game said and than they had paid for.
+      const ad = MJ.generateRunner(MJ.makeRNG("c24-gad"), { family: "fighter", origin: "magic" });
+      MJ.watchRunner(ad, rngG); MJ.hireRunner(ad, "permanent");
+      ad.attributes.magic = 4;
+      const bare = MJ.armourRatingFor(ad);
+      ad.classification.powersKnown = [{ id: "mysticArmor", label: "Mystic Armor", karma: 3 }];
+      const armed = MJ.armourRatingFor(ad);
+      check(armed > bare, "C24: mystic armour must reach the armour rating");
+      check(MJ.combatLoadoutFor(ad).armour === armed,
+        "C24: and the fight must honour exactly what the card counted");
     }
 
     // Powers augment training, they never invent it — the same rule
