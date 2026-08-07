@@ -90,18 +90,38 @@
   // a family gate, not just a Magic-attribute gate — an adept has
   // Magic but isn't a spellcaster, so adept-origin fighters still
   // don't qualify for the four magic skills.
+  // CASTING IS GATED BY FAMILY. PERCEIVING IS GATED BY BEING AWAKENED.
+  // These are not the same rule, and running them together left every
+  // adept in the game blind on a plane they exist on. Sorcery,
+  // conjuring and enchanting are things you DO with magic and are
+  // rightly mage-only — an adept has a spark, not a spellbook.
+  // Assensing is not one of them: it is astral PERCEPTION, and it got
+  // swept in only because it was filed under "the four magic skills".
+  // Anyone Awakened can open their eyes.
   const SKILL_GATES = {
     sorcery: "mage",
     conjuring: "mage",
     enchanting: "mage",
-    assensing: "mage",
+    assensing: "awakened",
     hacking: "decker",
     rigging: "rigger",
   };
 
-  function isSkillEligible(skillId, family) {
+  // `origin` is only consulted by the awakened gate. Callers who pass
+  // two arguments get the old family-only behaviour, which for every
+  // other gate is the same answer.
+  function isSkillEligible(skillId, family, origin) {
     const gate = SKILL_GATES[skillId];
-    return !gate || gate === family;
+    if (!gate) return true;
+    if (gate === "awakened") return family === "mage" || origin === "magic";
+    return gate === family;
+  }
+
+  // Awakened: carries a spark at all. A mage casts with it, an adept
+  // burns it on their own body — both of them can see with it.
+  function isAwakened(runner) {
+    const c = runner && runner.classification;
+    return !!c && (c.family === "mage" || c.origin === "magic");
   }
 
   // ── Metatypes: starting deltas AND lifetime ceilings ──────────
@@ -276,7 +296,7 @@
   // (every gate-eligible skill outside the list). This is rolled once
   // at generation and stored on the runner — it's an identity trait,
   // not something growth re-rolls.
-  function buildSkillTiers(rng, focus, trueArchetype) {
+  function buildSkillTiers(rng, focus, trueArchetype, origin) {
     const entry = ARCHETYPE_SKILLS[focus.id];
     const primary = entry.list[0];
     const secondaryCount = trueArchetype === "specialist" ? entry.specialistSecondary : entry.generalistSecondary;
@@ -284,7 +304,7 @@
     const secondary = restShuffled.slice(0, secondaryCount);
     const tertiary = restShuffled.slice(secondaryCount);
     const overflow = SKILLS.filter(
-      (s) => !entry.list.includes(s) && isSkillEligible(s, focus.family)
+      (s) => !entry.list.includes(s) && isSkillEligible(s, focus.family, origin)
     );
     return { primary, secondary, tertiary, overflow };
   }
@@ -431,7 +451,7 @@
   // secondary skills at a solid, even level. Tertiary and Overflow
   // are deliberately left at 0 here; they're what growRunner fills
   // in over a career, not something pre-rolled at generation.
-  function generateSkillSpread(rng, focus, trueArchetype, tiers) {
+  function generateSkillSpread(rng, focus, trueArchetype, tiers, origin) {
     const skills = {};
     for (const s of SKILLS) skills[s] = 0;
 
@@ -470,7 +490,7 @@
     // This does NOT make the four common — conjuring and enchanting
     // stay genuinely specialist, which is correct. It makes the
     // Awakened able to perceive.
-    if (isSkillEligible("assensing", focus.family) && skills.assensing === 0) {
+    if (isSkillEligible("assensing", focus.family, origin) && skills.assensing === 0) {
       skills.assensing = rng.int(1, 3);
     }
 
@@ -757,6 +777,38 @@
     return Object.values(effectiveSkills).reduce((sum, rank) => sum + karmaCost(rank), 0);
   }
 
+  // ── WHAT MAGIC COST, WHICH IS ALSO WHAT IT IS WORTH ─────────────
+  // SR5 charges 5 karma to learn a spell, and 5 karma per Power Point
+  // for anyone buying powers with karma rather than a chargen
+  // abstraction — which is us, permanently, because the app does the
+  // arithmetic. One rate, both kinds of Awakened.
+  //
+  // This has to be in the PRICE as well as the pool. `trueValue`
+  // called itself "a real, grounded measure of invested Karma" while
+  // reading skills only, so a mage priced identically at nought
+  // spells and ten. Harmless while grimoires were free; the moment
+  // they cost pool karma it means every point a mage spends on
+  // spells DISAPPEARS from their valuation, and the market hands out
+  // magic for nothing. It also leaves an adept's Magic unpriced,
+  // since `attributePriority` is skill-derived and an adept owns no
+  // magic-linked skill — give them powers that cost karma and the
+  // attribute finally has something to be relevant to.
+  const MAGIC_KARMA_PER_UNIT = 5;
+
+  function grimoireValue(runner) {
+    const c = runner && runner.classification;
+    if (!c) return 0;
+    const known = (c.spellsKnown || []).length;
+    // Powers are priced in karma directly — Power Points are the
+    // hand-calculation abstraction we do not need (see docs/
+    // OVERHAUL-PLAN.md). A power's `karma` is its SR5 cost x 5,
+    // settled once when the table was written.
+    const powers = (c.powersKnown || []).reduce(
+      (sum, p) => sum + (typeof p === "object" ? (p.karma || 0) : 0), 0);
+    // Study still owed is NOT value — it is a debt the buyer inherits.
+    return known * MAGIC_KARMA_PER_UNIT + powers;
+  }
+
   // Cumulative karma sunk into an attribute, by the same logic as
   // karmaCost but on the attribute curve (each step costs
   // rating x ATTRIBUTE_COST_MULT). Attributes are in the dice pool
@@ -789,7 +841,9 @@
   // now lives in models/economy.js's hireCost(), which is the only
   // place this karma-cost scale actually gets turned into nuyen.
   function computePrice(runner) {
-    const base = trueValue(getEffectiveSkills(runner)) + relevantAttributeValue(runner);
+    const base = trueValue(getEffectiveSkills(runner))
+      + relevantAttributeValue(runner)
+      + grimoireValue(runner);
     const c = runner.classification;
     if (c.disciplineLabel === c.trueArchetype) return Math.round(base);
     const mult = c.disciplineLabel === "specialist" ? KARMA_HYPE_MULT : KARMA_BARGAIN_MULT;
@@ -999,8 +1053,8 @@
 
     const attrs = applyMagic(r, generateAttributes(r, metatypeId, focus.family), focus.family, origin);
     const essence = generateEssence(r, origin);
-    const skillTiers = buildSkillTiers(r, focus, trueArchetype);
-    const skills = generateSkillSpread(r, focus, trueArchetype, skillTiers);
+    const skillTiers = buildSkillTiers(r, focus, trueArchetype, origin);
+    const skills = generateSkillSpread(r, focus, trueArchetype, skillTiers, origin);
 
     const runner = {
       identity: generateIdentity(r, metatypeId, options.handleBase),
@@ -1088,6 +1142,9 @@
   MJ.describeDiscipline = describeDiscipline;
   MJ.karmaCost = karmaCost;   // exposed for inspection/tuning — real SR5 rank cost curve
   MJ.trueValue = trueValue;   // exposed for inspection/tuning — the undistorted honest value
+  MJ.grimoireValue = grimoireValue;   // spells + powers, at SR5's 5 karma apiece
+  MJ.MAGIC_KARMA_PER_UNIT = MAGIC_KARMA_PER_UNIT;
+  MJ.isAwakened = isAwakened;
   MJ.SKILL_GATES = SKILL_GATES;       // exposed — growth-cascade overflow must respect these too
   MJ.isSkillEligible = isSkillEligible;
   MJ.ARCHETYPE_SKILLS = ARCHETYPE_SKILLS;

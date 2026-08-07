@@ -2177,11 +2177,25 @@
   // for. Baselines fix it the way the file already fixed Firearms:
   // some skills are what it MEANS to be that kind of person.
   function class24_baselines() {
+    // ASSENSING IS GATED ON AWAKENED, NOT ON FAMILY. This probe used
+    // family as the proxy — mage vs everyone — which was accurate
+    // only while adepts were wrongly locked out. Astral perception is
+    // what it MEANS to carry a spark: a mage casts with it, an adept
+    // burns it on their own body, and both of them can see. Bucketing
+    // by family again would re-assert the bug this fixed.
     const tally = { mage: { n: 0, assens: 0 }, decker: { n: 0, comp: 0, hack: 0 },
-                    other: { n: 0, assens: 0, comp: 0 } };
+                    other: { n: 0, assens: 0, comp: 0 },
+                    adept: { n: 0, assens: 0, casts: 0 } };
     for (let i = 0; i < 4000; i++) {
       const r = MJ.generateRunner(MJ.makeRNG("c24-" + i), {});
       const fam = r.classification.family;
+      if (fam !== "mage" && r.classification.origin === "magic") {
+        tally.adept.n++;
+        if ((r.skills.assensing || 0) > 0) tally.adept.assens++;
+        if ((r.skills.sorcery || 0) > 0 || (r.skills.conjuring || 0) > 0 ||
+            (r.skills.enchanting || 0) > 0) tally.adept.casts++;
+        continue;
+      }
       if (fam === "mage") {
         tally.mage.n++;
         if ((r.skills.assensing || 0) > 0) tally.mage.assens++;
@@ -2203,6 +2217,12 @@
     check(tally.decker.hack === tally.decker.n, "C24: and hacking is their key skill regardless");
     check(tally.other.assens === 0,
       "C24: the Awakened baseline must not leak to the unawakened");
+    // The adept half of the same rule, both directions.
+    check(tally.adept.n > 100, "C24: the sample needs adepts in it (" + tally.adept.n + ")");
+    check(tally.adept.assens === tally.adept.n,
+      "C24: every ADEPT can assense too — the spark is what sees, not the spellbook");
+    check(tally.adept.casts === 0,
+      "C24: but an adept never casts — perceiving is not spellcasting");
     // Computer is UNIVERSAL, not gated — anyone may study programming,
     // which is exactly why the baseline is decker-only rather than a
     // gate. Non-deckers get it sometimes, from their own lists.
