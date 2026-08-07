@@ -798,13 +798,21 @@
   function grimoireValue(runner) {
     const c = runner && runner.classification;
     if (!c) return 0;
+    // A formula in your head stays knowledge even if you cannot
+    // currently cast it — a burnt-out mage still knows the spell.
     const known = (c.spellsKnown || []).length;
-    // Powers are priced in karma directly — Power Points are the
-    // hand-calculation abstraction we do not need (see docs/
-    // OVERHAUL-PLAN.md). A power's `karma` is its SR5 cost x 5,
+    // A POWER IS NOT KNOWLEDGE, it is a piece of the spark spent. If
+    // the Magic is gone the power is gone with it, so this prices
+    // what `powersFor` says they still have rather than what the
+    // dossier remembers. Priced in karma directly — Power Points are
+    // the hand-calculation abstraction we do not need (see
+    // docs/OVERHAUL-PLAN.md); a power's `karma` is its SR5 cost x 5,
     // settled once when the table was written.
-    const powers = (c.powersKnown || []).reduce(
-      (sum, p) => sum + (typeof p === "object" ? (p.karma || 0) : 0), 0);
+    const live = MJ.powersFor ? MJ.powersFor(runner) : [];
+    const powers = live.reduce((sum, id) => {
+      const def = MJ.powerDef ? MJ.powerDef(id) : null;
+      return sum + (def ? def.karma : 0);
+    }, 0);
     // Study still owed is NOT value — it is a debt the buyer inherits.
     return known * MAGIC_KARMA_PER_UNIT + powers;
   }
@@ -870,6 +878,17 @@
     for (const implant of runner.implants || []) {
       for (const skill of Object.keys(implant.skillMods || {})) {
         if (out[skill] !== undefined && out[skill] > 0) out[skill] += implant.skillMods[skill];
+      }
+    }
+    // Adept powers ride the SAME path, and obey the same rule. Chrome
+    // and magic both augment training; neither invents it. An adept
+    // with Improved Ability (Firearms) and no Firearms rank still
+    // cannot shoot — which is why this reuses the slot rather than
+    // adding a second one that could drift from it.
+    if (MJ.powerSkillMods) {
+      const mods = MJ.powerSkillMods(runner);
+      for (const skill of Object.keys(mods)) {
+        if (out[skill] !== undefined && out[skill] > 0) out[skill] += mods[skill];
       }
     }
     // Injury is not a specialist problem. Boxes cost dice on
@@ -1020,6 +1039,52 @@
     return known.slice(0, count);
   }
 
+  // ── The starting powers ────────────────────────────────────────
+  // THE ADEPT'S GRIMOIRE, and built to the same shape: a focus-
+  // weighted draw with the signature guaranteed first, padded from
+  // what any adept might have found in themselves. What differs is
+  // the ceiling — Magic x 5 karma of powers, permanently, because a
+  // power is not studied, it is how much magic is in the person.
+  //
+  // Powers live in models/powers.js, which loads after this file;
+  // like the grimoire, this runs at GENERATION time, never at load,
+  // so the order is safe.
+  const FOCUS_POWERS = {
+    melee:        ["killingHands", "improvedMelee", "improvedReflexes", "painResistance", "mysticArmor"],
+    tank:         ["painResistance", "mysticArmor", "commandingVoice", "improvedMelee", "improvedReflexes"],
+    marksman:     ["improvedMarksmanship", "enhancedPerception", "improvedReflexes", "combatSenseAdept"],
+    heavyWeapons: ["improvedFirearms", "painResistance", "mysticArmor", "improvedReflexes"],
+    demolitions:  ["enhancedPerception", "improvedReflexes", "combatSenseAdept", "greatLeap"],
+    stealth:      ["improvedStealth", "greatLeap", "enhancedPerception", "improvedReflexes", "astralPerception"],
+    face:         ["kinesics", "commandingVoice", "astralPerception", "enhancedPerception"],
+  };
+  // What any adept might turn up carrying, whatever they trained for.
+  const STAPLE_POWERS = ["improvedReflexes", "combatSenseAdept", "painResistance",
+    "astralPerception", "enhancedPerception", "mysticArmor"];
+
+  function generatePowers(rng, focus, attrs, origin) {
+    if (focus.family === "mage" || origin !== "magic") return null;
+    const cap = (attrs.magic || 0) * MAGIC_KARMA_PER_UNIT;
+    if (cap <= 0) return [];
+    const list = FOCUS_POWERS[focus.id] || STAPLE_POWERS;
+    const defs = (MJ.POWERS) || {};
+    const known = [];
+    let spent = 0;
+    const take = (id) => {
+      const def = defs[id];
+      if (!def || known.some((k) => k.id === id)) return false;
+      if (spent + def.karma > cap) return false;
+      known.push({ id: id, label: def.label, karma: def.karma });
+      spent += def.karma;
+      return true;
+    };
+    // The signature is certain, if it fits at all.
+    take(list[0]);
+    for (const id of rng.shuffle(list.slice(1))) take(id);
+    for (const id of rng.shuffle(STAPLE_POWERS.slice())) take(id);
+    return known;
+  }
+
   // ── Top-level generator ────────────────────────────────────────
   // options: { focusId?: string, family?: string, origin?: string }
   // If focusId isn't given, one is picked (optionally filtered by
@@ -1067,6 +1132,10 @@
         deckerAffinity: focus.family === "decker" ? generateDeckerAffinity(r) : null,
         // Spell IDS into MJ.SPELLS — the grimoire is what you hired.
         spellsKnown: generateGrimoire(r, focus, attrs, skills),
+        // The adept's half of the same idea — powers into MJ.POWERS,
+        // capped at Magic x 5 karma for life. null for anyone whose
+        // spark is not the burn-it-on-your-own-body kind.
+        powersKnown: generatePowers(r, focus, attrs, origin),
         // Formulas taught but not yet paid for in karma — the study
         // queue growRunner services at top priority.
         spellQueue: focus.family === "mage" ? [] : null,

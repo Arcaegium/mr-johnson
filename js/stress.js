@@ -2223,6 +2223,80 @@
       "C24: every ADEPT can assense too — the spark is what sees, not the spellbook");
     check(tally.adept.casts === 0,
       "C24: but an adept never casts — perceiving is not spellcasting");
+
+    // ── AN ADEPT'S MAGIC MUST DO SOMETHING ────────────────────────
+    // It used to do nothing at all: measured across 600 runners,
+    // identical dice pools, identical lanes and an identical PRICE at
+    // Magic 4 and Magic 0, for ~9% of the market. That is the mute
+    // mage in a different costume, and this is the probe that stops
+    // it coming back.
+    {
+      let n = 0, powered = 0, overCap = 0, inertMagic = 0, leaked = 0;
+      for (let i = 0; i < 900; i++) {
+        const r = MJ.generateRunner(MJ.makeRNG("c24-pow-" + i), {});
+        const c = r.classification;
+        const adept = c.family !== "mage" && c.origin === "magic";
+        if (!adept) {
+          // Nobody else carries powers, and the field is null rather
+          // than an empty list so "not that kind of person" and "that
+          // kind, with nothing yet" stay distinguishable.
+          if (c.powersKnown !== null) leaked += 1;
+          continue;
+        }
+        n += 1;
+        if ((c.powersKnown || []).length) powered += 1;
+        if (MJ.powerKarmaSpent(r) > MJ.powerKarmaCap(r)) overCap += 1;
+        const had = r.attributes.magic;
+        const withMagic = MJ.computePrice(r);
+        r.attributes.magic = 0;
+        const without = MJ.computePrice(r);
+        r.attributes.magic = had;
+        if (withMagic === without) inertMagic += 1;
+      }
+      check(n > 40, "C24: the sample needs adepts in it (" + n + ")");
+      check(leaked === 0, "C24: only an adept carries powers");
+      check(powered === n, "C24: every adept has at least one power");
+      check(overCap === 0, "C24: no adept exceeds Magic x 5 karma of powers");
+      check(inertMagic === 0,
+        "C24: an adept's Magic must change their price — an inert defining trait is the bug");
+    }
+
+    // The cap is permanent, and the karma prices are whole numbers —
+    // Power Points are the abstraction we deliberately do not model.
+    for (const id of Object.keys(MJ.POWERS)) {
+      const def = MJ.POWERS[id];
+      check(!!def.label, "C24: power " + id + " needs a name");
+      check(Number.isInteger(def.karma) && def.karma > 0,
+        "C24: power " + id + " must cost whole karma, not Power Points");
+      check(def.karma === Math.round(def.pp * (MJ.MAGIC_KARMA_PER_UNIT || 5)),
+        "C24: power " + id + " must price as its SR5 cost x 5");
+      const reach = !!(def.effect || def.skillMods || def.grants);
+      check(reach, "C24: power " + id + " must actually reach the game");
+      if (def.effect) {
+        check(!!MJ.COMBAT_EFFECTS[def.effect],
+          "C24: power " + id + " names an effect row that exists (" + def.effect + ")");
+      }
+    }
+
+    // Powers augment training, they never invent it — the same rule
+    // chrome, gear and intel all follow.
+    {
+      const untrained = MJ.generateRunner(MJ.makeRNG("c24-untrained"), { family: "fighter", origin: "magic" });
+      untrained.skills.firearms = 0;
+      untrained.classification.powersKnown = [{ id: "improvedFirearms", label: "x", karma: 3 }];
+      check((MJ.getEffectiveSkills(untrained).firearms || 0) === 0,
+        "C24: Improved Ability must never rescue a skill with no ranks");
+      untrained.skills.firearms = 3;
+      check(MJ.getEffectiveSkills(untrained).firearms === 5,
+        "C24: but it must lift a skill that has them");
+      // Burn the spark out and the power goes with it — a power is a
+      // piece of the Magic, not something remembered.
+      untrained.attributes.magic = 0;
+      check(MJ.getEffectiveSkills(untrained).firearms === 3,
+        "C24: Magic 0 takes the powers with it");
+      check(MJ.grimoireValue(untrained) === 0,
+        "C24: and stops charging for them");
+    }
     // Computer is UNIVERSAL, not gated — anyone may study programming,
     // which is exactly why the baseline is decker-only rather than a
     // gate. Non-deckers get it sometimes, from their own lists.

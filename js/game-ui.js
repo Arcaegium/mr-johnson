@@ -179,6 +179,16 @@
                   (r.attributes.magic || 0) > 0 ? "; buy or build a formula and teach it" : ""}</span>`
           }</div>`
         : "") +
+      // An adept's powers are their grimoire, and the dossier owes
+      // them the same line. The karma spent against the Magic ceiling
+      // is shown because that ceiling is PERMANENT — unlike a mage's
+      // book, this is the whole of what they will ever be until they
+      // raise Magic, and that is a hire decision.
+      ((c.powersKnown || []).length
+        ? `<div class="det"><span class="dk">powers</span>${
+            c.powersKnown.map((p) => esc(p.label)).join(", ")
+          } <span class="muted">· ${MJ.powerKarmaSpent(r)}/${MJ.powerKarmaCap(r)} karma of Magic spent</span></div>`
+        : "") +
       `<div class="det"><span class="dk">kit</span>${kit.length ? kit.join(", ") : '<span class="muted">nothing issued</span>'}</div>`;
   }
 
