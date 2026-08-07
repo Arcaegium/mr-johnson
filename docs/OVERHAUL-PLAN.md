@@ -235,11 +235,31 @@ Ordered by dependency. Do not skip ahead — later steps assume earlier ones.
 - **The unattended body is a pattern too.** Astral Intruder, Jumped-In rigger,
   and a decker going slump all leave a meat body for the crew to guard. The
   plane/turn-ratio note in `UNDERSTANDING.md` is the system all three need.
-- **`tank` and `streetDoc` are mis-shaped.** `tank`'s keySkill is
-  `intimidation`, which is Charisma-linked — a fighter focus paid for by a Face
-  attribute, able to generate a runner bad at their own nameplate.
-  `streetDoc` is a fighter-family focus whose list holds no combat skill at all.
-  **Review both before writing bands.**
+- **`tank` is a naming problem, not a shape problem — RESOLVED.** Tanking is
+  drawing the attack (`intimidation`, Charisma) and then absorbing it (Body).
+  That is an ordinary skill-plus-attribute pairing; an earlier pass here talked
+  itself into "the model structurally cannot express it" and then invented
+  vocabulary to cover the confusion. **Rename to Enforcer. Nothing else
+  changes.** One thing to confirm before a presentation leans on it: whether
+  the resolver actually lets a runner *draw* an attack onto themselves.
+
+- **`streetDoc` is the FIGHTER'S CRAFTER — RESOLVED, and it closes four gaps
+  at once.** It was never homeless. Confirmed in the registry:
+  - **cyberware is the only gear category with no `craftSkill`** (weapons,
+    armour, decks, programs, drones, foci and formulas all have one; cyberware
+    is marked "buy-only in v1")
+  - **`implantSurgery(runner, item, armoryItems)` requires no surgeon** — no
+    doctor argument, no medicine check; anyone implants anything into anyone
+  - **`streetDoc`'s primary is `medicine`**
+  - **fighter is the only family without a crafter**
+
+  The symmetry completes: mage→enchantingMage (formulas/foci, `enchanting`),
+  decker→Coder (programs, `computer`), rigger→Mechanic (drones, `rigging`),
+  **fighter→streetDoc (cyberware, `medicine`)**. `combatMedic` is the genuine
+  fighter-family field medic; the two are not duplicates.
+
+  **Phase B action:** give cyberware `craftSkill: "medicine"`, and require a
+  medicine-skilled runner to perform `implantSurgery`.
 - **The band table cannot be one shape for all five families.** Mages separate
   on *attributes* (identical skills, different profession). Deckers all want
   Intelligence and separate on *skills and physical stats*. Fighters separate on
@@ -376,10 +396,38 @@ their Magic rating, spent on powers — structurally identical to the grimoire: 
 per-runner list, bounded by an attribute, read by the verb layer. `spellsFor`,
 the `carries` gate and `bestCombatSpell` are the working model to copy.
 
-**Open modelling question for Phase B:** adept presentations cross focus lines
-(a Presence adept could be a `face` or a `tank`; a Striker could be `melee` or
-`tank`). So adept presentation is a **second axis**, not a replacement for
-focus. Decide how that composes before writing the band table.
+### CORRECTION (same session): the second-axis framing was wrong
+
+Worked through the SR5 power list against the seven focuses that can actually
+produce an adept (measured: six fighter + `face`; `leader`, `decker`, `rigger`,
+`streetDoc`, `combatMedic` never roll one). Most adept powers do not create
+identities — **they amplify whatever the focus already is**:
+
+- Improved Reflexes helps all seven equally
+- Improved Ability [skill] is parameterised by the runner's own primary
+
+So adept powers are closer to **innate gear bought with Magic instead of
+nuyen** than to a presentation axis. Mechanically the grimoire is still the
+model; the *role* is a smartgun, not a profession.
+
+Two claimed exceptions, both of which failed on inspection:
+
+- **Traceless Walk — no referent.** Claimed as "a capability no skill
+  provides." There is no post-hoc evidence system in this game: `trace` means
+  Matrix overwatch converging during a run, and astral exposure. Nothing
+  records what a crew left behind. A power nothing reads is the inert-adept-
+  Magic bug, not a fix for it.
+- **Astral Perception — a bug in the gate, not an exotic power.**
+  `SKILL_GATES` makes `assensing` mage-only, justified in-comment by "an adept
+  has Magic but isn't a spellcaster." That conflates CASTING with PERCEIVING.
+  Sorcery, conjuring and enchanting are casting skills and are correctly
+  mage-only. Assensing is perception, swept in because it was filed under "the
+  four magic skills." **An Awakened runner is currently blind on a plane they
+  exist on, for a reason that only applies to the other three.**
+
+**Phase B action:** ungate `assensing` from mage-only to Awakened (any runner
+with Magic ≥ 1). Adept powers otherwise model as innate gear, not a second
+presentation axis.
 
 ---
 

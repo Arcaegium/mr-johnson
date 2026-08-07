@@ -20,14 +20,18 @@ different skill list — they are a different *person*.
 
 Three structural notes before the tables:
 
-1. **`tank` is secretly a Charisma archetype.** Its keySkill is `intimidation`,
-   which is Charisma-linked. A Tank who rolled low Charisma is bad at the one
-   thing their focus is named for. This is the single most mis-shaped focus we
-   have and the bands must account for it.
-2. **`streetDoc` is a fighter-family focus with no combat skill in its list**
-   (`medicine, electronics, leadership, con`). It is a bench profession filed
-   under fighters. Either it moves families or we accept that "fighter" is a
-   billing category, not a role.
+1. **`tank` is the Enforcer** — it draws the attack with `intimidation`
+   (Charisma) and absorbs it with Body. That is an ordinary skill-plus-attribute
+   pairing, not a mis-shape; an earlier draft of this document called it
+   structurally inexpressible, which was wrong. It needs a rename and nothing
+   else. *(Confirm the resolver lets a runner draw an attack before a
+   presentation leans on it.)*
+2. **`streetDoc` is the fighter family's CRAFTER**, and belongs exactly where it
+   is. Cyberware is the only gear category in the registry with no `craftSkill`,
+   `implantSurgery` currently requires no surgeon, streetDoc's primary is
+   `medicine`, and fighter was the only family without a crafter — four gaps
+   that close with one move. `combatMedic` is the field medic; they are not
+   duplicates. See the crafter symmetry at the end of this document.
 3. **Deckers already carry a presentation seed** — `deckerAffinity` is generated
    today as `masking | attack | search` and is currently decorative. It should
    become the presentation.
@@ -234,11 +238,24 @@ replacement for focus** — which is a genuine modelling question for Phase B.
 
 ## WHAT THESE TABLES ADD TO THE PLAN
 
-1. **The bench profession is a pattern, not a special case.** Artificer
-   (mage), Surgeon (fighter/streetDoc), Coder (decker), Mechanic (rigger) are
-   the same shape four times: best in the workshop, must be fielded to earn the
-   karma that improves the workshop. D9's tension deserves one systemic answer,
-   not four.
+1. **Every family has exactly one crafter, and the set is complete.**
+
+   | family | crafter | crafts | on skill |
+   |---|---|---|---|
+   | mage | `enchantingMage` | formulas, foci | `enchanting` |
+   | decker | Coder | programs | `computer` |
+   | rigger | Mechanic | drones | `rigging` |
+   | fighter | `streetDoc` | **cyberware** | `medicine` |
+   | face | — | *(none — see below)* | |
+
+   This is one shape five times, not four special cases: best in the workshop,
+   must be fielded to earn the karma that improves the workshop. D9's tension
+   gets one systemic answer.
+
+   **Face has no crafter, and probably should not have one** — there is no
+   fabricable social good. If that reads as an asymmetry worth closing, the
+   candidate is forged credentials/SINs, which would give the Badge presentation
+   something to make.
 
 2. **The unattended body is a pattern too.** Astral Intruder, Jumped-In rigger,
    and a decker going slump all leave a meat body for the crew to guard. The
