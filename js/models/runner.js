@@ -407,29 +407,122 @@
   // ── Attribute generation ──────────────────────────────────────
   const PHYSICAL_ATTRS = ["body", "agility", "strength", "willpower", "intelligence", "charisma"];
 
-  function generateAttributes(rng, metatypeId, family) {
-    const meta = METATYPES[metatypeId];
-    const base = () => rng.int(2, 5);
-    const attrs = { magic: 0 };
-    for (const k of PHYSICAL_ATTRS) {
-      // Clamped to the metatype's own ceiling at generation too — a
-      // troll should never open below 1, and an ork should never
-      // open above the Intelligence they can ever reach.
-      attrs[k] = Math.max(1, Math.min(meta.max[k], base() + (meta.mods[k] || 0)));
-    }
+  // ══ THE BIRTH POOL ════════════════════════════════════════════
+  // ONE pile of karma buys everything, on the same two curves growth
+  // uses for the rest of the runner's career — SR5's karma build has
+  // no separate allowance for attributes and neither do we. Sized
+  // against what the old band-rolled generator already produced when
+  // priced on those curves (~82k of skills, ~255k of attributes,
+  // ~335k all in), so this moves the SHAPE of a runner without moving
+  // their POWER.
+  // The pool is set BELOW the target embodied value on purpose: a
+  // metatype's mods are free (they are nature, not a purchase), so a
+  // runner ends up worth their pool plus whatever their metatype gave
+  // them. Measured at roughly 25 karma of difference, which is why
+  // ~310 of pool lands at ~335 of value.
+  const BIRTH_KARMA = { min: 270, max: 355 };
+
+  // BANDS, not fixed shares. Each entry is what a rank in that slot
+  // can look like; the value is ROLLED inside the band and then PAID
+  // FOR out of the pool, in priority order. That is the whole variance
+  // engine: a runner who rolls a towering primary has less left for
+  // everything after it, and one who rolls low across the board is
+  // spread too thin to be good at anything.
+  //
+  // The tails are the point, not a defect. Glass cannons (a lead
+  // attribute that outran the Body to survive using it), rubber bands
+  // (stretched so thin they snap), and the occasional beautifully
+  // built accident all have to fall out at natural rates, because
+  // that is what makes reading the market a skill.
+  const SKILL_BANDS = {
+    specialist: { primary: [6, 9], secondary: [2, 4], tertiary: [1, 3] },
+    generalist: { primary: [4, 6], secondary: [3, 5], tertiary: [1, 2] },
+  };
+  // By position in the presentation's own attribute order — its lead
+  // attribute is the one paying for its primary skill.
+  const ATTR_BANDS = [[4, 6], [3, 5], [2, 4]];
+  const ATTR_BAND_REST = [2, 3];
+
+  // ── PLAYABLE minimums, not survival minimums ──────────────────
+  // Nobody automatically survives anything. A low-level weak fighter
+  // loses to a mid-high weak decker, and that is correct; at the SAME
+  // level a weak fighter should usually beat a weak decker, and that
+  // is what these protect. Some combats need Body 4 — that does not
+  // mean every runner is owed Body 4.
+  //
+  // So this is a floor on being PLAYABLE IN YOUR OWN ROLE, it is
+  // relative to power level, and it is fed FIRST out of the pool.
+  // Everything above it is bought with what remains.
+  function playableFloor(pool) {
+    return Math.max(1, Math.min(4, Math.round(pool / 150)));
+  }
+
+  // Which attributes this runner cannot be left destitute in. Body is
+  // universal — a damage track of nothing is not a fragile character,
+  // it is an unplayable one. Willpower joins it for anyone Awakened,
+  // because Drain is resisted with Willpower and a caster without it
+  // kills themselves on their own first spell. Everything else is the
+  // presentation's business.
+  function floorAttrsFor(runner) {
+    const attrs = ["body"];
+    if ((runner.attributes.magic || 0) > 0) attrs.push("willpower");
     return attrs;
   }
 
-  // Magic attribute: mages get a real casting stat; adept-origin
-  // fighters/face get a smaller Magic score powering their
-  // abilities (Killing Hands, Improved Reflexes) without casting.
-  function applyMagic(rng, attrs, family, origin) {
-    if (family === "mage") {
-      attrs.magic = rng.int(3, 6);
-    } else if (origin === "magic") {
-      attrs.magic = rng.int(2, 4);
+  // WHERE A RUNNER STANDS BEFORE ANY KARMA IS SPENT — the metatype's
+  // own body and nothing bought. Attributes used to be rolled 2-5 and
+  // skills rolled from their own bands, so a runner was PRICED in a
+  // currency they were never BUILT from, and the player's character
+  // could never be made the same way as the people they hire.
+  //
+  // A metatype's mods are its nature, not a purchase: a troll IS
+  // bigger. They shift the floor and the pool buys up from there,
+  // which is also why a troll ends up worth more for the same karma.
+  function baseAttributes(metatypeId, family, origin) {
+    const meta = METATYPES[metatypeId];
+    const attrs = { magic: 0 };
+    for (const k of PHYSICAL_ATTRS) {
+      attrs[k] = Math.max(1, Math.min(meta.max[k], 1 + (meta.mods[k] || 0)));
     }
+    // Being Awakened is a qualification, not a purchase — you have a
+    // spark or you do not. Magic 1 IS that spark; every point above it
+    // comes out of the pool like any other attribute, which is why a
+    // mage's Magic competes with their Sorcery for the same karma.
+    if (family === "mage" || origin === "magic") attrs.magic = 1;
     return attrs;
+  }
+
+  // Raise one attribute toward a target, paying the real curve, and
+  // stop the moment the pool or the metatype ceiling says so. Returns
+  // what it cost — the caller is tracking one pile of karma.
+  function buyAttribute(shell, attr, target, purse) {
+    let spent = 0;
+    const ceiling = attributeCeiling(shell, attr);
+    while ((shell.attributes[attr] || 0) < Math.min(target, ceiling)) {
+      const step = attributeCost(shell.attributes[attr] || 0);
+      if (step > purse - spent) break;
+      shell.attributes[attr] = (shell.attributes[attr] || 0) + 1;
+      spent += step;
+    }
+    return spent;
+  }
+
+  // Same, for a skill, on the skill curve.
+  function buySkill(skills, skill, target, purse) {
+    const now = skills[skill] || 0;
+    if (target <= now) return 0;
+    const cost = karmaCost(target) - karmaCost(now);
+    if (cost > purse) {
+      // Buy as much of it as the pool can still afford rather than
+      // nothing — a runner who ran short is worse at the thing, not
+      // untrained in it.
+      let best = now;
+      while (best < target && karmaCost(best + 1) - karmaCost(now) <= purse) best += 1;
+      skills[skill] = best;
+      return karmaCost(best) - karmaCost(now);
+    }
+    skills[skill] = target;
+    return cost;
   }
 
   // Essence: everyone starts at 6.0 (tabletop default). Cyber-origin
@@ -451,16 +544,50 @@
   // secondary skills at a solid, even level. Tertiary and Overflow
   // are deliberately left at 0 here; they're what growRunner fills
   // in over a career, not something pre-rolled at generation.
-  function generateSkillSpread(rng, focus, trueArchetype, tiers, origin) {
+  function generateSkillSpread(rng, focus, trueArchetype, tiers, origin, ctx) {
     const skills = {};
     for (const s of SKILLS) skills[s] = 0;
 
-    if (trueArchetype === "specialist") {
-      skills[tiers.primary] = rng.int(7, 9);
-      for (const s of tiers.secondary) skills[s] = rng.int(2, 4);
+    // ── SPEND THE POOL ────────────────────────────────────────────
+    // Minimums are already fed (spendBirthPool ran them before this).
+    // What is left is spent in PRIORITY ORDER, each slot rolled inside
+    // its band and paid for on the real curve, so running out is a
+    // real outcome and the runner who rolled a towering primary is
+    // measurably poorer everywhere after it.
+    if (ctx && ctx.purse !== undefined) {
+      const band = SKILL_BANDS[trueArchetype] || SKILL_BANDS.generalist;
+      const roll = (b) => rng.int(b[0], b[1]);
+      // The presentation says which skills it leans on beyond the
+      // focus's own primary; those get looked at before the rest of
+      // the tier, so a Banisher's conjuring outranks their assensing
+      // and a Ghost's hacking outranks their stealth.
+      const favours = (ctx.presentation && ctx.presentation.favours) || [];
+      const order = []
+        .concat([tiers.primary])
+        .concat(favours.filter((s) => s !== tiers.primary && skills[s] !== undefined))
+        .concat(tiers.secondary)
+        .concat(tiers.tertiary);
+      const done = new Set();
+      for (const skill of order) {
+        if (done.has(skill) || skills[skill] === undefined) continue;
+        done.add(skill);
+        if (!isSkillEligible(skill, focus.family, origin)) continue;
+        const tier = skill === tiers.primary ? band.primary
+          : tiers.secondary.indexOf(skill) !== -1 || favours.indexOf(skill) !== -1 ? band.secondary
+          : band.tertiary;
+        ctx.purse -= buySkill(skills, skill, roll(tier), ctx.purse);
+        if (ctx.purse <= 0) break;
+      }
     } else {
-      skills[tiers.primary] = rng.int(4, 6);
-      for (const s of tiers.secondary) skills[s] = rng.int(3, 5);
+      // No pool given — the legacy shape, kept so a caller that has
+      // not been taught about the allocator still gets a runner.
+      if (trueArchetype === "specialist") {
+        skills[tiers.primary] = rng.int(7, 9);
+        for (const s of tiers.secondary) skills[s] = rng.int(2, 4);
+      } else {
+        skills[tiers.primary] = rng.int(4, 6);
+        for (const s of tiers.secondary) skills[s] = rng.int(3, 5);
+      }
     }
 
     // Baseline Firearms competence — the common (not universal)
@@ -1054,6 +1181,92 @@
     return known.slice(0, count);
   }
 
+  // ══ THE BIRTH ALLOCATOR ═══════════════════════════════════════
+  // One pool, spent in one order, and the order is the design:
+  //
+  //   1. PLAYABLE MINIMUMS, fed first. Not survival — playability in
+  //      your own role. A runner who cannot swing their own primary
+  //      or who has no damage track at all is not a fragile
+  //      character, they are a broken one.
+  //   2. The LEAD attribute and the PRIMARY skill — what this runner
+  //      IS, rolled in their bands and paid for.
+  //   3. The rest of the presentation's attributes, then their
+  //      favoured and secondary skills, then tertiary.
+  //   4. Whatever is left goes where they would have put it.
+  //
+  // Running out partway is a REAL OUTCOME and the point of the whole
+  // arrangement. Glass cannons, runners spread too thin to be good at
+  // anything, and the occasional beautifully built accident all fall
+  // out of the same arithmetic at their own natural rates.
+  function spendBirthPool(rng, shell, focus, trueArchetype, tiers, presentation, pool) {
+    let purse = pool;
+    const floor = playableFloor(pool);
+    const attrOrder = (presentation && presentation.attrs) || [];
+
+    // 1. Minimums, first, out of the same pool as everything else.
+    for (const attr of floorAttrsFor(shell)) {
+      purse -= buyAttribute(shell, attr, floor, purse);
+    }
+    // The attribute their own primary rolls against is part of being
+    // playable: a Puppeteer with no Charisma cannot do the one thing
+    // a Puppeteer is for.
+    if (attrOrder[0]) purse -= buyAttribute(shell, attrOrder[0], floor, purse);
+
+    // 2-3. The presentation's attributes, in its own order, each
+    // rolled inside the band for its position.
+    attrOrder.forEach((attr, i) => {
+      if (purse <= 0) return;
+      const band = ATTR_BANDS[i] || ATTR_BAND_REST;
+      purse -= buyAttribute(shell, attr, rng.int(band[0], band[1]), purse);
+    });
+
+    // Skills, in priority order, from the same purse.
+    const ctx = { purse: purse, presentation: presentation };
+    const skills = generateSkillSpread(rng, focus, trueArchetype, tiers, shell.origin, ctx);
+    purse = ctx.purse;
+
+    // 4. Anything left tops up the attributes nobody has spoken for —
+    // a person does not leave their own Body at 1 to bank karma.
+    for (const attr of PHYSICAL_ATTRS) {
+      if (purse <= 0) break;
+      if (attrOrder.indexOf(attr) !== -1) continue;
+      purse -= buyAttribute(shell, attr, rng.int(ATTR_BAND_REST[0], ATTR_BAND_REST[1]), purse);
+    }
+
+    // 5. SPEND IT DOWN. Karma left in the purse is karma the runner
+    // was priced for and never received — measured at a median of 33
+    // and as much as 135 before this existed, which is most of a rank
+    // in their own primary. A rich roll has to BUY something or the
+    // pool stops meaning anything.
+    //
+    // One step at a time, around the same priority order, so the
+    // remainder lands where the rest of the karma went rather than
+    // pooling into whatever happens to be cheapest. This can carry a
+    // slot past its band, and should: a runner who rolled a big pool
+    // IS better than one who did not, and that is where the
+    // occasional beautifully built accident comes from.
+    const stepOrder = attrOrder.concat(PHYSICAL_ATTRS.filter((a) => attrOrder.indexOf(a) === -1));
+    const skillOrder = [tiers.primary].concat(tiers.secondary, tiers.tertiary)
+      .filter((s) => skills[s] !== undefined && isSkillEligible(s, focus.family, shell.origin));
+    let progressed = true;
+    while (progressed && purse > 0) {
+      progressed = false;
+      for (const attr of stepOrder) {
+        if (purse <= 0) break;
+        const before = shell.attributes[attr] || 0;
+        purse -= buyAttribute(shell, attr, before + 1, purse);
+        if ((shell.attributes[attr] || 0) > before) progressed = true;
+      }
+      for (const skill of skillOrder) {
+        if (purse <= 0) break;
+        const before = skills[skill] || 0;
+        purse -= buySkill(skills, skill, before + 1, purse);
+        if ((skills[skill] || 0) > before) progressed = true;
+      }
+    }
+    return { skills: skills, unspent: Math.max(0, purse) };
+  }
+
   // ── The starting powers ────────────────────────────────────────
   // THE ADEPT'S GRIMOIRE, and built to the same shape: a focus-
   // weighted draw with the signature guaranteed first, padded from
@@ -1139,10 +1352,24 @@
       ? MJ.pickPresentation(r, focus, { affinity: deckerAffinity })
       : null;
 
-    const attrs = applyMagic(r, generateAttributes(r, metatypeId, focus.family), focus.family, origin);
+    // ONE POOL buys everything below this line, on the same curves
+    // growth uses for the rest of their career.
+    const pool = options.karma || r.int(BIRTH_KARMA.min, BIRTH_KARMA.max);
+    const attrs = baseAttributes(metatypeId, focus.family, origin);
     const essence = generateEssence(r, origin);
     const skillTiers = buildSkillTiers(r, focus, trueArchetype, origin);
-    const skills = generateSkillSpread(r, focus, trueArchetype, skillTiers, origin);
+
+    // The allocator reads the finished shape — attributeCeiling wants
+    // a metatype and an Essence — so it gets a runner one step early.
+    const shell = {
+      identity: { metatype: metatypeId },
+      classification: { focusKeySkill: focus.keySkill, skillTiers: skillTiers },
+      attributes: attrs,
+      essence: essence,
+      origin: origin,
+    };
+    const built = spendBirthPool(r, shell, focus, trueArchetype, skillTiers, presentation, pool);
+    const skills = built.skills;
 
     const runner = {
       identity: generateIdentity(r, metatypeId, options.handleBase),

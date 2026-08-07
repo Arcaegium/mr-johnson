@@ -113,7 +113,15 @@
     },
     tamper: {
       pillar: "physical", skill: "electronics",
-      label: (t) => (t.perceives ? "loop the feed" : "splice its wiring"),
+      // BOTH LABELS MUST SOUND LIKE HANDS. This is a physical act on
+      // a machine — the runner is stood at the thing with it open.
+      // The old label for a watcher was "loop the feed", which
+      // describes a MATRIX act, and that is the one confusion this
+      // whole pillar split exists to prevent: it reads as something
+      // done remotely, and then the guard's notice roll looks like a
+      // bug rather than the point. `castRemote` and the decking verbs
+      // are where remote work lives.
+      label: (t) => (t.perceives ? "get into its housing" : "splice its wiring"),
       requires: { living: false },
       loud: false, threat: "QUESTIONABLE", extended: true, disables: true,
       describe: "its own wiring, turned against it",

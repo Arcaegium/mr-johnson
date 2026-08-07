@@ -245,16 +245,25 @@
     const planeRunner = () => {
       const r = MJ.mintRunner("stress-plane", 1);
       r.market.hired = { tier: "permanent", missionsRemaining: 99, blockSize: 99 };
-      r.skills = { hacking: 14, stealth: 14, electronics: 14 };
+      // Hacking and electronics are maxed so the ACTS reliably land —
+      // this probe is about who witnesses them, not whether they
+      // work. Stealth is deliberately ORDINARY, because stealth is
+      // what sets concealment: at 14 the guard's notice roll cannot
+      // win no matter what tier he is, and "a physical act CAN be
+      // witnessed" stops being demonstrable. That is what made this
+      // fail once the karma allocator started paying attributes
+      // properly — the runner got quieter, not the guard blinder.
+      r.skills = { hacking: 14, stealth: 3, electronics: 14 };
       return r;
     };
-    const planeStage = (label) => {
+    const planeStage = (label, tier) => {
+      const t = tier || 1;
       const site = MJ.mintSite("stress-plane-u", 2);
       MJ.initSecurityState(MJ.makeRNG("sp" + label), site);
       const run = MJ.beginMission(MJ.makeRNG("spr" + label),
         { site: site, kind: "jobObjective", objective: {} }, [planeRunner()], 1);
-      const cam = MJ.generateObstacleInstance(MJ.makeRNG("spc"), "camera", 1);
-      const grd = MJ.generateObstacleInstance(MJ.makeRNG("spg"), "guard", 1);
+      const cam = MJ.generateObstacleInstance(MJ.makeRNG("spc"), "camera", t);
+      const grd = MJ.generateObstacleInstance(MJ.makeRNG("spg"), "guard", t);
       cam.rooms = [7]; grd.rooms = [7];
       run.obstacles = [cam, grd];
       run.index = 0;
@@ -283,10 +292,16 @@
     // aware, so he gets a roll rather than a certainty. The plane
     // separation above is absolute; this is a chance, and the probe
     // has to test each as what it is.
+    // `tamper` is a PHYSICAL act — pillar "physical", skill
+    // electronics, "its own wiring, turned against it". The runner is
+    // stood at the camera with their hands in it, which is exactly
+    // why the guard gets a roll here and gets nothing against the
+    // Matrix act above. The probe is right; the verb's LABEL is what
+    // misleads, and that is fixed in verbs.js rather than here.
     let sawIt = 0, byHandTrials = 0;
     for (let i = 0; i < 200; i++) {
       const stage = planeStage("h" + i);
-      const t = planeTake(stage, /loop the feed/);
+      const t = planeTake(stage, /get into its housing/);
       if (!t) continue;
       byHandTrials += 1;
       if (t.read) sawIt += 1;
@@ -303,7 +318,7 @@
       for (let i = 0; i < 200; i++) {
         const stage = planeStage("c" + concealment + "-" + i);
         stage.concealment = concealment;
-        const t = planeTake(stage, /loop the feed/);
+        const t = planeTake(stage, /get into its housing/);
         if (!t) continue;
         n += 1; if (t.read) seen += 1;
       }
@@ -1461,7 +1476,15 @@
     save.armory.items.push(prog);
     MJ.issueItem(prog, decker); // decker currently carries deckMk2
     check(MJ.gearBonusFor(decker, "hacking") === 2, "C11: program must not beat the deck alone (best tool)");
+    // Take away EVERY deck, not just the issued one. Personal kit
+    // scales with skill rank, so a well-generated decker turns up
+    // already carrying their own — this probe is about what a program
+    // is worth with no deck at all, and it has to actually create
+    // that state rather than assume it.
     MJ.reclaimItem(deck2);
+    for (const g of decker.gear.slice()) {
+      if ((MJ.ITEM_TEMPLATES[g.templateId] || {}).category === "deck") MJ.reclaimItem(g);
+    }
     check(MJ.gearBonusFor(decker, "hacking") === 0, "C11: a program without a deck must be dead weight");
     MJ.issueItem(deck2, decker);
     check(MJ.gearBonusFor(decker, "hacking") === 2, "C11: program+deck restores the bonus");
