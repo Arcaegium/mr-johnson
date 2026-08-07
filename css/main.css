@@ -617,9 +617,18 @@ body.railed .framebar { left: 300px; }
 .lane .ln { color: var(--dim); }
 .lane .lv { font-variant-numeric: tabular-nums; }
 .lane .lsep { color: var(--dim); margin: 0 1px; }
+/* Four bands: a shortfall is a price, not a wall, and the colour says
+   how steep. Green covered, yellow close, orange costly, red
+   outclassed — red is reserved for "this lane will not carry". */
 .lane.ok { border-color: var(--accent-2); }
 .lane.ok .lv { color: var(--accent-2); }
+.lane.close { border-color: #b8a04a; }
+.lane.close .lv { color: #d4c05e; }
+.lane.costly { border-color: #b87f3c; }
+.lane.costly .lv { color: #d4935e; }
+.lane.short { border-color: #a85448; }
 .lane.short .lv { color: #d4735e; }
+.lane-note { color: var(--dim); font-size: 0.7rem; margin-top: 3px; font-style: italic; }
 
 /* ── Mission results ─────────────────────────────────────────── */
 .res-verdict { font-size: 1.05rem; letter-spacing: 0.05em; margin-bottom: 4px; }

@@ -417,6 +417,33 @@
     return item;
   }
 
+  // ── OPERATION GEAR COMES HOME BY ITSELF ─────────────────────────
+  // The armoury's property returns the moment its holder stops being
+  // the operation's people: killed on a job, a freelance or retainer
+  // contract completing, or released outright. Nobody loses a deck
+  // because they forgot to unequip a dead man, and no dice roll is
+  // allowed to cost the operation its racks.
+  //
+  // Sweeping ITEMS rather than the roster is what makes it airtight:
+  // a released runner has already left the roster, but their gear
+  // refs are still on the racks' books, so the sweep finds them
+  // wherever they went. Personal kit is untouched — it was never in
+  // `armoryItems`, it is theirs and they walk with it. Implants are
+  // untouched for the same structural reason: surgery consumed them
+  // off the books, and chrome stays in the body it went into.
+  function reclaimUnentitled(armoryItems) {
+    const returned = [];
+    for (const item of armoryItems || []) {
+      const h = item.issuedTo;
+      if (!h || item.consumed) continue;
+      if (h.dead || !h.market || !h.market.hired) {
+        reclaimItem(item);
+        returned.push(item);
+      }
+    }
+    return returned;
+  }
+
   // The best tool in hand for this skill — never stacked.
   // Consumables don't count here (they're one-shot, triggered at
   // roll time by mission.js); programs only run on a carried deck.
@@ -619,6 +646,7 @@
   MJ.makeItem = makeItem;
   MJ.issueItem = issueItem;
   MJ.reclaimItem = reclaimItem;
+  MJ.reclaimUnentitled = reclaimUnentitled;
   MJ.gearBonusFor = gearBonusFor;
   MJ.woundGuardFor = woundGuardFor;
   MJ.gearSlotOf = gearSlotOf;

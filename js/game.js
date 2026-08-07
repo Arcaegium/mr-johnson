@@ -245,7 +245,12 @@
 
   function release(session, runner, rngOverride) {
     MJ.releaseRunner(runner, rngOverride || liveRNG());
-    logLine(session, "released " + runner.identity.handle + " from contract");
+    // Their issued gear comes off them the moment they walk — the
+    // sweep at settleDay would catch it tonight anyway, but the racks
+    // should read true the moment the player looks.
+    const returned = MJ.reclaimUnentitled(session.save.armory.items);
+    logLine(session, "released " + runner.identity.handle + " from contract" +
+      (returned.length ? " — armoury reclaimed " + returned.map((it) => it.label).join(", ") : ""));
     return { ok: true };
   }
 
@@ -653,6 +658,20 @@
         MJ.collectJobPay(session.save, job);
         logLine(session, "JOB COMPLETE — " + job.hiringFaction + " pays " + (session.save.johnson.money - before) + " (reputation +1)",
           "money", { job: job.contractNumber, delta: session.save.johnson.money - before, faction: job.hiringFaction });
+      }
+    }
+
+    // The armoury takes its property back BEFORE the burial sweep
+    // deletes anyone — killed on the job, a freelance or retainer
+    // contract that completed today, whatever the reason the holder
+    // stopped being the operation's people. Nobody loses a deck to a
+    // forgotten unequip or a bad roll of the dice; the racks are the
+    // operation's, and they come home with the day.
+    {
+      const returned = MJ.reclaimUnentitled(session.save.armory.items);
+      if (returned.length) {
+        logLine(session, "armoury reclaimed: " + returned.map((it) => it.label).join(", "),
+          "system", { reclaimed: returned.length });
       }
     }
 

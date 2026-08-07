@@ -720,12 +720,33 @@
       const why = r.unit === "armour"
         ? "your worst-dressed runner's armour, against the Power of the round you should expect to take here"
         : "dice pool the crew fronts, against the pool this lane takes";
-      return `<span class="lane${r.covered ? " ok" : " short"}" ` +
-        `title="${why}${r.estimated ? " — estimated; nobody has confirmed this yet" : " — confirmed"}">` +
+      // ── FOUR BANDS, because a shortfall is a price, not a wall ──
+      // Binary red-or-green read as a gate, and it is not one: at the
+      // weakest sites a crew a full 3 armour short still succeeded 53
+      // of 60 measured runs — they came home with wounds, which is a
+      // COST. The bands say how much it will cost, which is the
+      // question the player is actually asking.
+      const ratio = r.covered ? 1 : r.need > 0 ? r.have / r.need : 1;
+      const band = r.covered ? "ok" : ratio >= 0.72 ? "close" : ratio >= 0.45 ? "costly" : "short";
+      const verdict = {
+        ok: "covered",
+        close: r.unit === "armour"
+          ? "close — hits will land; expect wounds, not funerals"
+          : "close — doable with care; expect noise and retries",
+        costly: r.unit === "armour"
+          ? "a real shortfall — this will hurt; go careful or go armoured"
+          : "a real shortfall — every attempt here is uphill",
+        short: "outclassed — this lane will not carry the job",
+      }[band];
+      return `<span class="lane ${band}" ` +
+        `title="${why} · ${verdict}${r.estimated ? " — estimated; nobody has confirmed this yet" : " — confirmed"}">` +
         `<span class="ln">${r.label}</span>` +
         `<span class="lv">${r.have}<span class="lsep">/</span>${need}</span>` +
       `</span>`;
-    }).join("") + `</div>`;
+    }).join("") +
+    // The card's own disclaimer, in its own words, on every card —
+    // because the colour alone kept reading as permission.
+    `</div><div class="lane-note">short lanes are a price, not a wall — a forecast, never a gate</div>`;
   }
 
   function renderCrewDialog() {

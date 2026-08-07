@@ -1539,6 +1539,40 @@
       }
     }
     check(MJ.woundGuardFor(tank) === 2, "C11: T6 armor must guard 2 wounds");
+
+    // ── OPERATION GEAR COMES HOME BY ITSELF ───────────────────────
+    // Death, a completed freelance/retainer contract, or a release —
+    // however a holder stops being the operation's people, the racks
+    // take their property back. Nobody loses a deck to a forgotten
+    // unequip or a bad roll of the dice. Personal kit is theirs and
+    // walks with them; implants were consumed off the books and stay
+    // in the body.
+    {
+      const rngR = MJ.makeRNG("c11-reclaim");
+      const racks = { johnson: { money: 99999 }, armory: { items: [], craftQueue: [], materials: {} } };
+      const mk = (tag) => {
+        const r = MJ.generateRunner(rngR.fork(tag), { family: "fighter" });
+        MJ.watchRunner(r, rngR); MJ.hireRunner(r, "permanent");
+        const it = MJ.buyItem(racks, "smartgun").item;
+        MJ.issueItem(it, r);
+        return { r: r, it: it };
+      };
+      const dead = mk("dead"), done = mk("done"), rel = mk("rel"), kept = mk("kept");
+      const ownKit = (dead.r.gear || []).filter((g) => racks.armory.items.indexOf(g) === -1).length;
+      dead.r.dead = true;
+      done.r.market.hired = null;             // a contract that completed
+      MJ.releaseRunner(rel.r, rngR.fork("x"));
+      const returned = MJ.reclaimUnentitled(racks.armory.items);
+      check(returned.indexOf(dead.it) !== -1, "C11: a dead runner's issued gear comes home");
+      check(returned.indexOf(done.it) !== -1, "C11: a completed contract hands the gear back");
+      check(returned.indexOf(rel.it) !== -1, "C11: a released runner walks without the racks' property");
+      check(returned.indexOf(kept.it) === -1 && kept.it.issuedTo === kept.r,
+        "C11: a runner still under contract keeps what they were issued");
+      check((dead.r.gear || []).filter((g) => racks.armory.items.indexOf(g) === -1).length === ownKit,
+        "C11: personal kit is theirs — the sweep never touches it");
+      check(racks.armory.items.indexOf(dead.it) !== -1,
+        "C11: reclaimed gear is back on the racks, not vanished");
+    }
     const patch = MJ.makeItem("traumaPatch");
     save.armory.items.push(patch);
     MJ.issueItem(patch, tank);
