@@ -367,8 +367,12 @@ day must bank exactly one morning, before it resolves.
 - **The band law.** A site axis fields `[axis−1, axis+1]`, the shown site
   grade is the strongest axis, the board says `threat ~T · est P/A/M` before
   accepting. Uniform 1..rating spread repealed; `tierBandMid` = rating,
-  `tierBandHigh` = rating+1, one place only. **Open playtest question:** dice
-  quotes rose ~one tier with the new "pack for T+1" read.
+  `tierBandHigh` = rating+1, one place only.
+- **Every quote reads the ESTIMATE — no "pack for T+1" anywhere.** The Attack
+  high-end read was ruled back in line; imperfect information has no
+  exceptions. The band's top is real and unquoted; that gap is what recon is
+  worth. ~T verifies as P/A/M verify, and the number stays live (ratchet up
+  under pressure, cool overnight, inside the site's min/max).
 - **Tame the enemies, never inflate the player.** Guard base armour 3 → 2 so
   the ladder runs under the starting holdout (T1–3 penetrable at Power 4),
   heavy pistol carries the mid tiers. Spirits stay armoured on purpose.

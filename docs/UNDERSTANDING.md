@@ -527,29 +527,27 @@ to accept — which defeats the entire point of a job board.
 
 Now **what an axis fields sits in `[axis−1, axis+1]`**, clamped to 1–10, and
 the law lives in exactly one place (`tierBandMid` / `tierBandHigh` in
-`core/resolve.js` — mid *is* the rating, high is one over):
+`core/resolve.js` — mid *is* the rating, high is one over).
 
-| lane | reads | meaning |
-|---|---|---|
-| Defense | **mid** — the rating itself | what you should expect |
-| Attack | **high** — one over | what you should pack for; the band's top is *in* the promise the tier makes |
-
-Quoting T+1 is no longer an overclaim: the band is public knowledge the moment
-the tier is, which is the entire point of making sites legible. The estimates
-still carry error until confirmed on the ground — legible is not omniscient.
+**EVERY quote reads the ESTIMATE — the tier itself. No exceptions.** *(Ruling:
+an earlier call had Attack read the high end of typical; reversed.)* The
+imperfect-information rule stands whole: different things pack each pillar, so
+a player cannot know exactly what to pack for, and that gap is precisely what
+recon is worth. The band's top (`T+1`) is real, in the building, and
+**unquoted** — a crew that packs exactly the number will sometimes meet it.
+That is recon's reason to exist, not a lie on the card.
 
 **THE BOARD SHOWS THE THREAT BEFORE YOU ACCEPT.** Every job leg carries
 `threat ~T{n} · est P/A/M` where the tier tag is the site's **strongest axis**
 — the mint-time `value` is an internal budget knob; the player-facing grade is
 derived from what the axes actually hold, so a balanced "value 5" site whose
 physical axis landed at 8 is honestly sold as ~T8. Colour follows the lane
-band ladder (teal ≤3, gold ≤5, amber ≤7, red 8+).
-
-**Consequence, flagged deliberately:** with high = T+1, `diceForSecurity`
-quotes rose roughly one tier across the whole game relative to the old
-upper-quarter read. The suite is green under the new law; whether the felt
-difficulty of the quotes needs re-tuning is a playtest question, not a
-consistency one.
+band ladder (teal ≤3, gold ≤5, amber ≤7, red 8+). The `~` clears as the axes
+behind it are confirmed on the ground, and the number is LIVE — axes still
+ratchet up under pressure and cool off overnight, inside the site's own
+min/max potentials, exactly as before. Estimated threat level and estimated
+P/A/M dice are the same statement in two units: `~T5` pairs with `~12d`
+because tier-5 things take 12 dice.
 
 **The armour ladder is contiguous, 1–8, and that is load-bearing.** Armour is one
 side of the Penetrate gate, so every rating a weapon can demand has to be

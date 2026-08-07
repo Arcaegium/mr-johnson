@@ -90,11 +90,13 @@
   //
   // So what the PLAYER sees is a POOL: same units as a dossier, same
   // units as a crew read, so the comparison is a glance instead of an
-  // essay. It is the pool it takes to beat the HIGH END OF TYPICAL for
-  // that rating — a floor, honestly stated, not a guarantee. Bring
-  // exactly this and the top of the spread will still beat you
-  // sometimes; that is what makes scouting worth a day and what
-  // teaches a player to pack above the number.
+  // essay. It is the pool for THE ESTIMATE ITSELF — the tier, which
+  // is also the middle of the band. BY RULING there is no "pack for
+  // T+1" read anywhere: different things pack each pillar, so the
+  // player cannot know exactly what to pack for, and that gap is
+  // precisely what recon is worth. The band's top will still beat a
+  // crew that brought exactly the number sometimes. That is the
+  // imperfect-information rule doing its job, not a lie on the card.
   //
   // Exact, not sampled: hits are Binomial(n, 1/3), and this is the
   // smallest n whose chance of clearing the threshold reaches
@@ -118,10 +120,10 @@
   function diceForSecurity(value) {
     const v = Math.max(1, Math.min(10, Math.round(value || 0)));
     if (DICE_FOR_VALUE[v] === undefined) {
-      // Clearing an obstacle is pass/fail — being under the bar once
-      // is not made up for by being over it twice — so this reads the
-      // HIGH band, never the rating itself.
-      const need = thresholdForTier(tierBandHigh(v));
+      // The quote is THE ESTIMATE — the tier itself, same as every
+      // other number shown to the player. The band's top is real and
+      // unquoted; recon is how you find out more.
+      const need = thresholdForTier(tierBandMid(v));
       let n = 1;
       while (n < 60 && atLeastHits(n, need) < CHALLENGE_CONFIDENCE) n += 1;
       DICE_FOR_VALUE[v] = n;

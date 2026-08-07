@@ -246,8 +246,11 @@
   // lane idea, it is what every number quoted at the player has to do,
   // including the security header. Keeping one definition is what
   // stops the card and the header from disagreeing.
+  // Only the MID read exists on a card now — every number quoted at
+  // the player is the estimate, no exceptions (the Attack high-end
+  // read was ruled back in line). tierBandHigh still describes the
+  // world's own band edge; no card consumes it.
   const midTier = MJ.tierBandMid;
-  const highTier = MJ.tierBandHigh;
 
   // `shown` is { physical, astral, matrix } as raw 1-10 values.
   // `confirmed` is the same keys as booleans: has the crew actually
@@ -358,14 +361,16 @@
         // asymmetry with Defense is the point: absorbing a hit is
         // averaged over a whole firefight, while FAILING TO PENETRATE
         // is not averaged at all. The guard you cannot scratch does
-        // not become scratchable because the last two were softer — he
-        // just stands there while the crew empties magazines into him.
+        // not become scratchable because the last two were softer.
         //
-        // So the floor sits at the upper quarter of the spread. A crew
-        // that packs exactly to it will still meet things it cannot
-        // hurt; that is the lesson the card is there to teach, and the
-        // player learns to bring a few points more.
-        const atkTier = highTier(asTier);
+        // BY RULING the read is still THE ESTIMATE — the tier itself,
+        // in line with every other number on the card. An earlier
+        // ruling had Attack read the high end of typical; that was
+        // reversed: the imperfect-information rule has no exceptions,
+        // different things pack each pillar, and the band's top
+        // beating a crew that packed exactly the number is what recon
+        // exists to prevent — not something the card pre-spends.
+        const atkTier = midTier(asTier);
         const templateArmour = (MJ.OBSTACLE_TEMPLATE(thing.type) || {}).armour || 0;
         const armour = templateArmour + Math.floor(atkTier / 2);
         if (armour >= hardestArmour) { hardestArmour = armour; toughest = thing; }

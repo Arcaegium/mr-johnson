@@ -2951,24 +2951,25 @@
         for (let i = 0; i < 4000; i++) if (MJ.countHits(MJ.rollDicePool(rng, pool)) >= need) win++;
         return win / 4000;
       };
-      // It must genuinely do the job it claims: beat the high-end-of-
-      // typical obstacle, and one die fewer must not — otherwise the
-      // number is decoration.
-      const band = MJ.tierBandHigh(v);
+      // It must genuinely do the job it claims: beat THE ESTIMATE —
+      // the tier itself, which is every quote's read BY RULING (the
+      // Attack high-end exception was reversed; imperfect information
+      // has no exceptions). One die fewer must not do the job, or the
+      // number is decoration. The band's top staying unquoted and
+      // sometimes winning is recon's reason to exist, not a lie.
+      const band = MJ.tierBandMid(v);
       check(rate(dice, band) >= 0.75,
-        "C23: the stated pool must beat the high end of typical (v=" + v + ", " + dice + "d)");
+        "C23: the stated pool must beat the estimate itself (v=" + v + ", " + dice + "d)");
       check(rate(dice - 1, band) < rate(dice, band),
         "C23: and it must be the LINE, not a number above it (v=" + v + ")");
-      // Under the band ruling the quote covers the band's own top —
-      // that is the promise the tier makes, so nothing is withheld
-      // and nothing is overclaimed. The old floor-not-ceiling probe
-      // policed a uniform 1..rating spread that no longer exists.
     }
     check(MJ.diceForSecurity(10) > MJ.diceForSecurity(1),
       "C23: the top of the scale must demand more than the bottom");
     for (let v = 1; v <= 10; v++) {
+      check(MJ.tierBandMid(v) === Math.max(1, Math.min(10, v)),
+        "C23: every quote reads the ESTIMATE — the tier itself (v=" + v + ")");
       check(MJ.tierBandHigh(v) === Math.min(10, Math.max(1, Math.min(10, v)) + 1),
-        "C23: every quote reads the BAND — the tier plus one, never past the scale (v=" + v + ")");
+        "C23: while the world's band runs one over — real, and unquoted (v=" + v + ")");
     }
 
     // ── A RESPONSE SQUAD PROVES CAPABILITY ───────────────────────
