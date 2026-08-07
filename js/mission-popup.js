@@ -751,12 +751,23 @@
           (holding.length ? '<div class="dimmed">✦ holding: ' + holding.join(", ") + "</div>" : "") +
           '<div class="ask">Anything to put up first?</div>',
         options: rows.map((r) => ({ html: r.html, meta: r.meta, dead: r.dead })),
-        actions: [{ id: "go", label: "go in", tone: "warn-btn" }],
+        // Standing at the door is still a decision point — the player
+        // can look at what is waiting inside and decide not to today.
+        // The day is spent for this crew (they went, they came back),
+        // the job leg stays open to retry, nothing saw them and
+        // nothing ratchets. The rest of the queue plays on.
+        actions: [
+          { id: "holdOff", label: "hold off — not today" },
+          { id: "go", label: "go in", tone: "warn-btn" },
+        ],
         onChoose: (opt, i) => {
           const r = rows[i];
           if (r && !r.dead) openGrimoire(r.mage, ctx, "", stepPrep);
         },
-        onAction: () => step(),
+        onAction: (id) => {
+          if (id === "holdOff") { MJ.missionAbort(run, { atDoor: true }); return finish(); }
+          step();
+        },
       });
     }
 

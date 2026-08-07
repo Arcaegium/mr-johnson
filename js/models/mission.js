@@ -1927,10 +1927,20 @@
       gap.outclassed.slice(0, 3).join(", ") + ")";
   }
 
-  function missionAbort(run) {
+  function missionAbort(run, opts) {
     if (run.aborted) return run;
     run.aborted = true;
     run.failed = true;
+    // Backing out AT THE DOOR is not the same story as pulling out
+    // mid-run. Nothing was attempted, nothing saw them, and blaming a
+    // gap ("needs demolitions") would be an analysis of a fight that
+    // never happened — the player looked at the door and decided not
+    // to today, which is a decision the game must allow and must not
+    // editorialise about.
+    if (opts && opts.atDoor) {
+      run.tasks.push({ obstacle: "—", tier: 0, result: "held off — the crew never went in" });
+      return run;
+    }
     const gap = blockingGap(run);
     run.gap = gap;
     run.tasks.push({

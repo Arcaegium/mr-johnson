@@ -282,7 +282,15 @@
   // ── Armory: buy, MAKE, and assign, all in one place ─────────────
   function itemEffectText(t) {
     if (t.category === "cyberware") return Object.entries(t.skillMods).map(([k, v]) => `+${v} ${k}`).join(", ") + ` · −${t.essenceCost} ess (implant)`;
-    if (t.category === "armor") return `guards ${MJ.gearBonusForTier(t.tier)} wound(s)/mission`;
+    // ARMOUR'S FIRST JOB IS THE RATING — the Penetrate gate, Power
+    // against Armour, the number the Defense lane reads. The hover
+    // used to name only the crit-glitch woundGuard, which is
+    // ceil(tier/3) — so a ¥300 vest and a ¥1,800 longcoat both read
+    // "guards 1 wound" and the whole ladder looked like three items
+    // sold at eight prices. Measured at the weakest sites: T3 vs T4
+    // is 55% more wounds coming home. The rating IS the product.
+    if (t.category === "armor") return `armour ${t.tier} — stops fire up to power ${t.tier}` +
+      ` · guards ${MJ.gearBonusForTier(t.tier)} wound(s)/mission`;
     if (t.category === "consumable") return t.effect === "absorbWound" ? "absorbs a wound · single use"
       : `+${MJ.gearBonusForTier(t.tier)}d ${t.skill}, one roll · single use`;
     if (t.category === "program") return `+${MJ.gearBonusForTier(t.tier)}d ${t.skill} (needs a deck)`;
