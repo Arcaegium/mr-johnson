@@ -299,15 +299,31 @@
 
   // ── The handed-to-player estimate ───────────────────────────────
   // Rolled once, the moment a site enters the player's world (a job
-  // introducing it, or discovery). Estimates target the site's live
-  // Current at that moment — so even an honest number goes stale as
-  // the site ratchets or cools. A rolled miss is guaranteed to be
+  // introducing it, or discovery). A rolled miss is guaranteed to be
   // actually wrong (never clamped back onto the truth).
+  //
+  // IT TARGETS site.security — WHAT THE PLACE FIELDS. This used to
+  // read securityState.axes[axis].current, and that was quoting the
+  // wrong quantity entirely. The obstacles on a route are minted ONCE,
+  // from site.security, and never move; `current` is how MOBILISED the
+  // site is, which drives the alert pool, the ratchet and how big a
+  // response turns up. They are different numbers and they diverge by
+  // design — `current` starts at 40-100% of Max.
+  //
+  // So the card was quoting the staffing level and the crew was
+  // meeting the installed hardware. Measured over 300 sites: 53% of a
+  // host's ICE sat MORE THAN A FULL TIER above the matrix number on
+  // the card, and a site quoting M:4d could field T7 Black ICE. That
+  // is the GREEN LIGHT INVARIANT broken at the source — a green the
+  // crew was genuinely unqualified for, with stale intel nowhere in
+  // the story. The estimate is a guess about the building; what makes
+  // it wrong is the roll below and the passage of time, never a
+  // mismatch about which number was meant.
   function generateSecurityEstimate(rng, site) {
     if (!site.securityState) MJ.initSecurityState(rng, site);
     const est = {};
     for (const axis of ["physical", "astral", "matrix"]) {
-      const actual = site.securityState.axes[axis].current;
+      const actual = site.security[axis];
       if (rng.chance(ESTIMATE_ACCURACY)) {
         est[axis] = actual;
       } else {
@@ -324,10 +340,10 @@
   // ── ONE GRADE, DERIVED ONCE ─────────────────────────────────────
   // What "~T5" means, for the board title, the leg lines and the
   // board filter alike. A SITE's grade is its strongest axis as the
-  // player currently reads it — estimate until confirmed, and the
-  // site's CURRENT posture rather than its ceiling, because current
-  // is what the crew will actually walk into today (it ratchets under
-  // pressure and cools overnight inside the site's own min/max).
+  // player currently reads it — estimate until confirmed, over
+  // site.security, WHAT THE PLACE FIELDS. (It used to describe the
+  // site's current mobilisation instead; see generateSecurityEstimate
+  // for why that was quoting the wrong quantity.)
   // A JOB's grade is its hardest leg: a two-leg job of T2 and T8 is
   // an T8 problem wearing an average, and the hardest leg is what the
   // crew has to survive.
@@ -555,6 +571,12 @@
     const run = {
       rng: rng,
       mission: mission, runners: runners, day: day, site: site, kind: kind,
+      // A recon's lens IS its plane, and the run is read as a mission
+      // shape in several places (missionPlanes, runPlane). Without the
+      // lens on it those all quietly answered "physical" for a Matrix
+      // sweep — which is how the card came to quote the physical axis
+      // at a decker and a meat Guard came to answer a hack.
+      lens: mission.lens || null,
       state: state, start: start,
       intelBonus: hasFreshIntel(site, day) ? INTEL_BONUS_DICE : 0,
       obstacles: kind === "recon" ? reconObstacles(site, mission.lens)
@@ -653,9 +675,16 @@
   // Which world this run is happening in. A projecting mage is not
   // in the building and a decker is not in the room, so what can
   // actually get in their way is not the same list.
+  // WHICH WORLD THIS RUN HAPPENS IN. A recon has no kind of its own —
+  // it looks through a LENS, and that lens is its plane. Returning
+  // "physical" for every recon is what put a meat Guard in front of a
+  // decker doing a Matrix sweep, and then let them stealth past it:
+  // two impossible things on one line, both from this function not
+  // knowing recons have a plane at all.
   function runPlane(run) {
     if (run.kind === "astralRun") return "astral";
     if (run.kind === "matrixRun") return "matrix";
+    if (run.kind === "recon") return run.lens || "physical";
     return "physical";
   }
 
@@ -2317,7 +2346,18 @@
       if (axis !== "physical" && axis !== "astral" && axis !== "matrix") continue;
       site.intel[axis] = {
         snapshot: {
-          security: { physical: start.physical, astral: start.astral, matrix: start.matrix },
+          // WHAT THE PLACE FIELDS, not how staffed it was that night.
+          // This recorded the `start` snapshot of securityState.current,
+          // so a crew that walked a corridor full of T7 hardware came
+          // home and filed it as a T3 building — and the confirmed tick
+          // then made that wrong number look EARNED. Karma still keys
+          // off `start` further down: what a night was worth and what
+          // the building is are different questions.
+          security: {
+            physical: site.security.physical,
+            astral: site.security.astral,
+            matrix: site.security.matrix,
+          },
           band: band,
           obstaclesSeen: tasks.map((t) => t.obstacle),
         },

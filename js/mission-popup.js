@@ -270,11 +270,23 @@
           ? "<br>" + "&nbsp;&nbsp;" + no("RESPONSE: " + t.responders.join(", ") + " — they are coming") : "");
     }
     const bits = esc(t.skill) + " " + num(t.pool + "d") + (t.loud ? ", " + no("LOUD") : "") + (t.boosted ? ", +" + num(t.boosted) : "");
+    // HITS AGAINST THE BAR THEY WERE CLEARING. The threshold was
+    // always on the task and never printed, so a failed roll said
+    // "2 hits: MISSED" and the player could not tell a near miss from
+    // a hopeless one — no way to judge whether trying again was worth
+    // the noise. The extended test has always shown "3/3"; a simple
+    // one hiding it was the odd case out.
+    //
+    // Showing it AFTERWARDS keeps the rule intact: the bar is not on
+    // the menu before the click, and the attempt is what buys it. That
+    // is the same thing the crew learns by doing it once.
+    const shortBy = t.threshold === undefined ? ""
+      : '<span class="dimmed">/</span>' + num(t.threshold);
     // A group label already names each member with its tier —
     // appending the primary's tier again would print "…T2 T3".
     return nm(t.runner) + " (" + bits + ") vs " + nm(t.obstacle) +
       (t.groupSize > 1 ? '<span class="dimmed"> — together</span>' : " " + num("T" + t.tier)) + " — " +
-      num(t.hits) + " hits: " + (t.success ? ok("through") : no("MISSED")) +
+      num(t.hits) + shortBy + " hits: " + (t.success ? ok("through") : no("MISSED")) +
       (t.criticalGlitch ? " " + no("CRITICAL GLITCH") + (t.guarded ? ' <span class="dimmed">(absorbed by ' + esc(t.guarded) + ")</span>" : "") :
         t.glitch ? " " + no("glitch") : "") +
       // Why the read moved, on the line that moved it. After the
@@ -538,8 +550,12 @@
         // an estimate, `4d✓` once the crew has earned it. Nothing about
         // "how much more looking" belongs on screen — the math decides
         // WHEN the tick appears; it is not something to narrate.
+        // WHAT THE PLACE FIELDS — site.security, the same number the
+        // obstacles on this route were minted from. Reading
+        // state.axes[a].current here quoted the site's staffing level
+        // at a crew who were about to meet its hardware.
         if (p && p.proven) {
-          cells.push(chip(a, ok(MJ.diceForSecurity(run.state.axes[a].current) + "d✓"), "v-sure"));
+          cells.push(chip(a, ok(MJ.diceForSecurity(run.site.security[a]) + "d✓"), "v-sure"));
         } else {
           // Contact corrects the guess upward as it happens: meet a
           // tier-5 on a place pencilled at ~3 and it reads ~5, because
