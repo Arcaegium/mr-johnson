@@ -76,7 +76,7 @@
    engages the site's response (which spawns responders in front of
    the crew at each axis's alert level). Placeholders, flagged:
      - Wounds: a critical glitch wounds the runner who rolled it.
-     - Karma formulas (KARMA_PER_SECURITY etc.), the intel bonus
+     - Karma rates (KARMA_PER_TIER_FACED etc.), the intel bonus
        size, route/recon sample caps, crafting tier: all shape-
        only numbers for tuning later.
      - Yields are returned in the result; the integration layer
@@ -99,12 +99,38 @@
   // ── Tuning dials (all placeholder, shape only) ──────────────────
   const INTEL_FRESH_DAYS = 5;        // §09 staleness horizon
   const INTEL_BONUS_DICE = 1;        // fresh intel at the site -> +dice on every roll there
-  const KARMA_PER_SECURITY = 4;      // site missions: award = this x avg start-of-mission Current
-  const RECON_KARMA_PER_SECURITY = 2;// recon: award = this x the lens axis's start Current
+  // ── What a night was worth ──────────────────────────────────────
+  // KARMA KEYS OFF WHAT THE CREW ACTUALLY DEALT WITH. It used to be
+  // 4 x the site's average posture at the moment they walked in, which
+  // paid for TURNING UP: a run straight down an empty corridor earned
+  // exactly what a run that fought through four rooms of the same
+  // building earned, and a site whose security the crew never really
+  // touched still paid full price. Money is the half that keys off the
+  // contract and does not care how the night went; karma is the half
+  // that only cares how the night went.
+  //
+  // The rule is one a player can hold in their head: YOU EARN THE TIER
+  // OF EVERYTHING YOU GOT PAST. Responders count — a squad that turned
+  // up because somebody was loud is absolutely something you had to
+  // deal with, which makes a noisy run worth more as well as more
+  // dangerous.
+  //
+  // Calibrated live over 300 played runs: a rate of 0.83 would have
+  // held the old average exactly. 1 is used instead because "the tier
+  // of what you got past" is a rule worth being able to state, and
+  // because the old average was itself paying for presence. The spread
+  // widens a lot at the top — a T1 leg is worth about 5 and a T10 leg
+  // about 95, against the old 5-to-36 — which is the point, but it is
+  // a dial and this is where it lives.
+  const KARMA_PER_TIER_FACED = 1;
+  const RECON_KARMA_PER_TIER_FACED = 0.5; // looking is worth less than doing
   // Support work (crafting, Medicae): award = this x the work's tier.
   // INVARIANT to preserve under any tuning: this must stay VISIBLY
-  // below KARMA_PER_SECURITY at comparable difficulty — safe
-  // grinding keeps leveling, but is never the efficient path (§03).
+  // below what a run pays at comparable difficulty — safe grinding
+  // keeps leveling, but is never the efficient path (§03). A tier-3
+  // craft pays 6; a played leg at a value-3 site pays about 8 and a
+  // busy one considerably more, so the gap holds and widens with the
+  // work — which is the right direction for it to widen in.
   const SUPPORT_KARMA_RATE = 2;
   const DEFAULT_CRAFT_TIER = 3;      // until the armory gives items real tiers
   // First-hand estimates: the numbers a site gets handed to the
@@ -2368,12 +2394,16 @@
     let karmaAward = 0;
     let suppression = null;
     if (success) {
-      if (kind === "recon") {
-        karmaAward = Math.max(1, Math.round(RECON_KARMA_PER_SECURITY * start[mission.lens]));
-      } else {
-        const avg = (start.physical + start.astral + start.matrix) / 3;
-        karmaAward = Math.max(1, Math.round(KARMA_PER_SECURITY * avg));
-      }
+      // Everything the crew got PAST — attempted, slipped, group-passed
+      // or put down. Not what the site had; what they went through.
+      const facedTiers = [];
+      obstacles.forEach((o, i) => { if (i < run.index) facedTiers.push(o.tier || 1); });
+      const worked = facedTiers.reduce((a, b) => a + b, 0);
+      const rate = kind === "recon" ? RECON_KARMA_PER_TIER_FACED : KARMA_PER_TIER_FACED;
+      // The floor is for the job itself: a leg that closed with nothing
+      // in the way was still a leg, and it is still worth turning up
+      // tomorrow for. It is just not worth what the corridor was.
+      karmaAward = Math.max(1, Math.round(rate * worked));
       for (const runner of runners) MJ.growRunner(runner, karmaAward, rng);
       mission.resolved = true;
       mission.karmaAward = karmaAward;

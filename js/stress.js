@@ -2942,6 +2942,105 @@
     }
   }
 
+  // ── Class 26: nothing on the route is walked past for free ──────
+  // Playtest: "many contracts had minimal interference — in the front
+  // door and often right to success." Two innocent mechanisms produce
+  // that and one bug would too, so the difference has to be provable
+  // rather than argued.
+  //
+  // The innocent ones: a low-value site genuinely posts very little
+  // (coverage tracks the rating), and the watch-group contest folds
+  // every co-located thing into ONE roll — a room with three guards
+  // and a camera is one line in the log and four obstacles handled.
+  //
+  // The bug would be the index stepping over something nobody ever
+  // dealt with. THAT is what this class forbids. Every obstacle the
+  // crew got past must be accounted for exactly one of three ways:
+  // they attempted it, it was resolved as part of a group contest, or
+  // something removed it.
+  function class26_nothingSkipped() {
+    let played = 0, walked = 0, silent = 0, byGroup = 0, byAttempt = 0;
+    const density = {};
+    for (let s = 0; s < 90; s++) {
+      const S = MJ.game.newGame("c26-" + s);
+      S.save.nuyen = 400000;
+      MJ.game.refreshBoard(S);
+      MJ.game.acceptJob(S, 0);
+      const hired = [];
+      for (const r of S.market.slice()) {
+        if (hired.length >= 4) break;
+        if ((MJ.game.hire(S, r, "run") || {}).ok) hired.push(r);
+      }
+      if (!hired.length) continue;
+      MJ.game.queueDispatch(S, S.jobs[0].missions[0], hired, "c26 leg");
+      const day = MJ.game.beginDay(S);
+      const entry = (day.entries || []).find((e) => !e.done);
+      if (!entry || !entry.run) continue;
+      const run = entry.run;
+      for (let n = 0; n < 200 && !MJ.missionDone(run); n++) {
+        const p = MJ.missionPrompt(run);
+        if (!p) break;
+        if (p.extended) { MJ.missionExtendedStep(run, true); continue; }
+        const best = (p.options || []).find((o) => o.available);
+        if (!best) { MJ.missionChoose(run, null); continue; }
+        MJ.missionChoose(run, { skill: best.skill, runner: best.runner, approach: best.approach });
+      }
+      played += 1;
+      const v = run.site.identity.value;
+      const d = density[v] = density[v] || { n: 0, obs: 0 };
+      d.n += 1; d.obs += run.obstacles.length;
+      run.obstacles.forEach((o, i) => {
+        if (i >= run.index) return;               // never reached — fine
+        walked += 1;
+        if (run.attempts && run.attempts.has(o)) byAttempt += 1;
+        else if (run.groupPassed && run.groupPassed.has(o)) byGroup += 1;
+        else if (run.neutralized.has(o)) { /* removed outright */ }
+        else silent += 1;
+      });
+    }
+    check(played > 40, "C26: the probe needs a real sample of played runs");
+    check(walked > 100, "C26: and real ground walked");
+    check(silent === 0,
+      "C26: NOTHING IS WALKED PAST FOR FREE — " + silent + " of " + walked +
+      " obstacles were stepped over with no attempt, no group contest and nothing removing them");
+    // The group contest is doing real work, not hiding a skip: if this
+    // ever reads zero, short runs stopped being explained by it.
+    check(byGroup > 0 && byAttempt > 0,
+      "C26: both routes to 'dealt with' must be exercised (attempted " +
+      byAttempt + ", group-passed " + byGroup + ")");
+
+    // A QUIET SITE IS A CHEAP SITE, AND AN EXPENSIVE ONE IS NEVER
+    // QUIET. Coverage tracks the rating by design — that is exactly
+    // why a starter contract feels thin, and it is the honest answer
+    // to "was that clear run intentional?". What must never happen is
+    // the TOP of the scale feeling thin too.
+    //
+    // Minted directly rather than read off `density` above: a fresh
+    // crew only ever draws the safe rungs, so the played sample has no
+    // high-value sites in it and this would pass by never running.
+    const seen = {};
+    for (let v = 1; v <= 10; v++) {
+      let obs = 0, n = 0;
+      for (let i = 0; i < 40; i++) {
+        const s = MJ.mintSite("c26-density-" + v, i, { value: v });
+        MJ.initSecurityState(MJ.makeRNG("c26d" + v + i), s);
+        const route = MJ.routeObstacles(s);
+        if (!route) continue;
+        obs += route.obstacles.length; n += 1;
+      }
+      seen[v] = n ? obs / n : 0;
+    }
+    for (let v = 2; v <= 10; v++) {
+      check(seen[v] > 0, "C26: every value posts SOMETHING on its routes (value " + v + ")");
+    }
+    check(seen[10] > seen[1] * 2,
+      "C26: the top of the scale must be visibly busier than the bottom (" +
+      seen[1].toFixed(1) + " vs " + seen[10].toFixed(1) + ")");
+    check(seen[8] >= 4 && seen[9] >= 4 && seen[10] >= 4,
+      "C26: a top-band site may never post a near-empty route (" +
+      [8, 9, 10].map((v) => "v" + v + " " + seen[v].toFixed(1)).join(", ") + ")");
+  }
+
   // ── Class 23: what the live read may claim ──────────────────────
   // A leg IS the sample — walk the route, meet what is on it, and by
   // the time you leave you have seen what there was to see. So leg-end
@@ -4436,6 +4535,7 @@
       ["23. What a crew can honestly claim to know", class23_knowing],
       ["24. An archetype can always do its own job", class24_baselines],
       ["25. The lanes — a forecast, never a gate", class25_lanes],
+      ["26. Nothing on the route is walked past for free", class26_nothingSkipped],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
