@@ -206,15 +206,40 @@
   //   onBack(),                      dismissed
   //   backLabel
   // }
+  // Spells that land ON a crew member — the ones where "on whom" is
+  // a real decision the player makes, not a detail the code guesses.
+  function crewTargeted(def) {
+    if (!def) return false;
+    return def.home === "buff" || def.home === "heal" || def.home === "disguise" ||
+      (def.home === "silence" && def.single);
+  }
+
+  // What the pick needs to show about each candidate: the numbers the
+  // spell actually interacts with. Armor is judged against armour,
+  // Heal against wounds — and the tracks ride along on every row so
+  // the player is never asked to remember a sheet they cannot see.
+  function targetReadout(r, def) {
+    const bits = [];
+    bits.push(dim("armour ") + num(MJ.armourRatingFor(r)));
+    const w = r.wounds || 0, s = r.stun || 0;
+    bits.push(dim("P ") + (w ? '<span class="w-warn">' + w + "</span>" : num(0)) + dim("/" + MJ.physicalTrack(r)) +
+      dim(" S ") + (s ? '<span class="w-warn">' + s + "</span>" : num(0)) + dim("/" + MJ.stunTrack(r)));
+    if (def && def.home === "heal" && !w) bits.push(dim("nothing to close"));
+    return bits.join(dim(" · "));
+  }
+
   function open(opts) {
     const caster = opts.caster;
     const chrome = opts.chrome || {};
     const entries = entriesFor(caster, opts.ctx);
+    const ctxRun = (opts.ctx || {}).run || {};
+    const crewOf = ((opts.ctx || {}).crew || ctxRun.runners || [])
+      .filter((r) => !ctxRun.downed || !ctxRun.downed.has(r));
 
     function pickSpell() {
       MJ.decide.open({
         title: chrome.title, subtitle: chrome.subtitle || dim("the grimoire"),
-        context: chrome.context, transcript: chrome.transcript,
+        context: chrome.context, party: chrome.party, transcript: chrome.transcript,
         heading: opts.heading || (nm(caster.identity.handle) + dim(" — what they know") +
           '<div class="ask">Cast which?</div>'),
         options: entries.map((e) => ({ html: e.html, meta: e.meta, dead: e.dead })),
@@ -224,9 +249,45 @@
           if (!e || !e.available) return;
           // Letting go is not a cast — no Force, no Drain, no roll.
           if (e.release) return opts.onRelease && opts.onRelease(e);
+          // ON WHOM is a decision, not a guess. Armor used to land on
+          // whoever the code judged worst-dressed and the player was
+          // never asked — so a mage who wanted it on someone else
+          // simply could not say so. Skipped when there is nobody to
+          // choose between.
+          if (crewTargeted(e.def) && crewOf.length > 1) return pickTarget(e);
           pickForce(e);
         },
         onAction: () => opts.onBack && opts.onBack(),
+      });
+    }
+
+    // The target step. Every candidate shows the numbers this spell
+    // actually touches, so "who needs the Armor" is answerable from
+    // the screen instead of from memory. The code's own pick is
+    // offered first and labelled — a default, never a decision made
+    // on the player's behalf.
+    function pickTarget(entry) {
+      const suggested = entry.target || caster;
+      const ordered = crewOf.slice().sort((a, b) =>
+        (a === suggested ? -1 : 0) - (b === suggested ? -1 : 0));
+      const rows = ordered.map((r) => ({
+        html: nm(r.identity.handle) +
+          (r === caster ? dim(" — themselves") : "") +
+          (r === suggested ? dim(" · ") + '<span class="w-ok">suggested</span>' : ""),
+        meta: targetReadout(r, entry.def),
+      }));
+      MJ.decide.open({
+        title: chrome.title, subtitle: dim("on whom?"),
+        context: chrome.context, party: chrome.party, transcript: chrome.transcript,
+        heading: nm(caster.identity.handle) + dim(" casting ") + nm(entry.def.label) +
+          '<div class="ask">On whom?</div>',
+        options: rows,
+        actions: [{ id: "back", label: "pick a different spell", tone: "warn-btn" }],
+        onChoose: (opt, i) => {
+          const chosen = Object.assign({}, entry, { target: ordered[i] });
+          pickForce(chosen);
+        },
+        onAction: () => pickSpell(),
       });
     }
 
@@ -234,7 +295,7 @@
       const rows = forceRows(caster, entry.def);
       MJ.decide.open({
         title: chrome.title, subtitle: dim("how hard?"),
-        context: chrome.context, transcript: chrome.transcript,
+        context: chrome.context, party: chrome.party, transcript: chrome.transcript,
         heading: nm(caster.identity.handle) + dim(" casting ") + nm(entry.def.label) +
           (entry.target && entry.target !== caster ? dim(" on ") + nm(entry.target.identity.handle) : "") +
           '<div class="ask">How hard are they pushing?</div>',

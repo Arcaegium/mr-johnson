@@ -101,6 +101,8 @@
     const acts = (s.actions || []).map((a) =>
       `<button class="sm${a.tone ? " " + a.tone : ""}" data-side="${esc(a.id)}">${esc(a.label)}</button>`).join(" ");
     host.innerHTML =
+      '<div class="modal-shell">' +
+      (s.party ? `<aside class="modal-party">${s.party}</aside>` : "") +
       '<div class="modal" role="dialog" aria-modal="true">' +
         '<div class="modal-head">' +
           `<div class="modal-title">${s.title || ""}</div>` +
@@ -116,7 +118,7 @@
         (s.heading ? `<div class="modal-heading">${s.heading}</div>` : "") +
         (opts ? `<div class="modal-options">${opts}</div>` : "") +
         (acts ? `<div class="modal-actions">${acts}</div>` : "") +
-      "</div>";
+      "</div></div>";
     const t = host.querySelector(".modal-transcript");
     if (t) t.scrollTop = t.scrollHeight;
   }
@@ -272,6 +274,58 @@
       num((obstacle.leg || 0) + 1) +
       '<span class="dimmed"> of </span>' + num(route.path.length) +
       '<span class="dimmed"> on the way in</span>';
+  }
+
+  // ── The party column ───────────────────────────────────────────
+  // WHO IS STANDING THERE, on every screen of the run. There was
+  // nowhere in the popup that said what the crew's own numbers were
+  // — a player choosing who to armour, who to send at a lock, or
+  // whether to press on had to remember a sheet they could not see.
+  // The modal has room on both sides; one of them is now the crew.
+  //
+  // What each row carries is what a decision during a run turns on:
+  // both damage tracks, armour, the gun in their hand, and what they
+  // are holding up (a sustained spell is −2 on everything else, so
+  // it belongs where the player is choosing).
+  function partyPanel(run) {
+    const crew = run.runners || [];
+    if (!crew.length) return "";
+    const sustaining = run.sustaining || [];
+    const rows = crew.map((r) => {
+      const down = run.downed && run.downed.has(r);
+      const w = r.wounds || 0, s = r.stun || 0;
+      const wMax = MJ.physicalTrack(r), sMax = MJ.stunTrack(r);
+      const loadout = MJ.combatLoadoutFor(r);
+      const gun = MJ.weaponProfile(loadout.weaponId);
+      const held = sustaining.filter((x) => x.caster === r)
+        .map((x) => (MJ.spellDef(x.spell) || {}).label || x.spell);
+      const on = sustaining.filter((x) => x.target === r && x.caster !== r)
+        .map((x) => (MJ.spellDef(x.spell) || {}).label || x.spell);
+      // A bar per track, because "7 of 11" is arithmetic and a bar is
+      // a glance — and glance is what a fight allows.
+      const bar = (val, max, cls) => {
+        const pips = Math.max(1, Math.min(10, max));
+        const filled = Math.round((val / Math.max(1, max)) * pips);
+        return `<span class="pp-bar ${cls}">` +
+          Array.from({ length: pips }, (_, i) =>
+            `<i class="${i < filled ? "on" : ""}"></i>`).join("") + "</span>";
+      };
+      return `<div class="pp-row${down ? " pp-down" : ""}">` +
+        `<div class="pp-name">${esc(r.identity.handle)}` +
+        (down ? '<span class="w-no"> — down</span>' : "") + "</div>" +
+        `<div class="pp-line">${bar(w, wMax, "pp-p")}<span class="pp-n">${w}/${wMax}</span>` +
+        `<span class="dimmed">P</span></div>` +
+        `<div class="pp-line">${bar(s, sMax, "pp-s")}<span class="pp-n">${s}/${sMax}</span>` +
+        `<span class="dimmed">S</span></div>` +
+        `<div class="pp-kit"><span class="dimmed">armour</span> ${num(loadout.armour)}` +
+        `<span class="dimmed"> · </span>${esc(gun.label || "bare hands")}` +
+        (gun.power ? `<span class="dimmed"> P${gun.power}</span>` : "") + "</div>" +
+        (held.length ? `<div class="pp-held">✦ holding ${esc(held.join(", "))}` +
+          `<span class="dimmed"> · −2</span></div>` : "") +
+        (on.length ? `<div class="pp-held pp-on">✦ ${esc(on.join(", "))}</div>` : "") +
+        "</div>";
+    }).join("");
+    return `<div class="pp-head">the crew</div>${rows}`;
   }
 
   // ── The shape of the run ───────────────────────────────────────
@@ -678,6 +732,7 @@
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">debrief</span>',
         context: contextLines(run),
+        party: partyPanel(run),
         transcript: transcript,
         heading: '<div class="res-verdict">' + verdict + '</div>' +
           // `obstaclesFaced` is the route INDEX — how many they got
@@ -705,6 +760,7 @@
           '<span class="dimmed"> of </span>' + num(prompt.total) +
           '<span class="dimmed"> · working</span>',
         context: contextLines(run),
+        party: partyPanel(run),
         transcript: transcript,
         heading: nm(prompt.runner.identity.handle) + '<span class="dimmed"> is working on </span>' +
           nm(prompt.label) + " " + num("T" + prompt.tier) +
@@ -748,6 +804,7 @@
         chrome: {
           title: esc(entry.label || run.kind),
           context: contextLines(run),
+          party: partyPanel(run),
           transcript: transcript,
         },
         heading: nm(mage.identity.handle) + '<span class="dimmed"> — what they know</span>' +
@@ -820,6 +877,7 @@
         subtitle: '<span class="dimmed">obstacle </span>' + num(prompt.index + 1) +
           '<span class="dimmed"> of </span>' + num(prompt.total),
         context: contextLines(run),
+        party: partyPanel(run),
         transcript: transcript,
         heading: nm(prompt.label) + " " + num("T" + prompt.tier) +
           (prompt.projection ? ' <span class="dimmed">(' + esc(prompt.projection) + ")</span>" : "") +
@@ -887,6 +945,7 @@
         title: esc(entry.label || run.kind),
         subtitle: '<span class="dimmed">casing the approaches</span>',
         context: contextLines(run, { outside: true }),
+        party: partyPanel(run),
         transcript: transcript,
         heading: nm("The way in") + '<div class="ask">Which approach?</div>',
         options: rows,
@@ -930,6 +989,7 @@
         // rather than what is watching — otherwise it contradicts the
         // heading directly below it.
         context: contextLines(run, { outside: true }),
+        party: partyPanel(run),
         transcript: transcript,
         heading: nm("Outside") + '<span class="dimmed"> — nothing is watching yet</span>' +
           (holding.length ? '<div class="dimmed">✦ holding: ' + holding.join(", ") + "</div>" : "") +

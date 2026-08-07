@@ -190,13 +190,52 @@ a.navlink:hover { text-decoration: underline; }
   display: flex; align-items: center; justify-content: center;
   padding: 18px 14px;
 }
+/* The run's frame: the crew down one side, the decision in the
+   middle. The modal had empty gutters on both flanks and nowhere
+   that said what the crew's own numbers were. */
+.modal-shell {
+  display: flex; align-items: stretch; gap: 12px;
+  width: 100%; max-width: 1320px; max-height: 100%;
+}
 .modal {
   background: var(--panel); border: 1px solid var(--line);
-  width: 100%; max-width: 1080px; max-height: 100%;
+  flex: 1 1 auto; min-width: 0; max-height: 100%;
   display: flex; flex-direction: column;
   font-family: var(--mono); font-size: 17px; color: var(--ink);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
 }
+
+/* ── The party column ───────────────────────────────────────────
+   Who is standing there, on every screen of the run. */
+.modal-party {
+  flex: 0 0 226px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 10px 12px; font-size: 0.78rem;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+}
+.pp-head {
+  color: var(--accent); font-size: 0.68rem; letter-spacing: 0.14em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.pp-row { border-top: 1px solid var(--line); padding: 7px 0 8px; }
+.pp-row:first-of-type { border-top: none; padding-top: 0; }
+.pp-row.pp-down { opacity: 0.55; }
+.pp-name { color: var(--ink); margin-bottom: 3px; }
+.pp-line { display: flex; align-items: center; gap: 5px; line-height: 1.5; }
+.pp-n { color: var(--dim); font-size: 0.7rem; font-variant-numeric: tabular-nums; }
+/* Tracks as pips: a glance, which is what a fight allows. */
+.pp-bar { display: inline-flex; gap: 1px; }
+.pp-bar i {
+  width: 5px; height: 8px; background: var(--line);
+  border-radius: 1px; display: block;
+}
+.pp-bar.pp-p i.on { background: #d4735e; }
+.pp-bar.pp-s i.on { background: #d2b356; }
+.pp-kit { color: var(--dim); margin-top: 4px; font-size: 0.72rem; }
+.pp-held { color: var(--accent); margin-top: 3px; font-size: 0.72rem; }
+.pp-held.pp-on { color: var(--accent-2); }
+
+@media (max-width: 1100px) { .modal-party { display: none; } }
 .modal-head { padding: 16px 22px 12px; border-bottom: 1px solid var(--line); }
 .modal-title { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; }
 .modal-sub { margin-top: 5px; font-size: 16px; }

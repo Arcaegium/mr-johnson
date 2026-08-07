@@ -164,8 +164,22 @@
       const v = eff[k] || 0;
       return `<span class="${v > 0 ? "" : "z"}">${k}:${v}</span>`;
     }).join("");
+    // WHAT THEY ACTUALLY CARRY, and where it came from. Their own
+    // starting kit is theirs; anything the operation issued is marked
+    // so the player can see at a glance what comes back off them on
+    // release — and so "did I ever give this one a gun?" is a
+    // readable question rather than a memory test.
+    const issued = (it) => it.issuedTo === r &&
+      (S.save.armory.items || []).indexOf(it) !== -1;
     const kit = [
-      ...(r.gear || []).map((g) => `${esc(g.label)} T${g.tier}`),
+      ...(r.gear || []).map((g) => {
+        const t = MJ.ITEM_TEMPLATES[g.templateId] || {};
+        const w = t.category === "weapon" ? MJ.weaponProfile(t.combat) : null;
+        return `${esc(g.label)} T${MJ.effectiveTier(g)}` +
+          (w && w.power ? ` <span class="muted">P${w.power}/DV${w.dv}</span>` : "") +
+          (t.category === "armor" ? ` <span class="muted">armour ${MJ.effectiveTier(g)}</span>` : "") +
+          (issued(g) ? ` <span class="good">issued</span>` : "");
+      }),
       ...(r.implants || []).map((im) => `⟨${esc(im.label)}⟩`),
     ];
     return `<div class="det"><span class="dk">discipline</span>${esc(MJ.describeDiscipline(r))} ` +
@@ -173,6 +187,22 @@
       `<div class="det"><span class="dk">attributes</span>B${a.body} A${a.agility} S${a.strength} W${a.willpower} I${a.intelligence} C${a.charisma}` +
         `${a.magic ? " M" + a.magic : ""} <span class="muted">· essence ${r.essence.current}/${r.essence.max} · tracks ${MJ.physicalTrack(r)}P/${MJ.stunTrack(r)}S</span></div>` +
       `<div class="det"><span class="dk">skills</span><div class="skillgrid">${skills}</div></div>` +
+      // WHAT THEY BRING TO A FIGHT, in the two numbers that decide
+      // one: the armour that stops the round, and the Power of the
+      // gun in their hand. The Penetrate gate is Power vs Armour, and
+      // until this line existed neither side of it was visible
+      // anywhere in the game — a player could not tell that a holdout
+      // bounces off a guard until the eleventh round of a firefight.
+      (() => {
+        const lo = MJ.combatLoadoutFor(r);
+        const w = MJ.weaponProfile(lo.weaponId);
+        return `<div class="det"><span class="dk">in a fight</span>` +
+          `armour <span class="good">${lo.armour}</span> ` +
+          `<span class="muted">·</span> ${esc(w.label || "bare hands")} ` +
+          (w.power ? `<span class="good">Power ${w.power}</span> <span class="muted">DV ${w.dv}${w.ap ? ", AP " + w.ap : ""}</span>`
+                   : '<span class="muted">no weapon</span>') +
+          `</div>`;
+      })() +
       `<div class="det"><span class="dk">condition</span>karma ${r.karma}${isHurt(r) ? " · " + woundRead(r) : ' · <span class="muted">unhurt</span>'} · ${fmtContract(r)}</div>` +
       // SPELLS ARE WHAT YOU HIRED (§8) — so the dossier says which.
       // Two mages at the same price knowing different spells are
