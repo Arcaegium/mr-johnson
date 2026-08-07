@@ -289,14 +289,39 @@ Ordered by dependency. Do not skip ahead — later steps assume earlier ones.
 - [ ] B7. Fix the 4 failing probes and add probes for the new invariants.
 
 ### Phase C — the Green Light Invariant
-- [ ] C1. Audit every input to the capability card. Enumerate what contributes
-      and what is currently counted.
-- [ ] C2. Gear contributions complete — including armour from gear.
-- [ ] C3. Magic contributions complete — the Armor spell reaches the armour
-      rating; barriers, buffs and heals reach what they affect.
-- [ ] C4. Support presentations become readable (§3).
-- [ ] C5. A probe that asserts the invariant directly: across many sites, an
-      accurate green is never genuinely unqualified.
+- [x] C1. **Audited** by toggling each contributor and watching the lane. Three
+      findings, and two of them corrected the assumptions in this plan.
+- [x] C2/C3. **One armour number.** Mystic Armor was invisible to the card AND
+      the Penetrate gate — an adept was quietly less armoured than the game
+      said and than they had paid for. Always-on armour now lives in
+      `armourRatingFor`, which the card, the gate and the combat loadout all
+      read; its effect row is deleted so it cannot armour twice.
+      **Corrected:** the Armor *spell* already reached the Defense lane. It is
+      absent from `armourRatingFor` on purpose — a capability, not a
+      possession — and a green the player fails to cast is the "played your
+      cards wrong" case, which is explicitly allowed.
+      **Corrected:** Improved Ability reaches the effective sheet fine. It
+      looked broken only through the lane, because Attack takes the BEST of six
+      skills and a +2 on a non-best skill need not move the row.
+- [x] C4. **The concern was overstated — the model is already right.** No
+      presentation reads near-zero across the board, and every support shape
+      moves a lane. Their buffs-on-others stay invisible *by construction*:
+      audited, every sustained buff lands on a COMBAT CHANNEL (initiative,
+      accuracy, soak, defence), and lanes are measured in skill dice and
+      armour. `armor` -> `spellArmor` is the only buff whose channel IS a
+      lane's unit, which is exactly why the Defense lane special-cases it and
+      no sibling exists. Reasoning recorded in `lanes.js` so it is not
+      "fixed" later.
+- [x] C5. Invariant probed directly in C24: across 200 runners
+      `armourRatingFor` and the combat loadout may never disagree, and an
+      always-on power must move both together. Plus a structural rule — every
+      power reaches the game by exactly one of four routes, and always-on
+      armour must never also be an effect row.
+
+**Still open in C:** whether a *barrier* should reach the Defense lane. It
+currently does not, and that is argued to be correct — the lane is the
+Penetrate gate (Power vs Armour), while defence is dodging and soak is what
+you shrug off afterwards. Neither changes whether the round gets through.
 
 ### Phase D — extra bodies (D8)
 - [ ] D1. The formation/squad model: additional bodies that are not runners.

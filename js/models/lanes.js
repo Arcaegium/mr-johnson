@@ -509,6 +509,22 @@
             ? Math.min(armours[1], armours[0] + bonus)
             : armours[0] + bonus;
         }
+        // ── WHY ONLY THIS BUFF, AND NOT THE OTHERS ────────────────
+        // Audited: every sustained buff we have lands on a COMBAT
+        // CHANNEL — Increase Reflexes on initiative, Increase
+        // Attribute on accuracy/soak, Combat Sense and the barriers
+        // on defence/soak. Lanes are not measured in those units.
+        // They are measured in skill dice, and here in ARMOUR, and
+        // `armor` -> `spellArmor` is the only buff in the book whose
+        // channel IS a lane's unit. That is the whole reason this
+        // case exists and no sibling does.
+        //
+        // A barrier genuinely helps a crew survive, and still does not
+        // belong here: this lane is the Penetrate gate, Power against
+        // Armour. Defence is dodging and soak is what you shrug off
+        // afterwards — neither changes whether the round gets
+        // through. Adding them would make the number mean two things
+        // at once, which is how a card starts lying.
       } else if (laneId === "attack") {
         // Only the runners who can actually get through count. A
         // holdout against a hardsuit contributes exactly nothing to
