@@ -120,10 +120,25 @@
     locksmith:    { label: "Locksmith Utility",      category: "program", tier: 3, skill: "electronics", craftSkill: "computer", requires: "deck" },
     watchdog:     { label: "Watchdog Agent",         category: "program", tier: 4, skill: "computer",    craftSkill: "computer", requires: "deck" },
     // ── Drones ───────────────────────────────────────────────────
+    // TWO KINDS OF DRONE ITEM, and the difference is whether it puts
+    // a BODY on the ground.
+    //
+    // A KIT is toolbox: sensors, relays, a swarm of small things that
+    // make the rigger better at rigging. It grants dice and nothing
+    // walks anywhere. That is what all four drones used to be, which
+    // is why a rigger's whole class fantasy was a +2.
+    //
+    // A FRAME is a machine you deploy. It stands in the room, takes a
+    // square, holds a turn and can be jumped into — `deploys` names
+    // its role in models/bodies.js. Four roles by ruling, and the
+    // kits stay as the cheap rung a rigger can afford first.
     hummingbird:  { label: "Hummingbird Spy Drone",  category: "drone", tier: 2, skill: "rigging", craftSkill: "rigging" },
     droneMk1:     { label: "Drone Kit Mk1",          category: "drone", tier: 3, skill: "rigging", craftSkill: "rigging" },
-    bulldog:      { label: "Bulldog Combat Drone",   category: "drone", tier: 5, skill: "rigging", craftSkill: "rigging" },
     droneMk2:     { label: "Drone Kit Mk2",          category: "drone", tier: 6, skill: "rigging", craftSkill: "rigging" },
+    bulldog:      { label: "Bulldog Assault Frame",  category: "drone", tier: 5, skill: "rigging", craftSkill: "rigging", deploys: "attack" },
+    palisade:     { label: "Palisade Bulwark Frame", category: "drone", tier: 5, skill: "rigging", craftSkill: "rigging", deploys: "defense" },
+    corpsman:     { label: "Corpsman Medevac Frame", category: "drone", tier: 4, skill: "rigging", craftSkill: "rigging", deploys: "medic" },
+    sunderFrame:  { label: "Sunder Heavy Frame",     category: "drone", tier: 7, skill: "rigging", craftSkill: "rigging", deploys: "heavy" },
     // ── Foci & talismans (the SR foci families, our skills) ──────
     sorceryFocus: { label: "Spellcasting Focus",     category: "focus", tier: 4, skill: "sorcery",    craftSkill: "enchanting" },
     wardingCharm: { label: "Warding Charm",          category: "focus", tier: 3, skill: "sorcery",    craftSkill: "enchanting" },

@@ -1233,6 +1233,82 @@
       });
     }
 
+    // ── WHAT A RIGGER CAN DO WITH WHAT THEY BROUGHT ─────────────
+    // Every one of these is a real change of state, so each is its
+    // own line rather than a submenu: put a frame down, climb into
+    // one by remote, climb all the way in, or come back out.
+    function riggerActions(who) {
+      const B = MJ.bodies;
+      if (!B || !who || !who.identity) return [];
+      const rig = MJ.getEffectiveSkills(who).rigging || 0;
+      if (rig <= 0) return [];
+      const out = [];
+      if (!who.slumped) {
+        for (const f of B.framesCarriedBy(who)) {
+          out.push({
+            kind: "deploy", item: f.item,
+            html: nm(who.identity.handle) + '<span class="dimmed"> — </span>put down the ' + esc(f.template.label),
+            meta: '<span class="dimmed">a ' + esc(B.DRONE_ROLES[f.template.deploys].label) +
+              " on the ground — " + esc(B.DRONE_ROLES[f.template.deploys].blurb) + "</span>",
+          });
+        }
+      }
+      const flying = (run.extraBodies || []).filter((b) => b.bodyKind === "drone" && b.boundTo === who);
+      if (!who.jump) {
+        for (const d of flying) {
+          out.push({
+            kind: "warm", drone: d,
+            html: nm(who.identity.handle) + '<span class="dimmed"> — </span>fly the ' + esc(d.identity.handle) + " by remote",
+            meta: '<span class="dimmed">+' + Math.ceil(rig / 3) +
+              " to it, and they stay on their own feet — two bodies acting</span>",
+          });
+          out.push({
+            kind: "hot", drone: d,
+            html: nm(who.identity.handle) + '<span class="dimmed"> — </span>jump into the ' + esc(d.identity.handle),
+            meta: no("their body drops where it stands") +
+              '<span class="dimmed"> · +' + Math.ceil(rig / 2) +
+              " to the drone, and the body left behind can be found and hurt</span>",
+          });
+        }
+      } else {
+        out.push({
+          kind: "eject",
+          html: nm(who.identity.handle) + '<span class="dimmed"> — </span>' +
+            (who.jump.hot ? "come back to their body" : "drop the remote link"),
+          meta: '<span class="dimmed">' + (who.jump.hot
+            ? "they wake up where they were left"
+            : "the drone goes back to running itself") + "</span>",
+        });
+      }
+      return out;
+    }
+
+    function doRiggerAction(a, who) {
+      const B = MJ.bodies;
+      if (a.kind === "deploy") {
+        const res = B.deploy(run, who, a.item);
+        transcript.push(res.ok
+          ? nm(who.identity.handle) + '<span class="dimmed"> puts down a </span>' +
+            nm(res.drone.identity.handle) + '<span class="dimmed"> — armour ' +
+            res.drone.loadout.armour + ", " + res.drone.loadout.weaponLabel + "</span>"
+          : no(res.error));
+      } else if (a.kind === "warm" || a.kind === "hot") {
+        const res = B.jumpIn(run, who, a.drone, a.kind);
+        transcript.push(res.ok
+          ? nm(who.identity.handle) + '<span class="dimmed"> ' +
+            (a.kind === "hot" ? "jumps into" : "takes remote of") + " the </span>" +
+            nm(a.drone.identity.handle) + '<span class="dimmed"> · +' + res.bonus + "</span>" +
+            (a.kind === "hot" ? " — " + no("their body goes down where it stands") : "")
+          : no(res.error));
+      } else if (a.kind === "eject") {
+        const hot = who.jump && who.jump.hot;
+        B.endJump(run, who);
+        transcript.push(nm(who.identity.handle) + '<span class="dimmed"> ' +
+          (hot ? "comes back to their own body" : "drops the link") + "</span>");
+      }
+      step();
+    }
+
     // WHOSE TURN THE PLAYER IS THINKING ABOUT. Held across repaints
     // by identity, not index — the roster order never changes mid-run
     // but a downed runner should not stay selected.
@@ -1319,9 +1395,15 @@
               (MJ.getEffectiveSkills(who).conjuring || 0) + "d · it owes you services, and goes when the run does</span>",
           }]
         : [];
+      // ── THE RIGGER'S OWN LINES ─────────────────────────────────
+      // Put a frame down, then decide how far into it to go. Warm is
+      // two bodies; hot is one body and a liability lying where you
+      // dropped it.
+      const rigActs = riggerActions(who);
       const options = shown.map(optionFor)
         .concat(casts.map((c) => ({ html: c.html, meta: c.meta, dead: c.dead })))
-        .concat(conj);
+        .concat(conj)
+        .concat(rigActs.map((a) => ({ html: a.html, meta: a.meta })));
       // Stalled asks the MODEL's question (all approaches, spell verbs
       // included) — the funnel changes where spells are clicked, not
       // whether they count as ways through.
@@ -1350,7 +1432,11 @@
           if (o && MJ.missionFaceFirst(run, o)) step();
         },
         onChoose: (opt, i) => {
-          if (i >= shown.length + casts.length) return openSummon(who, step);
+          const afterCasts = shown.length + casts.length;
+          if (i >= afterCasts + conj.length) {
+            return doRiggerAction(rigActs[i - afterCasts - conj.length], who);
+          }
+          if (i >= afterCasts) return openSummon(who, step);
           if (i >= shown.length) {
             const c = casts[i - shown.length];
             return openGrimoire(c.mage, ctx,

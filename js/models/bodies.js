@@ -275,6 +275,38 @@
     });
   }
 
+  // ── Putting one on the ground ──────────────────────────────────
+  // A frame the rigger is CARRYING becomes a body. The item stays
+  // theirs — you get the drone back at the end of the run the same
+  // way you get your gun back — but while it is deployed it is a
+  // thing standing in a room rather than a line on a kit list.
+  function framesCarriedBy(runner) {
+    const out = [];
+    for (const item of (runner && runner.gear) || []) {
+      if (item.consumed || item.deployed) continue;
+      const t = MJ.ITEM_TEMPLATES[item.templateId];
+      if (t && t.category === "drone" && t.deploys) out.push({ item: item, template: t });
+    }
+    return out;
+  }
+
+  const canDeploy = (runner) =>
+    !!runner && (MJ.getEffectiveSkills(runner).rigging || 0) > 0 && framesCarriedBy(runner).length > 0;
+
+  function deploy(run, rigger, item) {
+    const t = MJ.ITEM_TEMPLATES[item && item.templateId];
+    if (!t || !t.deploys) return { ok: false, error: "that is a kit, not a frame" };
+    if ((MJ.getEffectiveSkills(rigger).rigging || 0) <= 0) {
+      return { ok: false, error: "untrained in rigging" };
+    }
+    if (item.deployed) return { ok: false, error: "already on the ground" };
+    const drone = makeDrone(t.deploys, MJ.effectiveTier ? MJ.effectiveTier(item) : t.tier, rigger);
+    drone.fromItem = item;
+    item.deployed = true;
+    join(run, drone);
+    return { ok: true, drone: drone };
+  }
+
   // ── Joining and leaving the formation ──────────────────────────
   function join(run, body) {
     run.extraBodies = run.extraBodies || [];
@@ -290,6 +322,11 @@
     const i = run.extraBodies.indexOf(body);
     if (i !== -1) run.extraBodies.splice(i, 1);
     body.released = why || "released";
+    // A FRAME COMES HOME. The item was never spent, only put on the
+    // ground, so landing it hands the rigger their drone back — you
+    // do not lose a machine for having used it.
+    if (body.fromItem) body.fromItem.deployed = false;
+    if (body.pilot) endJump(run, body.pilot);
     // A body that leaves mid-run must leave the ORDER too, or the
     // clock hands a turn to something that is not there any more.
     if (MJ.tactical && run.tactical) MJ.tactical.reseat(run);
@@ -354,6 +391,9 @@
     makeSpirit: makeSpirit,
     canSummon: canSummon,
     summon: summon,
+    framesCarriedBy: framesCarriedBy,
+    canDeploy: canDeploy,
+    deploy: deploy,
     makeDrone: makeDrone,
     isExtraBody: isExtraBody,
     servicesLeft: servicesLeft,
