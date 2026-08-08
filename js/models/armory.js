@@ -225,13 +225,30 @@
   }
 
   // Pick the best entry whose tier the runner's rank justifies.
-  function bestKitFor(list, rank) {
+  // `floor` — never come back empty-handed. A trade's instrument is
+  // not a reward for rank, it is the thing that makes them that trade,
+  // and a list whose cheapest entry outranks the holder hands back
+  // nothing at all. deckMk1 is tier 3 and it is the ONLY deck on the
+  // list, so `personalTierFor(4) === 2` meant every hacking-4 decker
+  // turned up without one — measured at 7 of 58 deckers owning no
+  // deck, which since the plane filter landed means owning no way to
+  // act on a Matrix run whatsoever. Same shape as the armour ladder's
+  // own note: the list running out, read as a statement about them.
+  function bestKitFor(list, rank, floor) {
     const cap = personalTierFor(rank);
     let choice = null;
     for (const id of list) {
       const t = ITEM_TEMPLATES[id];
       if (!t || t.tier > cap) continue;
       if (!choice || t.tier > ITEM_TEMPLATES[choice].tier) choice = id;
+    }
+    if (!choice && floor) {
+      // The cheapest thing on the list — entry-level, but theirs.
+      for (const id of list) {
+        const t = ITEM_TEMPLATES[id];
+        if (!t) continue;
+        if (!choice || t.tier < ITEM_TEMPLATES[choice].tier) choice = id;
+      }
     }
     return choice;
   }
@@ -257,10 +274,25 @@
       kit.push(item);
     };
 
-    // The tool for whatever they are actually best at, among the
-    // skills that HAVE a tool.
+    // ── THEIR TRADE'S INSTRUMENT, FIRST AND ALWAYS ───────────────
+    // A decker owns a deck because they are a decker. This used to be
+    // decided by a best-skill contest across every tool-bearing skill,
+    // with ties broken by the ORDER OF KEYS IN AN OBJECT — so a decker
+    // whose firearms merely EQUALLED their hacking lost the tie to
+    // `firearms` (declared first) and turned up carrying a holdout and
+    // no cyberdeck at all. A decker with no deck is not a character
+    // build, it is a decker who cannot work, and it was reachable
+    // straight off the market.
+    const trade = runner.classification && runner.classification.focusKeySkill;
+    if (trade && KIT_BY_SKILL[trade] && (skills[trade] || 0) > 0) {
+      take(bestKitFor(KIT_BY_SKILL[trade], skills[trade], true)); // floor: always something
+    }
+
+    // Then whatever else they are genuinely good at — the sideline,
+    // not the profession.
     let bestSkill = null;
     for (const skill of Object.keys(KIT_BY_SKILL)) {
+      if (skill === trade) continue;
       const rank = skills[skill] || 0;
       if (rank > 0 && (!bestSkill || rank > skills[bestSkill])) bestSkill = skill;
     }
@@ -269,8 +301,31 @@
     // A sidearm, if their trade did not already give them one. Even
     // a decker owns something to point at people.
     const gunRank = Math.max(skills.firearms || 0, skills.marksmanship || 0);
-    if (gunRank > 0 && bestSkill !== "firearms" && bestSkill !== "marksmanship") {
+    const armed = bestSkill === "firearms" || bestSkill === "marksmanship" ||
+      trade === "firearms" || trade === "marksmanship" || trade === "heavyWeapons";
+    if (gunRank > 0 && !armed) {
       take(bestKitFor(KIT_BY_SKILL.firearms, gunRank));
+    }
+
+    // ── THE INTERFACE ────────────────────────────────────────────
+    // A datajack, for a decker who already paid for chrome. Cyber
+    // origin means their Essence is ALREADY docked 0.5-2.5 at
+    // generation for implants the sheet never listed — this makes one
+    // of them explicit rather than granting free chrome, so the +1
+    // hacking it carries is bought with Essence like anyone else's.
+    //
+    // A MUNDANE decker does not get one and is not broken without it:
+    // the game models AR only — the decker works the maglock from the
+    // corridor, there is no jack-in and no VR — so a datajack is a
+    // shop upgrade today, not the price of admission. If hot-sim ever
+    // becomes a real mode with its own risks and rewards, THAT is when
+    // the jack becomes a prerequisite and this becomes a gate.
+    if (runner.classification && runner.classification.family === "decker" &&
+        runner.classification.origin === "cyber" &&
+        runner.essence && runner.essence.current > MJ.ITEM_TEMPLATES.datajack.essenceCost + 0.5) {
+      take("datajack");
+      runner.essence.current =
+        Math.round((runner.essence.current - MJ.ITEM_TEMPLATES.datajack.essenceCost) * 100) / 100;
     }
 
     // Something to stop a bullet, scaled to how dangerous their work

@@ -1423,7 +1423,15 @@
       essence: essence,
       origin: origin,
     };
-    const built = spendBirthPool(r, shell, focus, trueArchetype, skillTiers, presentation, pool);
+    // A STARTER SPEC REPLACES THE ROLL, and nothing else about the
+    // build changes: same shell, same tiers, same ceilings, same
+    // grimoire and powers grant below. Only where the numbers came
+    // from is different — rolled for somebody you met, chosen for the
+    // one you built.
+    shell.classification.family = focus.family;
+    const built = options.starter
+      ? applyStarterBuild(shell, skillTiers, options.starter)
+      : spendBirthPool(r, shell, focus, trueArchetype, skillTiers, presentation, pool);
     const skills = built.skills;
 
     const runner = {
@@ -1491,6 +1499,86 @@
     return runner;
   }
 
+  // ══ THE STARTER BUILD ═════════════════════════════════════════
+  // THE FIRST RUNNER IS BOUGHT, NOT ROLLED. The market's allocator
+  // rolls bands out of one karma pool, which is right for people you
+  // MEET — the variance is what makes a market worth reading. It is
+  // wrong for the one person the player builds, for two reasons: a
+  // creation screen that hands you a different character each time you
+  // press the button teaches nothing, and the whole point of building
+  // the first one is to see where a runner's numbers come from.
+  //
+  // So creation is a point buy, shaped like SR5's priority table at
+  // street level. Separate purses, fixed sizes, nothing rolled:
+  //
+  //   ATTRIBUTES   16 points, one point per rating, on top of the
+  //                metatype's own floor and capped at its ceiling.
+  //                (SR5 Priority C.)
+  //   PRIMARY      free at rank 4 — the focus IS this skill, and a
+  //                professional turns up already able to do their job.
+  //   SECONDARY    6 ranks to spread over the ones they chose.
+  //   TERTIARY     4 ranks over the rest of the class list.
+  //   UNIVERSAL    4 ranks over everything else they are allowed —
+  //                Perception, Firearms, Athletics and the rest are
+  //                nobody's class property and are purchasable on
+  //                every build.
+  //
+  // Eighteen skill ranks total, which is SR5's Priority E — correct
+  // for somebody who is going to grow into the work rather than
+  // arrive finished. Magic, spells and adept powers are NOT bought
+  // here: a spark is a qualification, not a purchase, and the free
+  // grant is whatever generation already gives that shape.
+  const STARTER = {
+    attributePoints: 16,
+    primaryRank: 4,
+    secondaryPool: 6,
+    tertiaryPool: 4,
+    universalPool: 4,
+    // SR5 caps a starting skill at 6. Growth is where 7+ lives.
+    skillCap: 6,
+  };
+
+  // Which skills are NOBODY'S class property. Everything the gates do
+  // not reserve — sorcery/conjuring/enchanting want a mage, assensing
+  // wants a spark, hacking wants a decker, rigging wants a rigger, and
+  // everything else is just a thing a person can learn.
+  function universalSkillsFor(family, origin) {
+    return SKILLS.filter((s) => !SKILL_GATES[s] && isSkillEligible(s, family, origin));
+  }
+
+  // Spend the player's answers. Deliberately NOT spendBirthPool: same
+  // tables, same ceilings, same skill list, different chooser. The
+  // runner that comes out is the same SHAPE as any other — that part
+  // is not negotiable and C27 holds it.
+  function applyStarterBuild(shell, tiers, spec) {
+    spec = spec || {};
+    const skills = {};
+    for (const s of SKILLS) skills[s] = 0;
+    // The primary comes free at its fixed rank; it is what the focus
+    // means.
+    skills[tiers.primary] = STARTER.primaryRank;
+    for (const s of Object.keys(spec.skills || {})) {
+      if (SKILLS.indexOf(s) === -1) continue;
+      if (!isSkillEligible(s, shell.classification.family || shell.family, shell.origin)) continue;
+      skills[s] = Math.max(skills[s] || 0, Math.min(STARTER.skillCap, spec.skills[s] | 0));
+    }
+    for (const attr of Object.keys(spec.attributes || {})) {
+      if (!(attr in shell.attributes)) continue;
+      // A SPARK IS NOT A PURCHASE. baseAttributes grants Magic 1 to
+      // anyone who has one and 0 to everyone else; points can deepen
+      // a spark but they can never buy one. attributeCeiling reads
+      // Essence, which a mundane also has, so without this a cyber
+      // ork Marksman could spend four points and walk out Awakened —
+      // caught live on the build screen.
+      if (attr === "magic" && !shell.attributes.magic) continue;
+      const ceiling = attributeCeiling(shell, attr);
+      shell.attributes[attr] = Math.max(
+        shell.attributes[attr],
+        Math.min(ceiling, (shell.attributes[attr] || 0) + (spec.attributes[attr] | 0)));
+    }
+    return { skills: skills };
+  }
+
   // ══ CHARACTER CREATION ════════════════════════════════════════
   // ONE ALLOCATOR, NEVER TWO. Everything a player picks arrives as
   // `options` on generateRunner and is spent by the same
@@ -1532,6 +1620,24 @@
       primary: entry ? entry.list[0] : null,
       secondaryCount: secondaryCount,
       secondaryPool: entry ? entry.list.slice(1) : [],
+      // ── The four tiers, as the build screen has to show them ────
+      // Choosing the secondaries is what DEFINES the tertiary tier —
+      // it is the remainder of the class list — and seeing that
+      // happen is half of what building the first runner teaches.
+      tertiary: entry && picks.secondaries
+        ? entry.list.slice(1).filter((s) => picks.secondaries.indexOf(s) === -1) : [],
+      // THE OVERFLOW: everything they are allowed that their class
+      // list does not already speak for. Perception and Firearms are
+      // nobody's property — they are here on every build where the
+      // class does not already cover them, and where it DOES they are
+      // simply bought from that tier's purse instead. Either way no
+      // build can be denied them, and no skill is ever buyable twice
+      // out of two different purses.
+      universal: focus && entry
+        ? universalSkillsFor(focus.family, picks.origin || (focus.origins || [])[0])
+            .filter((s) => entry.list.indexOf(s) === -1)
+        : [],
+      starter: STARTER,
       // Only origins this focus can actually have — a Street Doc is
       // mundane, and offering "magic" would be offering a lie.
       origins: focus ? focus.origins.slice() : [],
@@ -1562,7 +1668,11 @@
       presentationId: picks.presentationId,
       secondaries: picks.secondaries,
       spells: picks.spells,
-      handleBase: picks.handle,
+      // The point buy. Absent means roll them like anybody else.
+      starter: picks.starter,
+      // NO HANDLE PICK. A street name is dealt from the universe's own
+      // shuffle-bag, same as everyone's — it is how the world names
+      // people, and the player's runner is a person in that world.
     });
     runner.identity.madeByPlayer = true;
     return runner;
@@ -1598,6 +1708,8 @@
   // tables generation reads; neither is a second system.
   MJ.creationMenu = creationMenu;
   MJ.createRunner = createRunner;
+  MJ.STARTER = STARTER;
+  MJ.universalSkillsFor = universalSkillsFor;
   MJ.getEffectiveSkills = getEffectiveSkills;
   MJ.effectiveSkill = effectiveSkill;
   MJ.computePrice = computePrice;

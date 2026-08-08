@@ -3357,6 +3357,83 @@
     // Against a founder-less session, not against a constant — the
     // stake is not exported and `money > 0` would pass while the
     // signing quietly charged for the contract.
+    // ── THE STARTER BUILD IS BOUGHT, NOT ROLLED ──────────────────
+    // The market rolls bands out of one karma pool; the first runner
+    // is a point buy with fixed purses. What must stay true is that
+    // the POINT BUY IS OBEYED EXACTLY — a creation screen whose
+    // numbers drift is a creation screen that teaches the wrong thing.
+    {
+      const S = MJ.STARTER;
+      const picks = {
+        family: "fighter", focusId: "marksman", trueArchetype: "specialist",
+        secondaries: ["perception"], origin: "cyber", metatype: "ork",
+        starter: {
+          attributes: { body: 3, agility: 4, willpower: 2 },
+          skills: { perception: 4, firearms: 2, athletics: 3 },
+        },
+      };
+      const r = MJ.createRunner("c27-starter", picks);
+      const tiers = r.classification.skillTiers;
+      check(r.skills[tiers.primary] === S.primaryRank,
+        "C27: the primary comes free at exactly its fixed rank (" + r.skills[tiers.primary] + ")");
+      for (const s of Object.keys(picks.starter.skills)) {
+        check(r.skills[s] === picks.starter.skills[s],
+          "C27: a bought skill rank is exactly what was bought (" + s + ": " +
+          r.skills[s] + " vs " + picks.starter.skills[s] + ")");
+      }
+      // Attributes are ADDED to the metatype's own floor, never
+      // replacing it — the ork and the elf have to stay different
+      // characters after the same spend.
+      const floor = MJ.createRunner("c27-starter", Object.assign({}, picks,
+        { starter: { attributes: {}, skills: {} } }));
+      for (const a of Object.keys(picks.starter.attributes)) {
+        const want = Math.min(floor.attributes[a] + picks.starter.attributes[a],
+          MJ.METATYPES.ork.max[a]);
+        check(r.attributes[a] === want,
+          "C27: attribute points add to the metatype floor (" + a + ": " +
+          floor.attributes[a] + "+" + picks.starter.attributes[a] + " -> " + r.attributes[a] + ")");
+      }
+      // A SPARK IS NOT A PURCHASE.
+      const cheat = MJ.createRunner("c27-spark", Object.assign({}, picks,
+        { starter: { attributes: { magic: 6 }, skills: {} } }));
+      check(cheat.attributes.magic === 0,
+        "C27: a mundane may never buy a spark (" + cheat.attributes.magic + ")");
+      const mage = MJ.createRunner("c27-mage-spark", {
+        family: "mage", focusId: "combatMage", trueArchetype: "specialist",
+        secondaries: ["assensing"], metatype: "elf",
+        starter: { attributes: { magic: 3 }, skills: { sorcery: 4 } },
+      });
+      check(mage.attributes.magic > 1, "C27: but an awakened runner may deepen one");
+      // No skill may exceed the starting cap, however hard it is pushed.
+      const greedy = MJ.createRunner("c27-cap", Object.assign({}, picks,
+        { starter: { attributes: {}, skills: { perception: 99 } } }));
+      check(greedy.skills.perception === S.skillCap,
+        "C27: a starting skill is capped at " + S.skillCap + " (" + greedy.skills.perception + ")");
+      // A gated skill cannot be bought by someone without the gate.
+      const gated = MJ.createRunner("c27-gated", Object.assign({}, picks,
+        { starter: { attributes: {}, skills: { sorcery: 5, hacking: 5 } } }));
+      check(!gated.skills.sorcery && !gated.skills.hacking,
+        "C27: the point buy still respects the skill gates");
+      // Same spec, same seed, same person — no fishing for a good roll.
+      const again = MJ.createRunner("c27-starter", picks);
+      check(snap(again.attributes) === snap(r.attributes) && snap(again.skills) === snap(r.skills),
+        "C27: a starter build is deterministic — the same answers give the same runner back");
+      // The universal purse offers what nobody's class owns, and never
+      // something the class list already covers.
+      const menu = MJ.creationMenu(picks);
+      for (const s of menu.universal) {
+        check(menu.secondaryPool.indexOf(s) === -1 && s !== menu.primary,
+          "C27: a class-list skill is never also on the universal menu (" + s + ")");
+        check(MJ.universalSkillsFor("fighter", "cyber").indexOf(s) !== -1,
+          "C27: and the universal menu only offers ungated skills (" + s + ")");
+      }
+      check(menu.universal.indexOf("perception") === -1,
+        "C27: perception is a Marksman's own trade, so it is bought from their tier, not the universal purse");
+      check(MJ.creationMenu({ family: "decker", focusId: "decker", trueArchetype: "specialist" })
+        .universal.indexOf("perception") !== -1,
+        "C27: but a decker, whose class does not cover it, can always buy it");
+    }
+
     const bare = MJ.game.newGame("c27-nofounder");
     check(bare.roster.length === 0,
       "C27: a session without a founder is still a legal session (the suite opens thousands)");

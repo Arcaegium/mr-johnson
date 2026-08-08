@@ -123,6 +123,14 @@
     }
     if (picks.secondaries && picks.secondaries.length) {
       line("secondaries", picks.secondaries.map((s) => nm(words(s))).join(dim(", ")));
+      // CHOOSING THE SECONDARIES IS WHAT DEFINES THE TERTIARY TIER.
+      // Showing the remainder the moment it exists is half of what
+      // building the first runner is supposed to teach: the class list
+      // is finite, you decide which parts of it you are good at, and
+      // everything you did not pick is still yours, just shallower.
+      if (menu.tertiary && menu.tertiary.length) {
+        line("tertiary", dim(menu.tertiary.map(words).join(", ")));
+      }
     }
     if (picks.origin) line("origin", nm(picks.origin));
     if (picks.metatype) line("metatype", nm(picks.metatype));
@@ -150,7 +158,42 @@
     const picks = {};
     const history = [];   // step ids already answered, for "back"
 
+    const STARTER = MJ.STARTER;
+    // Where every purchase lands. Two ledgers because the two purses
+    // buy different units: attribute POINTS are +1 rating each, skill
+    // ranks are a rank each.
+    const buy = { attributes: {}, skills: {} };
+
     function menuNow() { return MJ.creationMenu(picks); }
+
+    // The metatype's own floor, before a single point is spent — what
+    // a rating is counted UP FROM, and the number the cap is measured
+    // against. Read off a throwaway build of the current picks so the
+    // screen can never disagree with the model about where a body
+    // starts.
+    function shellAttributes() {
+      if (!picks.metatype || !picks.focusId) return {};
+      const probe = MJ.createRunner("cc-floor|" + picks.metatype + "|" + picks.focusId + "|" + (picks.origin || ""),
+        Object.assign({}, picks, { starter: { attributes: {}, skills: {} } }));
+      return probe.attributes;
+    }
+
+    // ── A SPEND STEP ───────────────────────────────────────────────
+    // One purse, a list of rows, click to buy and click again to sell
+    // back. Nothing here is committed until the sheet is signed, so a
+    // misspent point is never a trap.
+    function spend(id, ask, sub, when, budget, rows, ledger) {
+      return {
+        id: id, ask: ask, sub: sub, when: when, spendStep: true,
+        budget: budget, ledger: ledger,
+        rowsFor: rows,
+        left: () => {
+          const put = buy[ledger] || {};
+          const mine = rows().map((r) => r.value);
+          return budget - mine.reduce((a, s) => a + (put[s] || 0), 0);
+        },
+      };
+    }
 
     // The ordered questions. `when` decides whether a step is asked at
     // all — a focus with one legal origin does not get an origin
@@ -227,6 +270,49 @@
           })),
           set: (v) => { picks.presentationId = v; },
         },
+        // ── THE POINT BUY ──────────────────────────────────────────
+        // Four purses, fixed sizes, nothing rolled. Each of these is a
+        // SPEND step: clicking a row buys a rank (or a point), and the
+        // subtitle counts down what is left. Building the first runner
+        // is meant to show where a sheet's numbers come from, and a
+        // screen that rolled them would show the opposite.
+        spend("attributes", "Where does the body go?",
+          "attribute points — one per rating, inside what the metatype allows",
+          () => !!picks.metatype,
+          STARTER.attributePoints,
+          () => {
+            const base = shellAttributes();
+            const meta = MJ.METATYPES[picks.metatype];
+            return Object.keys(base)
+              // Magic 0 means no spark, and a spark is not for sale.
+              // The model refuses it too; this keeps it off the menu
+              // so the refusal is never something the player discovers
+              // by spending points into a hole.
+              .filter((a) => a !== "magic" || base.magic > 0)
+              .map((a) => ({
+                value: a, label: a,
+                cap: a === "magic" ? 6 : (meta && meta.max ? meta.max[a] : 6),
+                base: base[a],
+              }));
+          }, "attributes"),
+        spend("secondarySpend", "How good are they at those?",
+          "ranks across the secondaries they picked",
+          () => !!(picks.secondaries && picks.secondaries.length),
+          STARTER.secondaryPool,
+          () => (picks.secondaries || []).map((s) => ({ value: s, label: words(s), cap: STARTER.skillCap, base: 0 })),
+          "skills"),
+        spend("tertiarySpend", "And the rest of the trade?",
+          "ranks across what the class list left over — this tier IS the remainder",
+          () => !!(picks.secondaries && picks.secondaries.length) && m.tertiary.length > 0,
+          STARTER.tertiaryPool,
+          () => m.tertiary.map((s) => ({ value: s, label: words(s), cap: STARTER.skillCap, base: 0 })),
+          "skills"),
+        spend("universalSpend", "What else can they do?",
+          "ranks on skills that belong to nobody's class — always on offer, whatever they are",
+          () => !!picks.focusId && m.universal.length > 0,
+          STARTER.universalPool,
+          () => m.universal.map((s) => ({ value: s, label: words(s), cap: STARTER.skillCap, base: 0 })),
+          "skills"),
         {
           id: "spells", ask: "What did they study?",
           sub: m.signatureSpell
@@ -250,6 +336,11 @@
 
     function nextStep() {
       for (const s of steps()) {
+        // A SPEND STEP IS DONE WHEN THE PURSE IS EMPTY. It cannot be
+        // "answered" like a choice, and leaving points unspent is not
+        // a thing a player should be able to do by accident — the
+        // build is fixed-size and every point is theirs.
+        if (s.spendStep) { if (s.left() > 0) return s; continue; }
         const v = picks[s.id];
         if (v === undefined || (Array.isArray(v) && s.multi > 0 && v.length !== s.multi)) return s;
       }
@@ -260,6 +351,7 @@
       const m = menuNow();
       const step = nextStep();
       if (!step) return confirmStep();
+      if (step.spendStep) return paintSpend(step, m);
       const chosen = Array.isArray(picks[step.id]) ? picks[step.id] : [];
       // A multi-pick step marks what is already taken and counts down,
       // so "pick 3" is a visible three rather than a remembered one.
@@ -316,14 +408,85 @@
       });
     }
 
+    // ── Spending a purse ───────────────────────────────────────────
+    // Left-click buys one, and a bought row can be sold back from the
+    // action bar. Rows show base → bought so the player can see the
+    // metatype's own floor underneath what they are adding, which is
+    // the whole reason the ork and the elf are different characters.
+    function paintSpend(step, m) {
+      const put = buy[step.ledger];
+      const rows = step.rowsFor();
+      const left = step.left();
+      const options = rows.map((r) => {
+        const bought = put[r.value] || 0;
+        const at = r.base + bought;
+        const full = at >= r.cap;
+        return {
+          html: nm(r.label) + " " + num(at) +
+            (r.base ? dim(" (" + r.base + " + " + bought + ")") : bought ? dim(" (+" + bought + ")") : ""),
+          meta: full ? dim("at the cap for this build")
+            : left <= 0 ? dim("nothing left to spend")
+            : dim("costs 1 · cap " + r.cap),
+          tone: bought ? "opt-on" : "",
+          dead: full || left <= 0,
+        };
+      });
+      MJ.decide.open({
+        title: "BUILD YOUR RUNNER",
+        subtitle: dim(step.sub) + " · " + num(left) + dim(" of " + step.budget + " left"),
+        present: picksPanel(picks, m),
+        transcript: [],
+        heading: nm(step.ask) +
+          '<div class="ask">' + num(left) + " to spend. " +
+          dim("Nothing is committed until you sign — take points back with “undo a point”.") + "</div>",
+        options: options,
+        actions: [
+          Object.keys(put).some((k) => put[k]) ? { id: "undo", label: "undo a point" } : null,
+          history.length ? { id: "back", label: "back" } : null,
+          { id: "cancel", label: "cancel" },
+        ].filter(Boolean),
+        onChoose: (opt, i) => {
+          const r = rows[i];
+          if (!r || step.left() <= 0) return;
+          if (r.base + (put[r.value] || 0) >= r.cap) return;
+          put[r.value] = (put[r.value] || 0) + 1;
+          paint();
+        },
+        onAction: (id) => {
+          if (id === "cancel") return cancel();
+          if (id === "back") {
+            const last = history.pop();
+            if (last) delete picks[last];
+            return paint();
+          }
+          if (id === "undo") {
+            // Hand back the last thing bought in THIS purse.
+            const mine = rows.map((x) => x.value).filter((v) => put[v]);
+            const giveBack = mine[mine.length - 1];
+            if (giveBack) { put[giveBack] -= 1; if (!put[giveBack]) delete put[giveBack]; }
+            return paint();
+          }
+        },
+      });
+    }
+
     // ── The sheet, and the last chance to change it ───────────────
     // NO RE-ROLL BUTTON, on purpose. The pool and the band rolls are
     // seeded off the universe, so this runner IS this universe's
     // answer to these picks — pressing the button again hands back the
     // same person. Fishing for a good pool would make creation a slot
     // machine, which is the same reason a market refresh costs money.
+    // THE SPEC IS THE PICKS PLUS THE PURSES. Assembled in one place so
+    // the preview and the signed runner cannot be built from different
+    // inputs — the sheet on screen IS the runner.
+    function spec() {
+      return Object.assign({}, picks, {
+        starter: { attributes: buy.attributes, skills: buy.skills },
+      });
+    }
+
     function confirmStep() {
-      const runner = MJ.createRunner(seed, picks);
+      const runner = MJ.createRunner(seed, spec());
       MJ.decide.open({
         title: "BUILD YOUR RUNNER",
         subtitle: dim("this is who that makes — nothing is hidden behind the button"),
@@ -347,7 +510,7 @@
             return paint();
           }
           MJ.decide.close();
-          opts.onDone && opts.onDone(runner, picks);
+          opts.onDone && opts.onDone(runner, spec());
         },
       });
     }
