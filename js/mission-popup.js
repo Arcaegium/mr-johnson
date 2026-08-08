@@ -502,11 +502,14 @@
         o.rooms && o.rooms.indexOf(rid) !== -1 && o.leg !== undefined && o.leg <= (outside ? 0 : frontier));
       const up = here.filter((o) => !run.neutralized.has(o)).length;
       const stroke = mini || !knows(i) ? "var(--line)" : up > 0 ? "var(--accent)" : "var(--accent-2)";
-      const shape = h % 4;
-      if (shape === 0) bits.push(`<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
-      else if (shape === 1) bits.push(`<polygon points="${p.x},${p.y - r - 1} ${p.x + r + 1},${p.y} ${p.x},${p.y + r + 1} ${p.x - r - 1},${p.y}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
-      else if (shape === 2) bits.push(`<rect x="${p.x - r + 1}" y="${p.y - r + 1}" width="${2 * r - 2}" height="${2 * r - 2}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
-      else bits.push(`<polygon points="${p.x - r},${p.y} ${p.x - r2},${p.y - r} ${p.x + r2},${p.y - r} ${p.x + r},${p.y} ${p.x + r2},${p.y + r} ${p.x - r2},${p.y + r}" fill="var(--panel)" stroke="${stroke}" stroke-width="1.8"/>`);
+      // ONE SHAPE VOCABULARY. This used to pick from four shapes by
+      // HASHING THE ROOM ID — a circle and a diamond meant nothing,
+      // and two rooms drawn differently were not different in any
+      // way. Now the shape says what the room is FOR, and it says the
+      // same thing on the tactical grid beside it. See js/icons.js.
+      const roomRec = (run.site.layout.rooms || []).find((rm) => rm.id === rid);
+      bits.push(`<g fill="var(--panel)" stroke="${stroke}" stroke-width="1.8">` +
+        MJ.icons.draw(MJ.icons.roomShape(roomRec), p.x, p.y, r) + "</g>");
       if (!mini && !knows(i)) {
         bits.push(`<text x="${p.x}" y="${p.y + S.font / 2 - 1}" text-anchor="middle" font-size="${S.font}" fill="var(--dim)">?</text>`);
       } else if (!mini) {
@@ -600,6 +603,93 @@
     return out.join("");
   }
 
+  // ── THE TACTICAL VIEW: this room, drawn ────────────────────────
+  // A SECOND VISUAL OUTPUT, not a replacement. The route graph is
+  // the strategic read — the whole site, which rooms are walked,
+  // where the job is. This is the tactical one: the room the crew is
+  // standing in, square by square, with everybody on it.
+  //
+  // It renders the run clock (models/tactical.js) and decides
+  // nothing. Squares a body can reach are marked while it is their
+  // turn; that is the seam a click-to-move lands on, and the arcs
+  // after it — drawn first as decoration that decides nothing, then
+  // consulted by sensesPlane/wasWitnessed (VISUAL-LAYER-SEAM 2c).
+  const TONE = {
+    crew:    "var(--accent-2)",
+    hostile: "#d4735e",
+    watcher: "var(--accent)",
+    device:  "#8a97a6",
+    astral:  "#a98bd6",
+    matrix:  "#5aa9c9",
+    lethal:  "#e05858",
+  };
+
+  function tacticalGrid(run) {
+    const T = MJ.tactical;
+    if (!T || !run.tactical) return "";
+    const t = run.tactical;
+    const room = (run.site.layout && run.site.layout.rooms || [])
+      .find((r) => r.id === t.roomId);
+    const CELL = 34, PAD = 10;
+    const W = t.grid.w * CELL + PAD * 2, H = t.grid.h * CELL + PAD * 2;
+    const cx = (x) => PAD + x * CELL + CELL / 2;
+    const cy = (y) => PAD + y * CELL + CELL / 2;
+    const bits = [];
+
+    // The floor. Plain squares — the room is the stage, not the show.
+    for (let y = 0; y < t.grid.h; y++) {
+      for (let x = 0; x < t.grid.w; x++) {
+        bits.push(`<rect x="${PAD + x * CELL}" y="${PAD + y * CELL}" width="${CELL}" height="${CELL}" ` +
+          `fill="none" stroke="var(--line)" stroke-width="0.6"/>`);
+      }
+    }
+
+    // WHERE THE ACTIVE BODY COULD GET TO. Only on their own turn, and
+    // only what the clock says is legal — the view never invents a
+    // move the model would refuse.
+    const active = T.whoseTurn(run);
+    if (active && active.identity) {
+      for (const p of T.reachable(run, active)) {
+        bits.push(`<rect x="${PAD + p.x * CELL + 2}" y="${PAD + p.y * CELL + 2}" ` +
+          `width="${CELL - 4}" height="${CELL - 4}" fill="rgba(90,169,201,0.10)" ` +
+          `stroke="var(--accent-2)" stroke-width="0.7" stroke-dasharray="2 2"/>`);
+      }
+    }
+
+    // Everything standing on it. One vocabulary, shared with the
+    // route graph — see js/icons.js.
+    for (const [b, p] of t.pos) {
+      if (p.roomId !== t.roomId) continue;
+      const mine = !!b.identity;
+      const ic = mine ? MJ.icons.bodyIcon(b) : MJ.icons.thingIcon(b);
+      const tone = TONE[ic.tone] || TONE.device;
+      const gone = run.neutralized.has(b);
+      const isActive = b === active;
+      if (isActive) {
+        bits.push(`<circle cx="${cx(p.x)}" cy="${cy(p.y)}" r="${CELL * 0.46}" ` +
+          `fill="none" stroke="var(--accent)" stroke-width="1.6"/>`);
+      }
+      bits.push(`<g fill="${tone}" stroke="${tone}" stroke-width="1.1" ` +
+        `opacity="${gone ? 0.3 : 1}">` +
+        MJ.icons.draw(ic.shape, cx(p.x), cy(p.y), CELL * 0.3) + "</g>");
+      const name = mine ? b.identity.handle : (ic.label || b.label);
+      bits.push(`<title>${esc(name)}${b.tier ? " T" + b.tier : ""}</title>`);
+    }
+
+    // Who is up, and what they have left.
+    const who = active
+      ? (active.identity ? nm(active.identity.handle) : nm(active.label)) +
+        '<span class="dimmed"> — ' + num(t.moveLeft.get(active) || 0) + " of " +
+        T.speedFor(active) + " squares" +
+        (t.acted.has(active) ? ", acted" : ", action ready") + "</span>"
+      : '<span class="dimmed">nobody</span>';
+    return '<div class="pane-k">this room' +
+      (room ? ' <span class="dimmed">· ' + esc(room.label) + " · " + esc(room.size) + "</span>" : "") +
+      "</div>" +
+      `<div class="tacgrid"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${bits.join("")}</svg></div>` +
+      '<div class="tacturn"><span class="dk">round ' + t.round + " · up:</span> " + who + "</div>";
+  }
+
   // ── THE FUTURE: the ground ahead ───────────────────────────────
   // The walk, drawn — earned knowledge only. This is the tense that
   // says where this is going, and it is deliberately the only place
@@ -626,7 +716,17 @@
   // `~3` until something has actually bounced off it and then `3✓`.
   function presentPanel(run, prompt, opts) {
     const outside = opts && opts.outside;
-    const out = ['<div class="pane-k">' + (outside ? "on the pavement" : "the room") + "</div>"];
+    // THE ROOM, DRAWN, above everything written about it. The clock
+    // is seeded on demand — a run that never opens this view never
+    // grows one, which is the invariant C28 holds.
+    const out = [];
+    if (!outside && MJ.tactical && run.site && run.site.layout) {
+      MJ.tactical.begin(run);
+      MJ.tactical.reseat(run);
+      const grid = tacticalGrid(run);
+      if (grid) out.push(grid);
+    }
+    out.push('<div class="pane-k">' + (outside ? "on the pavement" : "in the room") + "</div>");
     const ob = prompt && prompt.obstacle;
     const k = ob && MJ.obstacleKnowledge ? MJ.obstacleKnowledge(run, ob) : null;
 

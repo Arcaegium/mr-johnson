@@ -275,6 +275,14 @@ a.navlink:hover { text-decoration: underline; }
 }
 .ob-name { font-size: 1.2rem; line-height: 1.4; }
 
+/* ── The tactical view ──────────────────────────────────────────
+   The room the crew is standing in, square by square. A SECOND
+   output beside the route graph, not a replacement: the route says
+   which rooms, this says where in one. */
+.tacgrid { margin: 4px 0 6px; overflow-x: auto; }
+.tacgrid svg { display: block; }
+.tacturn { font-size: 0.94rem; line-height: 1.5; margin-bottom: 4px; }
+
 /* ── Character creation ─────────────────────────────────────────
    The answers so far, and the sheet they add up to. Key and value on
    one line with the key held to a column, so a stack of picks reads
