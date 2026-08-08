@@ -328,8 +328,15 @@
     // called zero "expired", which put an EXPIRED badge and a working
     // Accept button on the same still-valid offer (found live). Off by
     // one at both ends: it also called two days left "today".
+    // "2 days left" -> "last day" -> gone. There is no "expired"
+    // state a player should ever see on the board: a job is not dead
+    // until the day AFTER its last day, and the day cannot turn
+    // without settleDay running, so the offer can always be cleared
+    // before that word would be true. "expired" survives here only as
+    // a tell that something failed to sweep.
     const left = job.expiryDay - S.day + 1;
-    const clock = left <= 0 ? "expired" : left === 1 ? "last day" : left + "d left";
+    const clock = left <= 0 ? "expired" : left === 1 ? "last day"
+      : left + " days left";
     // The other end of the Locations link: an accepted job carries its
     // number, and every job names WHERE by the location numbers the
     // Locations tab already uses — closed, the title alone says which
