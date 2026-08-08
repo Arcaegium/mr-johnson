@@ -1304,6 +1304,19 @@
   function crewCombatants(run) {
     const crew = run.runners.filter((r) => !run.downed || !run.downed.has(r)).map((r) =>
       MJ.makeCombatant(r, Object.assign({ side: "crew", ammo: 30 }, MJ.combatLoadoutFor(r))));
+    // CHROME WALKS IN WITH THE BODY IT IS BOLTED TO. Wired Reflexes
+    // is a tier-7, two-Essence implant whose entire identity is
+    // initiative, and it was granting two skill points and nothing
+    // else — the `wired` effect existed and only the Increase
+    // Reflexes SPELL ever applied it. Implants declare their effect
+    // now and it lands here, the same way a held spell does.
+    if (MJ.implantEffectsFor) {
+      for (const c of crew) {
+        for (const id of MJ.implantEffectsFor(c.source)) {
+          MJ.applyEffect(c, id, { source: "implant" });
+        }
+      }
+    }
     // Spells held open WALK INTO THE FIGHT with the crew: the Armor
     // on the tank and the sustaining weight on the mage both arrive
     // as the ordinary effects they are. Cast before the shooting

@@ -199,7 +199,11 @@
   //
   // DURATION: `rounds` counts down at the top of each round;
   // absent means it lasts the whole fight until something clears it.
-  const CHANNELS = ["accuracy", "defence", "power", "damage", "armour", "soak", "initiative", "initiativeDice"];
+  // `move` is the run clock's channel — squares in a turn. It lives
+  // here with the rest because a body has one set of modifiers
+  // whether it is in a firefight or walking a corridor, and two
+  // registries would drift.
+  const CHANNELS = ["accuracy", "defence", "power", "damage", "armour", "soak", "initiative", "initiativeDice", "move"];
 
   const EFFECTS = {
     // Postures — what the combatant is doing with their body. The
@@ -235,6 +239,14 @@
     // Anything reading EFFECTS as a closed list will be wrong about
     // a third of it.
     wired:       { label: "wired reflexes",  kind: "boon", channels: { initiative: 4, initiativeDice: 1 } },
+    // The lesser rung of the same ladder — Reflex Wiring is tier 5
+    // against Wired Reflexes' 7, and it should read as a step toward
+    // it rather than as a different thing.
+    reflexWired: { label: "reflex wiring",   kind: "boon", channels: { initiative: 2 } },
+    // Not reflexes: legs. It moves you further in a turn rather than
+    // getting you there sooner, which is the difference between the
+    // heart and the wiring.
+    quickened:   { label: "synthacardium",   kind: "boon", channels: { move: 1 } },
     combatSense: { label: "combat sense",    kind: "boon", channels: { defence: 2 } },
     painEditor:  { label: "pain editor",     kind: "boon", channels: { soak: 2 } },
   };

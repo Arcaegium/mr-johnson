@@ -167,12 +167,19 @@
     smartlink:       { label: "Smartlink",            category: "cyberware", tier: 3, essenceCost: 0.6, skillMods: { firearms: 2 } },
     cybereyes:       { label: "Cybereyes",            category: "cyberware", tier: 3, essenceCost: 0.5, skillMods: { marksmanship: 2 } },
     voiceMod:        { label: "Voice Modulator",      category: "cyberware", tier: 3, essenceCost: 0.4, skillMods: { con: 2 } },
-    synthacardium:   { label: "Synthacardium",        category: "cyberware", tier: 3, essenceCost: 0.6, skillMods: { athletics: 2 } },
     cerebralBooster: { label: "Cerebral Booster",     category: "cyberware", tier: 4, essenceCost: 0.8, skillMods: { computer: 1, electronics: 1 } },
-    reflexWiring:    { label: "Reflex Wiring",        category: "cyberware", tier: 5, essenceCost: 1.2, skillMods: { firearms: 1, melee: 1 } },
+    // CHROME THAT IS ABOUT SPEED HAS TO MAKE YOU FAST. `effect` names
+    // a row in combat.js's registry and it is applied wherever the
+    // body is — in a firefight, and in the run clock's turn order.
+    // Without it, Reflex Wiring and Wired Reflexes were two of the
+    // most expensive implants in the game handing out a couple of
+    // skill points and no reflexes at all: the `wired` effect existed
+    // and only the Increase Reflexes SPELL ever applied it.
+    reflexWiring:    { label: "Reflex Wiring",        category: "cyberware", tier: 5, essenceCost: 1.2, skillMods: { firearms: 1, melee: 1 }, effect: "reflexWired" },
     controlRig:      { label: "Control Rig",          category: "cyberware", tier: 5, essenceCost: 1.0, skillMods: { rigging: 2 } },
     boneLacing:      { label: "Titanium Bone Lacing", category: "cyberware", tier: 5, essenceCost: 1.5, skillMods: { melee: 2, athletics: 1 } },
-    wiredReflexes:   { label: "Wired Reflexes",       category: "cyberware", tier: 7, essenceCost: 2.0, skillMods: { firearms: 2, melee: 2 } },
+    wiredReflexes:   { label: "Wired Reflexes",       category: "cyberware", tier: 7, essenceCost: 2.0, skillMods: { firearms: 2, melee: 2 }, effect: "wired" },
+    synthacardium:   { label: "Synthacardium",        category: "cyberware", tier: 3, essenceCost: 0.6, skillMods: { athletics: 2 }, effect: "quickened" },
   };
 
   const ESSENCE_FLOOR = 0.5; // nobody chromes past this (placeholder)
@@ -320,12 +327,19 @@
     // shop upgrade today, not the price of admission. If hot-sim ever
     // becomes a real mode with its own risks and rewards, THAT is when
     // the jack becomes a prerequisite and this becomes a gate.
+    // IMPLANTED, NOT CARRIED. The first version pushed it into `gear`
+    // and docked the Essence by hand, which bought the runner nothing
+    // at all: getEffectiveSkills reads runner.implants, and
+    // gearBonusFor wants a `skill` field that cyberware does not have
+    // — it carries `skillMods`. So the jack cost 0.3 Essence and its
+    // +1 hacking went nowhere. Caught by auditing every template
+    // against the mechanism it claims. It goes through the same
+    // surgery the shop does now, so there is one way chrome gets into
+    // a body and one place the Essence comes off.
     if (runner.classification && runner.classification.family === "decker" &&
-        runner.classification.origin === "cyber" &&
-        runner.essence && runner.essence.current > MJ.ITEM_TEMPLATES.datajack.essenceCost + 0.5) {
-      take("datajack");
-      runner.essence.current =
-        Math.round((runner.essence.current - MJ.ITEM_TEMPLATES.datajack.essenceCost) * 100) / 100;
+        runner.classification.origin === "cyber") {
+      const jack = makeItem("datajack");
+      implantSurgery(runner, jack, []);
     }
 
     // Something to stop a bullet, scaled to how dangerous their work
@@ -668,6 +682,42 @@
   // ── Cyberware surgery: consume, spend Essence, mark the dossier ─
   // v1 is an instant hub operation; making it a real Medicae
   // dispatch (Street Doc's internal job, §03) is flagged future work.
+  // ── WHAT THE CHROME DOES BEYOND SKILL POINTS ───────────────────
+  // Some implants are not about being better at something, they are
+  // about being FASTER — and speed is a channel, not a skill. This
+  // is the list of combat-effect rows a body's implants grant, read
+  // by crewCombatants when a fight starts AND by the run clock when
+  // it works out who goes first and how far they get.
+  //
+  // ONE LIST, TWO READERS. A second table of "which chrome makes you
+  // quick" would be the kind of thing that agrees with this one right
+  // up until somebody edits one of them.
+  function implantEffectsFor(runner) {
+    const out = [];
+    for (const im of (runner && runner.implants) || []) {
+      // Implants record their own label and mods, not their template
+      // id, so the effect is looked up by matching the template that
+      // produced them.
+      for (const id of Object.keys(ITEM_TEMPLATES)) {
+        const t = ITEM_TEMPLATES[id];
+        if (t.category === "cyberware" && t.label === im.label && t.effect) out.push(t.effect);
+      }
+    }
+    return out;
+  }
+
+  // The sum of one channel across a body's implants, for readers that
+  // are not building a combatant — the run clock asks this before any
+  // fight exists.
+  function implantChannel(runner, channel) {
+    let total = 0;
+    for (const id of implantEffectsFor(runner)) {
+      const def = MJ.COMBAT_EFFECTS && MJ.COMBAT_EFFECTS[id];
+      if (def && def.channels && def.channels[channel]) total += def.channels[channel];
+    }
+    return total;
+  }
+
   function implantSurgery(runner, item, armoryItems) {
     const t = ITEM_TEMPLATES[item.templateId];
     if (!t || t.category !== "cyberware") return { ok: false, error: "not cyberware" };
@@ -721,4 +771,6 @@
   MJ.teachFormula = teachFormula;
   MJ.carriesCategory = carriesCategory;
   MJ.implantSurgery = implantSurgery;
+  MJ.implantEffectsFor = implantEffectsFor;
+  MJ.implantChannel = implantChannel;
 })();

@@ -94,7 +94,11 @@
     if (!body) return 1;
     if (typeof body.speed === "number") return Math.max(1, body.speed);
     const agi = (body.attributes && body.attributes.agility) || 1;
-    return Math.max(1, agi);
+    // Chrome that is about legs rather than reflexes moves you
+    // further in the same turn — one list of what the implants do,
+    // read here and by the fight, never two.
+    const chrome = MJ.implantChannel ? MJ.implantChannel(body, "move") : 0;
+    return Math.max(1, agi + chrome);
   }
 
   // ── Turn order ─────────────────────────────────────────────────
@@ -111,8 +115,14 @@
   function initiativeOf(body) {
     if (!body) return 0;
     if (body.attributes) {
-      return MJ.initiativeScore ? MJ.initiativeScore(body)
+      const base = MJ.initiativeScore ? MJ.initiativeScore(body)
         : (body.attributes.agility || 0) + (body.attributes.intelligence || 0);
+      // initiativeScore reads a COMBATANT's effects, and a runner
+      // walking a corridor is not one — so chrome that buys initiative
+      // has to be read off the implants directly, or Wired Reflexes
+      // would make you fast in a firefight and ordinary in the hallway
+      // outside it.
+      return base + (MJ.implantChannel ? MJ.implantChannel(body, "initiative") : 0);
     }
     // Anything unplaceable on that scale goes last, which is right
     // for a maglock: it does not take turns.
