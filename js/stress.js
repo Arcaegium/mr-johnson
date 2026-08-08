@@ -3235,6 +3235,148 @@
   // So this class holds three things: the picks are honoured, the
   // result is structurally a runner, and the things that MAY NOT be
   // picked still cannot be.
+  // ── Class 28: the run clock ─────────────────────────────────────
+  // Where every body is, and whose turn it is. NOT the initiative
+  // system — that already exists in combat.js and runs inside a
+  // firefight; this is the clock for the run itself, and it reuses
+  // that same score rather than inventing a second one.
+  //
+  // The load-bearing property is that it is ADDITIVE. The beat loop
+  // does not read any of it, and placement consumes NO RNG — taking
+  // draws here would shift every roll downstream and hand the same
+  // seed a different world, which this project has already measured
+  // happening twice.
+  function class28_tactical() {
+    const T = MJ.tactical;
+    check(!!T, "C28: the tactical model is loaded");
+    if (!T) return;
+
+    // ── A room is a grid, and its own size word decides how big ──
+    for (const size of Object.keys(T.ROOM_GRID)) {
+      const g = T.roomGrid({ size: size });
+      check(g.w > 0 && g.h > 0, "C28: every room size has a grid (" + size + ")");
+      check(g.w % 2 === 1 && g.h % 2 === 1,
+        "C28: grids are odd-sided so a room has a true centre (" + size + ")");
+      check(T.squaresOf(g).length === g.w * g.h, "C28: the grid enumerates every square (" + size + ")");
+    }
+    check(T.roomGrid({ size: "large" }).w > T.roomGrid({ size: "small" }).w,
+      "C28: a large room is bigger than a small one");
+    check(T.roomGrid({}).w > 0, "C28: a room with no size still gets a grid");
+
+    // ── Deterministic: the same site lays out the same way ───────
+    const build = (tag) => {
+      const site = MJ.mintSite("c28-site", 4, { value: 6 });
+      MJ.initSecurityState(MJ.makeRNG("c28-i" + tag), site);
+      const crew = makeRoster(MJ.makeRNG("c28-crew"), 3);
+      const run = MJ.beginMission(MJ.makeRNG("c28-r" + tag),
+        { site: site, kind: "jobObjective", objective: {} }, crew, 1);
+      T.begin(run);
+      return run;
+    };
+    const a = build("x"), b = build("x");
+    const dump = (run) => T.turnOrder(run.tactical.order).map((x) => {
+      const p = T.posOf(run, x);
+      return (x.identity ? x.identity.handle : x.label) + "@" + p.x + "," + p.y;
+    }).join("|");
+    check(dump(a) === dump(b),
+      "C28: placement is a pure function of the site — no dice, same layout every time");
+
+    const run = a;
+    const t = run.tactical;
+    check(t.order.length > 0, "C28: somebody is in the turn order");
+    check(t.round === 1, "C28: a run starts on round 1");
+
+    // ── Nobody shares a square ───────────────────────────────────
+    const seen = new Set();
+    for (const [, p] of t.pos) {
+      const k = p.roomId + ":" + p.x + "," + p.y;
+      check(!seen.has(k), "C28: two bodies may never stand on the same square (" + k + ")");
+      seen.add(k);
+    }
+    for (const [, p] of t.pos) {
+      check(p.x >= 0 && p.x < t.grid.w && p.y >= 0 && p.y < t.grid.h,
+        "C28: everyone stands inside the room (" + p.x + "," + p.y + ")");
+    }
+
+    // ── Turn order is by initiative, and it reuses combat.js's ───
+    for (let i = 1; i < t.order.length; i++) {
+      check(T.initiativeOf(t.order[i - 1]) >= T.initiativeOf(t.order[i]),
+        "C28: the order runs fastest first");
+    }
+    // A site obstacle has no attribute sheet — combat.js builds it
+    // one only when a fight starts — so asking it for Agility throws.
+    // Its tier is how sharp it is, and a thing that does not fight
+    // does not take turns.
+    const wall = MJ.generateObstacleInstance(MJ.makeRNG("c28-w"), "maglock", 5, "physical");
+    check(T.initiativeOf(wall) < 0, "C28: a maglock does not take turns");
+    const guard8 = MJ.generateObstacleInstance(MJ.makeRNG("c28-g8"), "guard", 8, "physical");
+    const guard2 = MJ.generateObstacleInstance(MJ.makeRNG("c28-g2"), "guard", 2, "physical");
+    check(T.initiativeOf(guard8) > T.initiativeOf(guard2),
+      "C28: a better guard goes first");
+
+    // ── Movement costs, and the budget is real ───────────────────
+    const mover = t.order.find((x) => x.identity);
+    check(!!mover, "C28: the probe needs a runner in the order");
+    const speed = T.speedFor(mover);
+    check(speed >= 1, "C28: everybody can move at least one square");
+    const reach = T.reachable(run, mover);
+    check(reach.length > 0, "C28: there is somewhere to go");
+    check(reach.every((p) => p.cost >= 1 && p.cost <= speed),
+      "C28: nothing reachable costs more than the speed or less than a square");
+    const occupied = new Set();
+    for (const [other, p] of t.pos) if (other !== mover) occupied.add(p.x + "," + p.y);
+    check(reach.every((p) => !occupied.has(p.x + "," + p.y)),
+      "C28: an occupied square is never offered as reachable");
+
+    const far = reach.reduce((x, y) => (y.cost > x.cost ? y : x));
+    const paid = T.moveTo(run, mover, far.x, far.y);
+    check(paid === far.cost, "C28: moving costs what the square said it would");
+    const at = T.posOf(run, mover);
+    check(at.x === far.x && at.y === far.y, "C28: and the body is actually there");
+    check((t.moveLeft.get(mover) || 0) === speed - paid, "C28: the budget came down by exactly that");
+    check(T.moveTo(run, mover, 0, 0) === 0 || speed - paid > 0,
+      "C28: a move with nothing left to spend is refused");
+
+    // ── Reach: a hand needs to be next to what it touches ────────
+    const target = t.order.find((x) => !x.identity);
+    if (target) {
+      const d = T.distance(T.posOf(run, mover), T.posOf(run, target));
+      check(d >= 1, "C28: two bodies are never at distance zero");
+      check(T.canReach(run, mover, target, MJ.VERBS.shoot),
+        "C28: a gun reaches anywhere in the room");
+      check(T.canReach(run, mover, target, MJ.VERBS.kick) === (d <= 1),
+        "C28: a melee verb reaches exactly as far as an arm (distance " + d + ")");
+      check(T.reachOf(MJ.VERBS.hackDevice) === Infinity,
+        "C28: the grid is not where a hack happens");
+    }
+
+    // ── One action a turn; the round restores movement ───────────
+    const first = T.whoseTurn(run);
+    check(T.spendAction(run, first), "C28: a body gets an action");
+    check(!T.spendAction(run, first), "C28: and only one");
+    let guard = 0;
+    while (T.whoseTurn(run) !== first && guard++ < 50) T.endTurn(run);
+    check(guard === 0 || t.round === 1, "C28: the round has not turned yet");
+    T.endTurn(run);
+    let seenAgain = 0;
+    while (T.whoseTurn(run) !== first && seenAgain++ < 50) T.endTurn(run);
+    check(t.round >= 2, "C28: coming back round to the first body ticks the round");
+    check((t.moveLeft.get(first) || 0) === T.speedFor(first),
+      "C28: and a new round hands movement back");
+    check(T.spendAction(run, first), "C28: and the action with it");
+
+    // ── ADDITIVE: the beat loop does not know this exists ────────
+    const plain = MJ.beginMission(MJ.makeRNG("c28-plain"),
+      { site: MJ.mintSite("c28-site", 4, { value: 6 }), kind: "jobObjective", objective: {} },
+      makeRoster(MJ.makeRNG("c28-crew2"), 2), 1);
+    check(plain.tactical === undefined,
+      "C28: a run that never opens a tactical view never grows one");
+    const before = plain.index;
+    const p = MJ.missionPrompt(plain);
+    check(!!p || MJ.missionDone(plain), "C28: and it still prompts exactly as it did");
+    check(plain.index === before, "C28: asking does not advance it");
+  }
+
   function class27_creation() {
     // ── The menu only ever offers what is legal ──────────────────
     const m0 = MJ.creationMenu({});
@@ -4946,6 +5088,7 @@
       ["25. The lanes — a forecast, never a gate", class25_lanes],
       ["26. Nothing on the route is walked past for free", class26_nothingSkipped],
       ["27. A made runner is a runner", class27_creation],
+      ["28. The run clock — where everyone is, and whose turn", class28_tactical],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;
