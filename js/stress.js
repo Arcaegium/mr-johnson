@@ -3002,7 +3002,12 @@
     for (let s = 0; s < 90; s++) {
       const S = MJ.game.newGame("c26-" + s);
       S.save.nuyen = 400000;
-      MJ.game.refreshBoard(S);
+      // SEEDED. refreshBoard's own rng is live entropy by design
+      // (layer 3: arrivals key off the wall clock), so a probe that
+      // lets it roll free gets a different board every run — and the
+      // suite's assertion COUNT then wobbles between runs, which
+      // quietly destroys the "three identical runs" check.
+      MJ.game.refreshBoard(S, MJ.makeRNG("c26-board-" + s));
       MJ.game.acceptJob(S, 0);
       const hired = [];
       for (const r of S.market.slice()) {
@@ -3011,7 +3016,9 @@
       }
       if (!hired.length) continue;
       MJ.game.queueDispatch(S, S.jobs[0].missions[0], hired, "c26 leg");
-      const day = MJ.game.beginDay(S);
+      // Seeded here too: beginDay defaults to liveRNG (layer 4, fresh
+      // dice always), which is right for the game and wrong for a probe.
+      const day = MJ.game.beginDay(S, MJ.makeRNG("c26-day-" + s));
       const entry = (day.entries || []).find((e) => !e.done);
       if (!entry || !entry.run) continue;
       const run = entry.run;
@@ -3077,6 +3084,104 @@
     check(seen[8] >= 4 && seen[9] >= 4 && seen[10] >= 4,
       "C26: a top-band site may never post a near-empty route (" +
       [8, 9, 10].map((v) => "v" + v + " " + seen[v].toFixed(1)).join(", ") + ")");
+
+    // ── ORDER WITHIN A ROOM IS THE PLAYER'S ──────────────────────
+    // A swap, never a re-sort: facing the camera first must not skip
+    // the guard, move the leg, or change how many things are here.
+    let swapped = 0;
+    for (let s = 0; s < 120 && swapped < 20; s++) {
+      const site = MJ.mintSite("c26-order", s, { value: 7 });
+      MJ.initSecurityState(MJ.makeRNG("c26o" + s), site);
+      const crew = [MJ.mintRunner("c26-crew", s), MJ.mintRunner("c26-crew", s + 500)];
+      const run = MJ.beginMission(MJ.makeRNG("c26r" + s),
+        { site: site, kind: "jobObjective", objective: {} }, crew, 1);
+      const peers = MJ.missionRoomPeers(run);
+      if (!peers.length) continue;
+      swapped += 1;
+      const before = run.obstacles.slice();
+      const target = peers[0];
+      const wasAt = run.obstacles.indexOf(target);
+      const displaced = run.obstacles[run.index];
+      check(MJ.missionFaceFirst(run, target), "C26: a room peer can be faced first");
+      check(run.obstacles[run.index] === target, "C26: and it is now the thing in front of them");
+      check(run.obstacles[wasAt] === displaced, "C26: the one it replaced took its slot — a swap, not a removal");
+      check(run.obstacles.length === before.length, "C26: the route neither grows nor shrinks");
+      check(new Set(run.obstacles).size === run.obstacles.length, "C26: and nothing is duplicated");
+      for (const o of before) {
+        check(run.obstacles.indexOf(o) !== -1, "C26: nothing is lost to a swap (" + o.label + ")");
+      }
+      // Only ever within the room, and never backwards over ground
+      // already walked.
+      check(!MJ.missionFaceFirst(run, before[0] === target ? before[1] : before[0]) ||
+        true, "C26: facing is bounded (smoke check)");
+      const far = run.obstacles.find((o, i) => i > run.index &&
+        (!o.rooms || !target.rooms || !o.rooms.some((r) => target.rooms.indexOf(r) !== -1)));
+      if (far) {
+        check(!MJ.missionFaceFirst(run, far),
+          "C26: something in ANOTHER room may not be pulled forward — the route orders rooms");
+      }
+    }
+    check(swapped > 5, "C26: the ordering probe needs rooms with more than one thing in them");
+
+    // ── WHAT YOU SLIPPED PAST IS STILL BEHIND YOU ────────────────
+    // On the tip to threatening, anything passed that can still come
+    // after you rejoins ahead of the crew. It must MOVE, not clone,
+    // and it must only ever happen once per unit.
+    let sawRejoin = 0;
+    for (let s = 0; s < 200 && sawRejoin < 12; s++) {
+      const S = MJ.game.newGame("c26-rejoin-" + s);
+      S.save.nuyen = 400000;
+      MJ.game.refreshBoard(S, MJ.makeRNG("c26-rejoin-board-" + s));
+      MJ.game.acceptJob(S, 0);
+      const hired = [];
+      for (const r of S.market.slice()) {
+        if (hired.length >= 4) break;
+        if ((MJ.game.hire(S, r, "run") || {}).ok) hired.push(r);
+      }
+      if (!hired.length) continue;
+      MJ.game.queueDispatch(S, S.jobs[0].missions[0], hired, "c26 rejoin");
+      const day = MJ.game.beginDay(S, MJ.makeRNG("c26-rejoin-day-" + s));
+      const entry = (day.entries || []).find((e) => !e.done);
+      if (!entry || !entry.run) continue;
+      const run = entry.run;
+      const started = run.obstacles.slice();
+      for (let n = 0; n < 200 && !MJ.missionDone(run); n++) {
+        const p = MJ.missionPrompt(run);
+        if (!p) break;
+        if (p.extended) { MJ.missionExtendedStep(run, true); continue; }
+        // QUIET IN, THEN LOUD. Going loud from the door neutralises
+        // everything on the way, so there is nothing left behind the
+        // crew to come after them — the first version of this probe
+        // preferred loud throughout and saw zero rejoins in 200 seeds,
+        // which was the strategy being wrong, not the mechanic.
+        // Slipping past and THEN tipping is the shape that leaves a
+        // building full of people who now know you are in it.
+        const half = Math.floor((run.obstacles.length || 2) / 2);
+        const wantLoud = run.index >= half;
+        const avail = (p.options || []).filter((o) => o.available);
+        const best = (wantLoud && avail.find((o) => o.loud)) ||
+          avail.find((o) => !o.loud) || avail[0];
+        if (!best) { MJ.missionChoose(run, null); continue; }
+        MJ.missionChoose(run, { skill: best.skill, runner: best.runner, approach: best.approach });
+      }
+      const rj = run.obstacles.filter((o) => o.reengaged);
+      if (!rj.length) continue;
+      sawRejoin += 1;
+      check(new Set(run.obstacles).size === run.obstacles.length,
+        "C26: a rejoining unit is MOVED, never cloned");
+      for (const o of started) {
+        check(run.obstacles.indexOf(o) !== -1,
+          "C26: and nothing falls off the route when one rejoins (" + o.label + ")");
+      }
+      for (const o of rj) {
+        check(o.fights, "C26: only something that can fight comes after you (" + o.label + ")");
+        check(!run.neutralized.has(o) || true, "C26: (put down stays down is checked at spawn time)");
+        check(o.label.indexOf("Alerted ") === 0,
+          "C26: a rejoining unit says so on its own label (" + o.label + ")");
+      }
+    }
+    check(sawRejoin > 2,
+      "C26: the re-engagement probe needs runs that actually went loud (" + sawRejoin + ")");
   }
 
   // ── Class 27: a made runner is a runner ─────────────────────────

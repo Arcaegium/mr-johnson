@@ -820,8 +820,19 @@
     const planes = mission ? MJ.missionPlanes(mission) : null;
     if (mission && planes === null) return "";
     const rows = MJ.laneReport(runners, site, axes.values, axes.confirmed, planes);
-    if (!rows.length) return "";
-    return `<div class="lanes">` + rows.map((r) => {
+    // NOTHING TO ROLL IS NOT A SHORT LANE. The card below is a
+    // forecast and says so; this is the one thing on the screen that
+    // is a flat wall, so it gets said separately and in different
+    // words. It does not disable the dispatch — a player may have
+    // their own reason to send a body somewhere — it just refuses to
+    // let them find out by spending the day.
+    const viable = runners.length && site && mission && MJ.dispatchViable
+      ? MJ.dispatchViable(runners, site, mission) : { ok: true };
+    const wall = viable.ok ? "" :
+      `<div class="lane-wall">✗ ${esc(viable.reason)}` +
+      `<span class="dimmed"> — this dispatch has nothing they can attempt</span></div>`;
+    if (!rows.length) return wall;
+    return wall + `<div class="lanes">` + rows.map((r) => {
       // A "~" on the RIGHT of the slash only. What the crew brings is
       // a fact — you know who you hired and what you issued — and what
       // is waiting is a briefing until somebody has been inside and

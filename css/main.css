@@ -289,6 +289,15 @@ a.navlink:hover { text-decoration: underline; }
   text-transform: uppercase; margin: 16px 0 5px;
 }
 .cc-line { line-height: 1.65; }
+
+/* The one thing on the dispatch card that IS a gate. Every other row
+   there is a forecast and says so; this is "there is nothing to
+   roll", which is a different sentence and has to look like one. */
+.lane-wall {
+  border: 1px solid #a85448; border-left: 3px solid #d4735e;
+  border-radius: 2px; padding: 8px 12px; margin: 8px 0;
+  color: #d4735e; line-height: 1.55;
+}
 /* A taken option in a multi-pick step. */
 button.opt.opt-on { border-color: var(--accent-2); background: #101b1d; }
 
@@ -301,6 +310,17 @@ button.opt.opt-on { border-color: var(--accent-2); background: #101b1d; }
   margin-top: 9px; font-size: 0.96rem; line-height: 1.6;
 }
 .ob-revealed { color: var(--dim); }
+/* The other things on this ground, each one clickable to face it
+   first. Not options — the choice is WHICH, and the options below
+   stay about whatever is currently in front of the crew. */
+.ob-peers { margin-top: 9px; font-size: 0.96rem; line-height: 2; }
+button.peer {
+  background: #0d131a; border: 1px solid var(--line); color: var(--ink);
+  font-family: var(--mono); font-size: 0.92rem; cursor: pointer;
+  padding: 3px 10px; border-radius: 2px; margin-right: 6px;
+  text-transform: none; letter-spacing: 0;
+}
+button.peer:hover { border-color: var(--accent); color: var(--accent); }
 
 /* THE PAST IS BOUNDED. The log used to take every pixel the column
    had, which is how it crushed first the options and then the

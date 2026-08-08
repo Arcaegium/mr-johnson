@@ -575,14 +575,30 @@
   // in order) — every other step here is pure. Preserving those two
   // sequences is what makes interactive and auto play produce
   // identical worlds from identical choices.
+  // WHICH GROUND A DISPATCH WOULD ACTUALLY WALK. Pure and side-effect
+  // free, so anything that wants to reason about a dispatch BEFORE
+  // committing the day can ask the same question the run will.
+  // dispatchViable used to scan every obstacle at the site instead,
+  // which is a different and larger set — a recon walks a SAMPLE, and
+  // a matrix recon selects on presence rather than projection — so the
+  // warning cleared itself on things the crew would never be shown.
+  function missionGround(mission) {
+    const site = mission.site;
+    const kind = missionKind(mission);
+    if (kind === "matrixRun") return hostRoute(site, { wantData: !!mission.wantData });
+    if (kind === "astralRun") return astralRoute(site);
+    if (kind === "recon") return { obstacles: reconObstacles(site, mission.lens), path: null };
+    return routeObstacles(site);
+  }
+
   function beginMission(rng, mission, runners, day) {
     const site = mission.site;
     const kind = missionKind(mission);
-    const matrixRun = kind === "matrixRun" ? hostRoute(site, { wantData: !!mission.wantData }) : null;
-    const astralRun = kind === "astralRun" ? astralRoute(site) : null;
+    const matrixRun = kind === "matrixRun" ? missionGround(mission) : null;
+    const astralRun = kind === "astralRun" ? missionGround(mission) : null;
     // The meat run walks the building. Held like the other two routes
     // so a readout can say which room the crew is standing in.
-    const streetRun = kind === "recon" || matrixRun || astralRun ? null : routeObstacles(site);
+    const streetRun = kind === "recon" || matrixRun || astralRun ? null : missionGround(mission);
     if (!site.securityState) MJ.initSecurityState(rng, site);
     const state = site.securityState;
     // Karma keys off the START of the mission — snapshot first.
@@ -740,13 +756,79 @@
       ob.label = "Response " + ob.label;
       spawned.push(ob);
     }
+    // ── THE ONES YOU ALREADY WALKED PAST ─────────────────────────
+    // Slipping past a guard is not killing him. He is behind you with
+    // his own eyes and his own radio, and the moment the building
+    // decides there are intruders in it, he is looking for them —
+    // so a crew that went quiet past four rooms and then tipped the
+    // alarm has four rooms of problem behind them, which is exactly
+    // the tension a stealth route is supposed to carry.
+    //
+    // ONCE EACH, and only things that can actually come after you: it
+    // has to be able to fight or to see on this plane, and anything
+    // put down stays down. A camera bolted to a wall in room 1 does
+    // not walk to room 4.
+    const rejoin = [];
+    for (let i = 0; i < run.index; i++) {
+      const o = run.obstacles[i];
+      if (!o || o.reengaged || run.neutralized.has(o)) continue;
+      if (!o.fights) continue;                       // eyes alone cannot chase
+      if ((o.senses || []).indexOf(plane) === -1 && o.projection !== plane) continue;
+      o.reengaged = true;
+      rejoin.push(o);
+    }
     // They come to where the crew actually is, so they witness the
     // same ground — a response team is the definition of more eyes.
     const here = run.obstacles[run.index];
     for (const o of spawned) o.rooms = (here && here.rooms) || [];
+    // A rejoining unit is the SAME obstacle, moved: spliced out of
+    // where it was standing and back in ahead of the crew, so the
+    // route never grows a duplicate of somebody and the census still
+    // counts one of him.
+    for (const o of rejoin) {
+      const at = run.obstacles.indexOf(o);
+      if (at !== -1 && at < run.index) { run.obstacles.splice(at, 1); run.index -= 1; }
+      o.rooms = (here && here.rooms) || o.rooms;
+      o.label = o.label.indexOf("Alerted ") === 0 ? o.label : "Alerted " + o.label;
+    }
     // They arrive in front of you — next, not at the end of the route.
-    run.obstacles.splice(atIndex === undefined ? run.index + 1 : atIndex, 0, ...spawned);
-    return spawned;
+    const at = atIndex === undefined ? run.index + 1 : atIndex;
+    run.obstacles.splice(at, 0, ...spawned, ...rejoin);
+    return spawned.concat(rejoin);
+  }
+
+  // ── WHICH ONE FIRST ─────────────────────────────────────────────
+  // The route fixes the order of ROOMS; it should never have fixed the
+  // order WITHIN one. Standing in a room with a camera and a guard,
+  // taking the camera first so nothing watches the takedown is the
+  // whole shape of a quiet run, and the walk order was making that
+  // decision for the player.
+  //
+  // Everything still standing on the same ground as the thing in
+  // front of them — same rooms, not yet dealt with, not already
+  // behind them.
+  function missionRoomPeers(run) {
+    const here = run.obstacles[run.index];
+    if (!here || !here.rooms) return [];
+    return run.obstacles.filter((o, i) =>
+      i > run.index && o !== here && o.rooms &&
+      !run.neutralized.has(o) && !run.groupPassed.has(o) &&
+      o.rooms.some((r) => here.rooms.indexOf(r) !== -1));
+  }
+
+  // Face that one instead. A SWAP, not a re-sort: the chosen obstacle
+  // moves to run.index and the one that was there takes its slot, so
+  // the index, the leg stamps, the group contests and the axis census
+  // all keep meaning exactly what they meant. Nothing is skipped —
+  // both are still on the route, in the same room, at the same leg.
+  function missionFaceFirst(run, obstacle) {
+    const at = run.obstacles.indexOf(obstacle);
+    if (at <= run.index) return false;
+    if (missionRoomPeers(run).indexOf(obstacle) === -1) return false;
+    const cur = run.obstacles[run.index];
+    run.obstacles[run.index] = obstacle;
+    run.obstacles[at] = cur;
+    return true;
   }
 
   function missionDone(run) {
@@ -907,6 +989,83 @@
   //                   box is air-gapped, so this appears ONLY after
   //                   an attempt bought the knowledge, and thereafter
   //                   the option is marked rather than deleted.
+  // ── BODIES REACH EVERYTHING; A PROJECTION REACHES ITS OWN PILLAR ──
+  // verbs.js's `reaches` gate asks whether the THING is present on the
+  // verb's pillar. It has no idea what kind of run is asking, so a
+  // maglock — physical AND matrix, because it is a device on the host
+  // — offered `kick`, `shoot`, `breach` and `sneak` to a decker who
+  // was not in the building. Measured before the fix: 76% of every
+  // option on a matrix recon was a physical verb, 73% on an astral
+  // one.
+  //
+  // The rule already existed one layer up, in the lane model: a crew
+  // with bodies on the ground can front any pillar (the decker hacks
+  // the maglock from the corridor in AR, no jack-in), while a pure
+  // projection has no hands and no gun and only its own world is real
+  // to it. missionPlanes already says which case this is — a run with
+  // "physical" among its planes has people standing there.
+  //
+  // `anywhere` verbs survive either way; that flag exists for the acts
+  // that are not about a medium at all.
+  function actsOnThisRun(run, obstacle) {
+    const acts = MJ.actsFor(obstacle);
+    const planes = MJ.missionPlanes(run) || ["physical", "astral"];
+    if (planes.indexOf("physical") !== -1) return acts;   // bodies are there
+    return acts.filter((a) => a.def.anywhere || planes.indexOf(MJ.verbPlane(a.def)) !== -1);
+  }
+
+  // ── CAN THIS CREW ACT ON THIS PLANE AT ALL? ─────────────────────
+  // A SHORTFALL IS A PRICE; THIS IS A WALL, and the lane card cannot
+  // say it — that card's whole disclaimer is "a forecast, never a
+  // gate", and it is right to say so about a lane that is merely
+  // short. Nothing to roll is a different kind of fact.
+  //
+  // It became reachable the moment the plane filter landed. Before it,
+  // a deckerless matrix dispatch was offered `kick` and `shoot`
+  // against a maglock and looked playable; now the prompt honestly
+  // stalls, and without a warning the player spends a day finding
+  // that out. Measured: with a decker 0% of matrix recons stall at the
+  // first obstacle, without one 78%.
+  //
+  // Derived exactly the way the run will derive it — the same plane
+  // rule, the same verb table, the same effective skills — so the
+  // warning and the menu can never disagree.
+  function dispatchViable(runners, site, mission) {
+    const planes = MJ.missionPlanes(mission);
+    if (!planes) return { ok: true };               // support work: no ground to walk
+    const bodies = planes.indexOf("physical") !== -1;
+    const upright = (runners || []).filter((r) => r);
+    if (!upright.length) return { ok: false, reason: "nobody is going" };
+    const eff = upright.map((r) => MJ.getEffectiveSkills(r));
+    // THE GROUND THIS DISPATCH WOULD WALK, not the whole site — a
+    // recon meets a sample, and a matrix recon selects on presence
+    // rather than projection. Scanning everything made the warning
+    // clear itself on obstacles the crew would never be shown, which
+    // measured as 6 dispatches in 131 that were promised a move and
+    // then had none.
+    const ground = missionGround(mission);
+    for (const thing of (ground && ground.obstacles) || []) {
+      for (const act of MJ.actsFor(thing)) {
+        if (!bodies && !act.def.anywhere && planes.indexOf(MJ.verbPlane(act.def)) === -1) continue;
+        if (!act.effective) continue;
+        // A way through that needs nobody trained is a real way through.
+        if (!act.def.skill && !act.def.skillFor) return { ok: true };
+        for (let i = 0; i < upright.length; i++) {
+          if (act.def.carries && !act.def.carries(upright[i])) continue;
+          const skill = MJ.verbSkill(act.def, upright[i]);
+          if (skill && (eff[i][skill] || 0) > 0) return { ok: true };
+        }
+      }
+    }
+    return {
+      ok: false,
+      reason: bodies
+        ? "nobody on this crew can act on anything here"
+        : "nobody on this crew can act in the " + planes.join("/") + " at all",
+      planes: planes,
+    };
+  }
+
   function optionsFor(run, obstacle) {
     // Effective skills are recomputed per prompt, not cached on the
     // run: a critical glitch mid-mission changes them. Once per
@@ -917,7 +1076,7 @@
     const upright = run.runners.filter((r) => !run.downed || !run.downed.has(r));
     const eff = upright.map((r) => MJ.getEffectiveSkills(r));
     const options = [];
-    for (const act of MJ.actsFor(obstacle)) {
+    for (const act of actsOnThisRun(run, obstacle)) {
       const verb = act.def;
       // How many swings this verb has already had, and therefore what
       // the NEXT one would read as. Handing the player the projected
@@ -2136,7 +2295,11 @@
     // Only ways that would WORK here are worth naming as the next
     // hire. Hiring a face because the camera has no opinion to change
     // would be a lesson worse than no lesson.
-    for (const act of MJ.actsFor(obstacle)) {
+    // The same plane filter the menu uses. Without it a stalled matrix
+    // crew is told to go and hire a melee runner for a maglock they
+    // are looking at from inside a host — advice they cannot act on
+    // and that would not help if they did.
+    for (const act of actsOnThisRun(run, obstacle)) {
       const skill = act.def.skill;
       if (!skill || !act.effective) continue;
       if (knownUseless(run, obstacle, skill)) continue;
@@ -2722,6 +2885,9 @@
   MJ.siteThreat = siteThreat;
   MJ.jobThreat = jobThreat;
   MJ.obstacleKnowledge = obstacleKnowledge;
+  MJ.dispatchViable = dispatchViable;
+  MJ.missionRoomPeers = missionRoomPeers;
+  MJ.missionFaceFirst = missionFaceFirst;
   MJ.suppressionBonus = suppressionBonus;
   MJ.applySuppression = applySuppression;
   // The stepper — interactive resolution drives these directly;

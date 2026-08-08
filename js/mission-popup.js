@@ -51,9 +51,12 @@
     host.style.display = "none";
     document.body.appendChild(host);
     host.addEventListener("click", (e) => {
-      const el = e.target.closest("[data-pick],[data-side],[data-body]");
+      const el = e.target.closest("[data-pick],[data-side],[data-body],[data-peer]");
       if (!el || !current) return;
-      if (el.dataset.body !== undefined) {
+      if (el.dataset.peer !== undefined) {
+        // Face a different thing in the same room.
+        current.onFacePeer && current.onFacePeer(+el.dataset.peer);
+      } else if (el.dataset.body !== undefined) {
         // Selecting a body re-asks the question from THEIR side.
         current.onSelectBody && current.onSelectBody(+el.dataset.body);
       } else if (el.dataset.pick !== undefined) {
@@ -643,6 +646,21 @@
       out.push(Object.keys(prompt.revealed).map((key) =>
         '<div class="ob-revealed">✦ ' + esc(prompt.revealed[key]) + "</div>").join(""));
     }
+    // ── WHICH ONE FIRST ────────────────────────────────────────────
+    // The route fixes the order of ROOMS, never the order within one.
+    // Taking the camera before the guard so nothing watches the
+    // takedown is the whole shape of a quiet run, and the walk order
+    // used to make that call for the player. Clicking one faces it
+    // instead — a swap, so nothing is skipped and both are still here.
+    const peers = MJ.missionRoomPeers ? MJ.missionRoomPeers(run) : [];
+    if (peers.length) {
+      out.push('<div class="ob-peers"><span class="dk">also in this room:</span> ' +
+        peers.map((o) => {
+          const i = run.obstacles.indexOf(o);
+          return `<button class="peer" data-peer="${i}" title="face this one first instead">` +
+            esc(o.label) + " " + num("T" + o.tier) + "</button>";
+        }).join(" ") + "</div>");
+    }
     // Everything else on this ground that has eyes, and the patrol
     // whose circuit runs through it.
     const watchers = watcherLine(run, opts);
@@ -1089,6 +1107,10 @@
           { id: "withdraw", label: "withdraw the crew", tone: "warn-btn" },
         ].filter(Boolean),
         onSelectBody: (i) => { selected = bodies[i] || selected; step(); },
+        onFacePeer: (i) => {
+          const o = run.obstacles[i];
+          if (o && MJ.missionFaceFirst(run, o)) step();
+        },
         onChoose: (opt, i) => {
           if (i >= shown.length) {
             const c = casts[i - shown.length];
