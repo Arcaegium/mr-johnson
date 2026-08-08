@@ -1000,11 +1000,22 @@
   }
 
   function act(action, el) {
+    // A NEW GAME STARTS WITH A PERSON, not an empty roster. Creation
+    // runs first and the session is only built once they have signed
+    // — cancel and nothing happened, so an accidental click on New
+    // Game no longer throws away the game in progress.
     if (action === "new-game") {
-      S = MJ.game.newGame($("universe-seed").value.trim() || undefined);
-      MJ.game.refreshBoard(S);
-      UI.crew.clear(); UI.entry = null; UI.focus = null; UI.pending = null;
-      render(); return;
+      const seed = $("universe-seed").value.trim() || undefined;
+      MJ.characterCreation.open({
+        seed: (seed || "universe") + "|founder",
+        onDone: (runner) => {
+          S = MJ.game.newGame(seed, runner);
+          MJ.game.refreshBoard(S);
+          UI.crew.clear(); UI.entry = null; UI.focus = null; UI.pending = null;
+          render();
+        },
+      });
+      return;
     }
     if (action === "load-game") {
       MJ.game.loadSession().then((loaded) => {

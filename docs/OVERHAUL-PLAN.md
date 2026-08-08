@@ -12,21 +12,21 @@ tables — Phase A, complete). Governing docs remain `UNDERSTANDING.md` and
 
 ## 0. STATE OF THE TREE — read before touching code
 
-`js/models/runner.js` has **uncommitted, half-finished work** and the suite is
-**red: 4 failures** (C2, C11, C17, C22 — listed in §7).
+**Updated 2026-08-07. The overhaul is built.** Phases A–F are all done; the
+tree is clean and the suite is green (0 failures across ~120k assertions).
+What remains is listed in §6 and on the task list, not here.
 
-That work implemented a *share-split* allocator (each tier gets a fixed
-percentage of the pool). **That approach is superseded** — see D3. It produced
-zero variance: every runner of a given archetype got identical off-stats.
+> The original §0 described uncommitted share-split work and a red suite, and
+> told the next reader to `git checkout -- js/models/runner.js`. That advice
+> would now destroy the allocator. It is kept below only as the record of why
+> the share-split approach was abandoned.
 
-**Recommended first action: revert `runner.js` to `HEAD` and start from clean.**
-The salvageable ideas are already recorded here; the code is not worth keeping.
-
-```
-git checkout -- js/models/runner.js
-```
-
-Last good commit: `b1bd922`.
+**Superseded, for the record:** a *share-split* allocator (each tier gets a
+fixed percentage of the pool) was written and thrown away. It produced zero
+variance — every runner of a given archetype got identical off-stats, because
+a fixed share of a fixed pool is a deterministic number. **D3 replaced it**
+with bands consumed in priority order: the pool creates the tradeoff, the
+bands create the variance, and the tails (D5) are the point.
 
 ---
 
@@ -275,18 +275,18 @@ Ordered by dependency. Do not skip ahead — later steps assume earlier ones.
   `lanes.js` implements teamwork stacking. Worth studying before Phase C, since
   it is the working example of a support role that reads correctly.
 
-### Phase B — the birth allocator
-- [ ] B1. Revert the half-finished `runner.js` work (§0).
-- [ ] B2. `presentation` as a generated, always-true trait carrying its own
+### Phase B — the birth allocator — **DONE** (task #46)
+- [x] B1. Revert the half-finished `runner.js` work (§0).
+- [x] B2. `presentation` as a generated, always-true trait carrying its own
       attribute priority order. This replaces skill-derived `attributePriority`
       *at birth* (growth may keep using the derived order — decide when there).
-- [ ] B3. Playable minimums table: per presentation, per power level (D4).
-- [ ] B4. Band table: per presentation, per tier (D3).
-- [ ] B5. The allocator — minimums first, then bands in priority order,
+- [x] B3. Playable minimums table: per presentation, per power level (D4).
+- [x] B4. Band table: per presentation, per tier (D3).
+- [x] B5. The allocator — minimums first, then bands in priority order,
       subtracting from one pool (D1/D3/D4).
-- [ ] B6. Calibrate to ~335k total (§1) and verify the tails exist (D5):
+- [x] B6. Calibrate to ~335k total (§1) and verify the tails exist (D5):
       measure the rate of glass cannons, rubber bands, and gems.
-- [ ] B7. Fix the 4 failing probes and add probes for the new invariants.
+- [x] B7. Fix the 4 failing probes and add probes for the new invariants.
 
 ### Phase C — the Green Light Invariant
 - [x] C1. **Audited** by toggling each contributor and watching the lane. Three
@@ -328,13 +328,45 @@ you shrug off afterwards. Neither changes whether the round gets through.
 - [ ] D2. Spirits — summoned, limited by services.
 - [ ] D3. Drones moved onto the same system (currently gear-only).
 
-### Phase E — the player's own runner
-- [ ] E1. Character creation over the **same** birth allocator, never a parallel
-      system. Player picks class → generalist/specialist → focus → primary →
-      the N secondaries; presentation chosen, not rolled.
-- [ ] E2. Mage creation picks spells up to `min(Magic, Sorcery+1)`.
-- [ ] E3. One free permanent runner; killable; no dispatch requirement; caps
-      like everyone else.
+### Phase E — the player's own runner — **DONE**
+- [x] E1. Character creation over the **same** birth allocator. Every pick
+      arrives as `options` on `generateRunner` and is spent by the same
+      `spendBirthPool` the market uses — one pool, one set of playable
+      minimums, one band table, one set of curves. `MJ.creationMenu` reads the
+      legal choices off the same tables generation reads, so the UI never
+      carries a list of its own. `MJ.createRunner` builds it;
+      `js/character-creation.js` is the screen, on `MJ.decide` like the
+      grimoire and the mission popup.
+      **Clarified against the never-lie rule:** THE PRIMARY IS NOT A CHOICE.
+      It is `ARCHETYPE_SKILLS[focus].list[0]`, which IS `focus.keySkill` —
+      picking the focus is picking the primary, said twice. A Marksman whose
+      primary was hacking would make the class identifier lie. What the player
+      actually picks is class → focus → breadth → the N secondaries → origin →
+      metatype → presentation, plus the book for a mage.
+      **Also not a choice:** `disciplineLabel`. It is a self-assessment and the
+      one visible claim allowed to be wrong; a form field would destroy the
+      only unreliable narration the game has.
+      **Also not a choice:** the karma pool and the band rolls. Seeded off the
+      universe, so the same picks in the same universe give the same person
+      back — no re-roll button, for the same reason a market refresh costs
+      money. Change the picks to change the outcome.
+- [x] E2. Mage creation picks spells up to `min(Magic, Sorcery+1)` — the same
+      ceiling `generateGrimoire` already enforced on everyone. The FOCUS's
+      signature spell is kept off the menu and granted free, because it is the
+      half of "Combat mage" the label promises. A short book is legal and the
+      roll tops it up.
+- [x] E3. One free permanent runner. Free means the SIGNING is free: they eat a
+      roster slot, count against capacity, take wounds and can be killed.
+      `permanent` already means `missionsRemaining: Infinity`, so the
+      no-dispatch-requirement rule needed no new code. `newGame(seed, founder)`
+      — founder optional, because the stress suite opens thousands of sessions
+      and must never be dragged through a creation screen.
+
+Probed in C27 (457 assertions): the menu only ever offers what is legal; every
+pick is honoured across every focus, both breadths; a made runner is
+structurally identical to a met one; an off-list secondary is REFUSED and the
+count filled anyway; a picked book still obeys the cap; and the founder is free
+to sign, measured against a founder-less session rather than a constant.
 
 ### Phase F — the save/death gate — **DONE** (commit below)
 - [x] F1. **No save may be written while a mission outcome is unacknowledged.**

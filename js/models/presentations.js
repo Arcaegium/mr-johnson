@@ -241,6 +241,17 @@
   // that could contradict it.
   const AFFINITY_PRESENTATION = { masking: "ghost", attack: "icebreaker", search: "datamancer" };
 
+  // The same link read backwards, for character creation: a player who
+  // CHOSE Ghost must end up with the masking affinity underneath it,
+  // or the two contradict each other in exactly the way pairing them
+  // was meant to stop.
+  function affinityForPresentation(presentationId) {
+    for (const [affinity, id] of Object.entries(AFFINITY_PRESENTATION)) {
+      if (id === presentationId) return affinity;
+    }
+    return null;
+  }
+
   function pickPresentation(rng, focus, opts) {
     opts = opts || {};
     const list = presentationsFor(focus.id);
@@ -256,4 +267,5 @@
   MJ.presentationsFor = presentationsFor;
   MJ.presentationDef = presentationDef;
   MJ.pickPresentation = pickPresentation;
+  MJ.affinityForPresentation = affinityForPresentation;
 })();

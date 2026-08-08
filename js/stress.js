@@ -3079,6 +3079,146 @@
       [8, 9, 10].map((v) => "v" + v + " " + seen[v].toFixed(1)).join(", ") + ")");
   }
 
+  // ── Class 27: a made runner is a runner ─────────────────────────
+  // ONE ALLOCATOR, NEVER TWO. Character creation is generateRunner
+  // with the rolls replaced by answers — same karma pool, same
+  // playable minimums, same bands, same curves. The moment it becomes
+  // a second budget the whole teaching argument collapses: what the
+  // player learns building one stops being true of anyone they hire.
+  //
+  // So this class holds three things: the picks are honoured, the
+  // result is structurally a runner, and the things that MAY NOT be
+  // picked still cannot be.
+  function class27_creation() {
+    // ── The menu only ever offers what is legal ──────────────────
+    const m0 = MJ.creationMenu({});
+    check(m0.families.length >= 4, "C27: creation offers the real class list");
+    for (const family of m0.families) {
+      const mf = MJ.creationMenu({ family: family });
+      check(mf.focuses.length > 0, "C27: every class has at least one focus (" + family + ")");
+      for (const f of mf.focuses) {
+        check(MJ.focusById(f.id).family === family,
+          "C27: a class may only offer its own focuses (" + f.id + ")");
+        const mm = MJ.creationMenu({ family: family, focusId: f.id, trueArchetype: "generalist" });
+        // The primary is the focus's key skill. If these can differ,
+        // a class identifier can lie, which is the one thing
+        // generation may never do.
+        check(mm.primary === MJ.focusById(f.id).keySkill,
+          "C27: the primary IS the focus's key skill (" + f.id + ")");
+        check(mm.secondaryPool.indexOf(mm.primary) === -1,
+          "C27: the primary is never also on the secondary menu (" + f.id + ")");
+        check(mm.secondaryCount > 0 && mm.secondaryCount <= mm.secondaryPool.length,
+          "C27: the secondary count must be satisfiable from its own pool (" + f.id + ")");
+        check(mm.origins.length > 0, "C27: every focus has a legal origin (" + f.id + ")");
+        for (const o of mm.origins) {
+          check(MJ.focusById(f.id).origins.indexOf(o) !== -1,
+            "C27: creation may not offer an origin the focus cannot have (" + f.id + "/" + o + ")");
+        }
+      }
+    }
+
+    // ── Every pick is honoured, across every focus ───────────────
+    let built = 0;
+    for (const f of MJ.FOCUSES) {
+      for (const arch of ["specialist", "generalist"]) {
+        const menu = MJ.creationMenu({ family: f.family, focusId: f.id, trueArchetype: arch });
+        const secondaries = menu.secondaryPool.slice(0, menu.secondaryCount);
+        const pres = menu.presentations.length ? menu.presentations[0].id : null;
+        const origin = menu.origins[0];
+        const picks = {
+          family: f.family, focusId: f.id, trueArchetype: arch,
+          secondaries: secondaries, origin: origin,
+          metatype: "ork", presentationId: pres,
+        };
+        const r = MJ.createRunner("c27-" + f.id + "-" + arch, picks);
+        built += 1;
+        const c = r.classification;
+        check(c.focusId === f.id, "C27: the focus is what was picked (" + f.id + ")");
+        check(c.trueArchetype === arch, "C27: the breadth is what was picked (" + f.id + ")");
+        check(c.origin === origin, "C27: the origin is what was picked (" + f.id + ")");
+        check(r.identity.metatype === "ork", "C27: the metatype is what was picked (" + f.id + ")");
+        check(c.skillTiers.primary === f.keySkill,
+          "C27: a made runner's primary is still their focus's key skill (" + f.id + ")");
+        check(JSON.stringify(c.skillTiers.secondary.slice().sort()) ===
+          JSON.stringify(secondaries.slice().sort()),
+          "C27: the secondaries are what was picked (" + f.id + ")");
+        if (pres) {
+          check(c.presentation === pres, "C27: the presentation is what was picked (" + f.id + ")");
+          // A decker's affinity and presentation are one fact said
+          // twice; a CHOSEN presentation has to drag the affinity with
+          // it or the two contradict.
+          if (f.family === "decker" && MJ.affinityForPresentation(pres)) {
+            check(c.deckerAffinity === MJ.affinityForPresentation(pres),
+              "C27: a chosen presentation sets the affinity underneath it");
+          }
+        }
+        // Tertiary is exactly the remainder — nothing lost, nothing
+        // counted twice.
+        const all = [c.skillTiers.primary].concat(c.skillTiers.secondary, c.skillTiers.tertiary);
+        check(new Set(all).size === all.length, "C27: no skill sits in two tiers (" + f.id + ")");
+      }
+    }
+    check(built === MJ.FOCUSES.length * 2, "C27: every focus was built both ways");
+
+    // ── A made runner is structurally a met runner ───────────────
+    const made = MJ.createRunner("c27-shape", { family: "mage", focusId: "combatMage" });
+    const met = MJ.mintRunner("c27-universe", 11);
+    const keys = (o) => Object.keys(o).sort().join(",");
+    check(keys(made) === keys(met), "C27: a made runner has the same top-level shape as a met one");
+    check(keys(made.classification) === keys(met.classification),
+      "C27: and the same classification shape");
+    check(keys(made.market) === keys(met.market), "C27: and the same market shape");
+
+    // ── What may NOT be picked, still cannot be ──────────────────
+    // An illegal secondary is DROPPED, not honoured — creation must
+    // never produce a shape generation could not.
+    const cheat = MJ.createRunner("c27-cheat", {
+      family: "decker", focusId: "decker", trueArchetype: "specialist",
+      secondaries: ["sorcery", "conjuring", "heavyWeapons"],
+    });
+    const entry = MJ.creationMenu({ family: "decker", focusId: "decker", trueArchetype: "specialist" });
+    for (const s of cheat.classification.skillTiers.secondary) {
+      check(entry.secondaryPool.indexOf(s) !== -1,
+        "C27: an off-list secondary must be refused, not granted (" + s + ")");
+    }
+    check(cheat.classification.skillTiers.secondary.length === entry.secondaryCount,
+      "C27: and the count is filled anyway — a refused pick is not a missing skill");
+
+    // The mage's book obeys the same ceiling a generated mage does,
+    // however long a list the player hands it.
+    const greedy = MJ.createRunner("c27-greedy", {
+      family: "mage", focusId: "combatMage",
+      spells: Object.keys(MJ.SPELLS).slice(0, 40),
+    });
+    const cap = Math.max(1, Math.min(greedy.attributes.magic || 1, (greedy.skills.sorcery || 0) + 1));
+    check(greedy.classification.spellsKnown.length <= cap,
+      "C27: a picked book is still capped at min(Magic, Sorcery+1) (" +
+      greedy.classification.spellsKnown.length + " vs " + cap + ")");
+    for (const id of greedy.classification.spellsKnown) {
+      check(!!MJ.spellDef(id), "C27: every spell in a picked book is a real spell (" + id + ")");
+    }
+
+    // ── The founder ──────────────────────────────────────────────
+    // Free to SIGN, ordinary in every other respect.
+    const s = MJ.game.newGame("c27-founder", { family: "face", focusId: "face" });
+    check(s.roster.length === 1, "C27: a founded session starts with exactly one runner");
+    const f0 = s.roster[0];
+    check(f0.market.hired && f0.market.hired.tier === "permanent",
+      "C27: the founder is permanent");
+    check(f0.market.hired.missionsRemaining === Infinity,
+      "C27: permanent means no dispatch requirement");
+    check(f0.market.phase !== "kia", "C27: and they start alive");
+    // Against a founder-less session, not against a constant — the
+    // stake is not exported and `money > 0` would pass while the
+    // signing quietly charged for the contract.
+    const bare = MJ.game.newGame("c27-nofounder");
+    check(bare.roster.length === 0,
+      "C27: a session without a founder is still a legal session (the suite opens thousands)");
+    check(s.save.johnson.money === bare.save.johnson.money,
+      "C27: signing the founder costs nothing (" + s.save.johnson.money +
+      " vs " + bare.save.johnson.money + ")");
+  }
+
   // ── Class 23: what the live read may claim ──────────────────────
   // A leg IS the sample — walk the route, meet what is on it, and by
   // the time you leave you have seen what there was to see. So leg-end
@@ -4574,6 +4714,7 @@
       ["24. An archetype can always do its own job", class24_baselines],
       ["25. The lanes — a forecast, never a gate", class25_lanes],
       ["26. Nothing on the route is walked past for free", class26_nothingSkipped],
+      ["27. A made runner is a runner", class27_creation],
     ];
     for (const [label, fn] of classes) {
       const before = failures.length;

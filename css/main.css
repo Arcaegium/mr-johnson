@@ -274,6 +274,29 @@ a.navlink:hover { text-decoration: underline; }
   flex: 0 0 auto;
 }
 .ob-name { font-size: 1.2rem; line-height: 1.4; }
+
+/* ── Character creation ─────────────────────────────────────────
+   The answers so far, and the sheet they add up to. Key and value on
+   one line with the key held to a column, so a stack of picks reads
+   as a form and not as run-together prose. */
+.cc-pick { display: flex; gap: 12px; align-items: baseline; margin-top: 7px; line-height: 1.5; }
+.cc-pk {
+  flex: 0 0 108px; color: var(--dim);
+  font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.cc-k {
+  color: var(--accent); font-size: 0.64rem; letter-spacing: 0.16em;
+  text-transform: uppercase; margin: 16px 0 5px;
+}
+.cc-line { line-height: 1.65; }
+/* A taken option in a multi-pick step. */
+button.opt.opt-on { border-color: var(--accent-2); background: #101b1d; }
+
+/* When the choice column is closed, the question rides down with the
+   buttons rather than disappearing with the column. */
+.modal-foot { display: flex; align-items: center; gap: 18px; }
+.foot-ask { flex: 1 1 auto; text-align: left; line-height: 1.5; }
+.foot-ask .ask { color: var(--dim); font-size: 15.5px; margin-top: 4px; }
 .ob-learned, .ob-eyes, .ob-where, .ob-revealed {
   margin-top: 9px; font-size: 0.96rem; line-height: 1.6;
 }

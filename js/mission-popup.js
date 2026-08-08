@@ -140,9 +140,17 @@
             (s.transcript.length ? s.transcript.join("<br>")
               : '<span class="dimmed">nothing yet — this is where the night gets written down</span>') +
             "</div></div>" : "") +
-        // With no choice column, the way out belongs at the foot of
-        // the column that IS on screen.
-        (!side && acts ? `<div class="modal-actions">${acts}</div>` : "") +
+        // With no choice column, the question and the way out both
+        // belong at the foot of the column that IS on screen. The
+        // heading used to render ONLY inside the side column, so a
+        // caller that closed it lost its own question — the creation
+        // screen's "Sign them?" vanished and left three unlabelled
+        // buttons under a sheet.
+        (!side && (s.heading || acts)
+          ? '<div class="modal-actions modal-foot">' +
+            (s.heading ? `<div class="foot-ask">${s.heading}</div>` : "") +
+            (acts || "") + "</div>"
+          : "") +
       "</div>" +
       (s.party ? `<aside class="modal-party">${s.party}</aside>` : "") +
       (side

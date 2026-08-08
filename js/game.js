@@ -99,7 +99,20 @@
   }
 
   // ── Session ─────────────────────────────────────────────────────
-  function newGame(universeSeed) {
+  // ── The founder ─────────────────────────────────────────────────
+  // ONE FREE PERMANENT RUNNER, and everything else about them is
+  // ordinary. Free means the SIGNING is free — they still eat a roster
+  // slot, still count against capacity, still take wounds, and can
+  // still be killed. Permanent already means no dispatch requirement
+  // (CONTRACT_MISSIONS.permanent is Infinity), so nothing special is
+  // needed to grant that.
+  //
+  // `founder` is optional and the game path always supplies one. It
+  // stays optional because the stress suite opens thousands of
+  // sessions and must never be dragged through a creation screen to
+  // do it — and because a session with no founder is a strictly
+  // simpler thing that ought to keep working.
+  function newGame(universeSeed, founder) {
     const session = {
       universeSeed: universeSeed || ("universe-" + Date.now() + "-" + Math.floor(Math.random() * 1e6)),
       day: 1,
@@ -121,7 +134,24 @@
     session.save.johnson.money = STARTING_MONEY;
     fillMarket(session);
     logLine(session, "new game — universe \"" + session.universeSeed + "\", stake " + STARTING_MONEY + " nuyen", "system", { universe: session.universeSeed });
+    if (founder) signFounder(session, founder);
     return session;
+  }
+
+  // `founder` is either a finished runner or the picks to build one.
+  // Built through MJ.createRunner, which is generateRunner with the
+  // player's answers — the same allocator, never a second one.
+  function signFounder(session, founder) {
+    const runner = founder.classification
+      ? founder
+      : MJ.createRunner(session.universeSeed + "|founder", founder);
+    runner.identity.founder = true;
+    MJ.hireRunner(runner, "permanent");   // no economy call: the signing is the free part
+    session.roster.push(runner);
+    logLine(session, "you started with " + runner.identity.handle + " — " +
+      (runner.classification.presentationLabel || runner.classification.focusLabel) +
+      ", permanent, no fee", "roster", { runner: runner.identity.handle });
+    return runner;
   }
 
   // ── Filling the market, and SCOUTING a class ────────────────────
@@ -1104,6 +1134,7 @@
     // else so no view has to hand-build one.
     note: logLine,
     newGame: newGame,
+    signFounder: signFounder,
     refreshBoard: refreshBoard,
     refreshMarket: refreshMarket,
     watchCapacity: watchCapacity,

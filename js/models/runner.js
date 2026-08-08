@@ -296,13 +296,33 @@
   // (every gate-eligible skill outside the list). This is rolled once
   // at generation and stored on the runner — it's an identity trait,
   // not something growth re-rolls.
-  function buildSkillTiers(rng, focus, trueArchetype, origin) {
+  // `chosen` — the player's own secondaries, from character creation.
+  // THE PRIMARY IS NEVER A CHOICE: it is `entry.list[0]`, which IS
+  // `focus.keySkill`, which is what makes a Marksman a Marksman.
+  // Letting it be picked would let the class identifier lie, and that
+  // is the one thing generation may never do. Picking the FOCUS is
+  // picking the primary; they are the same decision said twice.
+  //
+  // Anything unpicked, or picked illegally, falls back to the roll —
+  // a half-specified runner is still a whole runner, and creation must
+  // never be able to produce a shape generation could not.
+  function buildSkillTiers(rng, focus, trueArchetype, origin, chosen) {
     const entry = ARCHETYPE_SKILLS[focus.id];
     const primary = entry.list[0];
     const secondaryCount = trueArchetype === "specialist" ? entry.specialistSecondary : entry.generalistSecondary;
-    const restShuffled = rng.shuffle(entry.list.slice(1));
-    const secondary = restShuffled.slice(0, secondaryCount);
-    const tertiary = restShuffled.slice(secondaryCount);
+    const rest = entry.list.slice(1);
+    let secondary;
+    const legal = (chosen || []).filter((s, i, a) => rest.indexOf(s) !== -1 && a.indexOf(s) === i);
+    if (legal.length === secondaryCount) {
+      secondary = legal;
+    } else {
+      // Honour what was legally picked, roll for the remainder — so a
+      // partial choice is still the player's choice as far as it went.
+      const pool = rng.shuffle(rest.filter((s) => legal.indexOf(s) === -1));
+      secondary = legal.slice(0, secondaryCount)
+        .concat(pool.slice(0, Math.max(0, secondaryCount - legal.length)));
+    }
+    const tertiary = rest.filter((s) => secondary.indexOf(s) === -1);
     const overflow = SKILLS.filter(
       (s) => !entry.list.includes(s) && isSkillEligible(s, focus.family, origin)
     );
@@ -1157,7 +1177,13 @@
   // conjurer; what was broken was printing spells on their sheet.
   // Their Magic goes into spirits, and the Banish lane already reads
   // that.
-  function generateGrimoire(rng, focus, attrs, skills) {
+  // `chosen` — the book a player wrote at creation. The COUNT is not
+  // negotiable: min(Magic, Sorcery+1) is what the spark and the
+  // training can hold, the same ceiling a generated mage lives under.
+  // Neither is the SIGNATURE: a Combat mage always knows their combat
+  // spell, because that is the half of "Combat mage" the label
+  // promises. Everything after it is what they chose to study.
+  function generateGrimoire(rng, focus, attrs, skills, chosen) {
     if (focus.family !== "mage") return null;
     const trained = (skills && skills.sorcery) || 0;
     if (trained <= 0) return [];      // a mage, with an empty book
@@ -1165,6 +1191,16 @@
     const list = FOCUS_SPELLS[focus.id] || STAPLE_SPELLS;
     // The signature is certain; the rest of their training is not.
     const known = [list[0]];
+    if (chosen && chosen.length) {
+      for (const id of chosen) {
+        if (known.length >= count) break;
+        if (known.indexOf(id) !== -1) continue;
+        if (!MJ.spellDef || !MJ.spellDef(id)) continue;   // must be a real spell
+        known.push(id);
+      }
+      // A short book is a legal book — the roll below tops it up the
+      // same way it would for anyone who left the choice open.
+    }
     const own = rng.shuffle(list.slice(1));
     const wantOwn = Math.min(own.length, Math.max(0, Math.ceil((count * 2) / 3) - 1));
     for (let i = 0; i < wantOwn && known.length < count; i++) {
@@ -1341,23 +1377,42 @@
     const origin = options.origin || pickOrigin(r, focus);
     const metatypeId = options.metatype || pickMetatype(r);
 
-    const trueArchetype = r.chance(0.5) ? "specialist" : "generalist";
+    const trueArchetype = options.trueArchetype === "specialist" || options.trueArchetype === "generalist"
+      ? options.trueArchetype
+      : (r.chance(0.5) ? "specialist" : "generalist");
+    // THE ONE CLAIM THAT MAY STILL MISLEAD, and it stays rolled even
+    // for a made runner. disciplineLabel is a SELF-ASSESSMENT — people
+    // misjudge their own breadth — so letting the player set it would
+    // turn the game's one honest piece of unreliable narration into a
+    // form field. What they picked is the truth; what the sheet claims
+    // is the character's own opinion of themselves.
     const disciplineLabel = generateDiscipline(r, trueArchetype);
 
     // A decker's affinity has been rolled since the beginning and
     // never meant anything; it now decides the presentation, so the
-    // two can never contradict each other.
-    const deckerAffinity = focus.family === "decker" ? generateDeckerAffinity(r) : null;
-    const presentation = MJ.pickPresentation
-      ? MJ.pickPresentation(r, focus, { affinity: deckerAffinity })
-      : null;
+    // two can never contradict each other. A CHOSEN presentation has
+    // to run that derivation BACKWARDS, or a player who picked Ghost
+    // would get an Icebreaker's affinity underneath it — the exact
+    // contradiction the affinity/presentation link exists to prevent.
+    let presentation = null;
+    if (options.presentationId && MJ.presentationDef) {
+      presentation = MJ.presentationDef(focus.id, options.presentationId);
+    }
+    let deckerAffinity = null;
+    if (focus.family === "decker") {
+      deckerAffinity = (presentation && MJ.affinityForPresentation
+        ? MJ.affinityForPresentation(presentation.id) : null) || generateDeckerAffinity(r);
+    }
+    if (!presentation && MJ.pickPresentation) {
+      presentation = MJ.pickPresentation(r, focus, { affinity: deckerAffinity });
+    }
 
     // ONE POOL buys everything below this line, on the same curves
     // growth uses for the rest of their career.
     const pool = options.karma || r.int(BIRTH_KARMA.min, BIRTH_KARMA.max);
     const attrs = baseAttributes(metatypeId, focus.family, origin);
     const essence = generateEssence(r, origin);
-    const skillTiers = buildSkillTiers(r, focus, trueArchetype, origin);
+    const skillTiers = buildSkillTiers(r, focus, trueArchetype, origin, options.secondaries);
 
     // The allocator reads the finished shape — attributeCeiling wants
     // a metatype and an Essence — so it gets a runner one step early.
@@ -1387,7 +1442,7 @@
         presentation: presentation ? presentation.id : null,
         presentationLabel: presentation ? presentation.label : null,
         // Spell IDS into MJ.SPELLS — the grimoire is what you hired.
-        spellsKnown: generateGrimoire(r, focus, attrs, skills),
+        spellsKnown: generateGrimoire(r, focus, attrs, skills, options.spells),
         // The adept's half of the same idea — powers into MJ.POWERS,
         // capped at Magic x 5 karma for life. null for anyone whose
         // spark is not the burn-it-on-your-own-body kind.
@@ -1436,6 +1491,83 @@
     return runner;
   }
 
+  // ══ CHARACTER CREATION ════════════════════════════════════════
+  // ONE ALLOCATOR, NEVER TWO. Everything a player picks arrives as
+  // `options` on generateRunner and is spent by the same
+  // spendBirthPool the market uses — same karma pool, same playable
+  // minimums, same bands, same curves. A made runner and a met runner
+  // are the same kind of object, built the same way, and the only
+  // difference is who answered the questions.
+  //
+  // That is the point of creation as a teaching tool: what the player
+  // learns making one is TRUE of everyone they will ever hire.
+  //
+  // This is the menu — what is legal at each step, read off the same
+  // tables generation reads. The UI renders it and never hardcodes a
+  // list of its own, so a focus added to FOCUSES appears in creation
+  // without anyone remembering to go and add it.
+  function creationMenu(picks) {
+    picks = picks || {};
+    const families = [];
+    for (const f of FOCUSES) {
+      if (families.indexOf(f.family) === -1) families.push(f.family);
+    }
+    const focusList = picks.family ? FOCUSES.filter((f) => f.family === picks.family) : [];
+    const focus = picks.focusId ? focusById(picks.focusId) : null;
+    const entry = focus ? ARCHETYPE_SKILLS[focus.id] : null;
+    const arch = picks.trueArchetype === "specialist" ? "specialist" : "generalist";
+    const secondaryCount = entry
+      ? (arch === "specialist" ? entry.specialistSecondary : entry.generalistSecondary) : 0;
+    const magic = focus && (focus.family === "mage" || (picks.origin || "") === "magic");
+    return {
+      families: families,
+      focuses: focusList.map((f) => ({ id: f.id, label: f.label, family: f.family, keySkill: f.keySkill })),
+      // Specialist buys fewer, deeper secondaries; generalist more,
+      // shallower. The COUNT is the whole difference and it is shown.
+      archetypes: entry ? [
+        { id: "specialist", label: "Specialist", secondaries: entry.specialistSecondary },
+        { id: "generalist", label: "Generalist", secondaries: entry.generalistSecondary },
+      ] : [],
+      // Fixed by the focus, shown so the player knows what they bought.
+      primary: entry ? entry.list[0] : null,
+      secondaryCount: secondaryCount,
+      secondaryPool: entry ? entry.list.slice(1) : [],
+      // Only origins this focus can actually have — a Street Doc is
+      // mundane, and offering "magic" would be offering a lie.
+      origins: focus ? focus.origins.slice() : [],
+      metatypes: MJ.METATYPE_IDS ? MJ.METATYPE_IDS.slice() : [],
+      presentations: focus && MJ.presentationsFor
+        ? MJ.presentationsFor(focus.id).map((p) => ({ id: p.id, label: p.label, blurb: p.blurb })) : [],
+      // The book, for a mage. The signature is not on the menu — it is
+      // the focus's own spell and it comes for free, because it is the
+      // half of the label that must stay true.
+      signatureSpell: focus && focus.family === "mage"
+        ? (FOCUS_SPELLS[focus.id] || STAPLE_SPELLS)[0] : null,
+      spellPool: magic && MJ.SPELLS ? Object.keys(MJ.SPELLS) : [],
+    };
+  }
+
+  // Build one to the player's spec. Returns the runner AND what the
+  // allocator actually did with the picks, so the creation screen can
+  // show the sheet before it is committed — nothing is hidden behind
+  // the confirm button.
+  function createRunner(seed, picks) {
+    picks = picks || {};
+    const runner = generateRunner(MJ.makeRNG(seed || ("made-" + Date.now())), {
+      family: picks.family,
+      focusId: picks.focusId,
+      origin: picks.origin,
+      metatype: picks.metatype,
+      trueArchetype: picks.trueArchetype,
+      presentationId: picks.presentationId,
+      secondaries: picks.secondaries,
+      spells: picks.spells,
+      handleBase: picks.handle,
+    });
+    runner.identity.madeByPlayer = true;
+    return runner;
+  }
+
   // ── The universe runner registry (§09 layer 1) ─────────────────
   // Same pattern as site.js's mintSite: runner #N of a universe is a
   // pure function of (universeSeed, index) — lazy, infinite, and
@@ -1458,9 +1590,14 @@
   MJ.handleBaseFromIndex = handleBaseFromIndex;
   MJ.mintRunner = mintRunner;
   MJ.METATYPES = METATYPES;
+  MJ.METATYPE_IDS = METATYPE_IDS;
   MJ.FOCUSES = FOCUSES;
   MJ.focusById = focusById;
   MJ.generateRunner = generateRunner;
+  // Character creation — the menu, and the builder. Both read the same
+  // tables generation reads; neither is a second system.
+  MJ.creationMenu = creationMenu;
+  MJ.createRunner = createRunner;
   MJ.getEffectiveSkills = getEffectiveSkills;
   MJ.effectiveSkill = effectiveSkill;
   MJ.computePrice = computePrice;
