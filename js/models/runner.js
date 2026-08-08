@@ -1522,23 +1522,41 @@
   //                (SR5 Priority C.)
   //   PRIMARY      free at rank 4 — the focus IS this skill, and a
   //                professional turns up already able to do their job.
-  //   SECONDARY    6 ranks to spread over the ones they chose.
-  //   TERTIARY     4 ranks over the rest of the class list.
+  //   SECONDARY    PER SKILL: 4 to a specialist, 2 to a generalist.
+  //   TERTIARY     PER SKILL: 1, whoever you are.
   //   UNIVERSAL    4 ranks over everything else they are allowed —
   //                Perception, Firearms, Athletics and the rest are
   //                nobody's class property and are purchasable on
   //                every build.
   //
-  // Eighteen skill ranks total, which is SR5's Priority E — correct
-  // for somebody who is going to grow into the work rather than
-  // arrive finished. Magic, spells and adept powers are NOT bought
-  // here: a spark is a qualification, not a purchase, and the free
-  // grant is whatever generation already gives that shape.
+  // ── WHY THE SKILL POOLS ARE PER-SKILL AND NOT FLAT ──────────────
+  // They were flat: 6 for the secondaries and 4 for the tertiaries,
+  // whatever the counts. That inverts the tiers the moment the counts
+  // are lopsided — a generalist Decker takes 3 secondaries and is left
+  // with ONE tertiary, so the flat pools handed them 2 ranks per
+  // secondary and FOUR for the single tertiary. The bottom tier
+  // outranked the middle one and reached the primary. Reported as
+  // "6 amongst 3, and then 4 amongst 1? Make that make sense."
+  //
+  // Per-skill allowances make it make sense, and they make the
+  // specialist/generalist choice mean something instead of just
+  // shuffling counts. A SPECIALIST'S ONE SECONDARY IS WORTH TWICE A
+  // GENERALIST'S — that IS the difference between deep and wide, and
+  // the two land on the same total:
+  //
+  //   Decker specialist  1 secondary x4 + 3 tertiary x1 = 7
+  //   Decker generalist  3 secondary x2 + 1 tertiary x1 = 7
+  //
+  // Plus the primary at 4 and 4 universal: 15 skill ranks, near SR5's
+  // Priority E, correct for somebody who grows into the work rather
+  // than arriving finished. Magic, spells and adept powers are NOT
+  // bought here: a spark is a qualification, not a purchase, and the
+  // free grant is whatever generation already gives that shape.
   const STARTER = {
     attributePoints: 16,
     primaryRank: 4,
-    secondaryPool: 6,
-    tertiaryPool: 4,
+    perSecondary: { specialist: 4, generalist: 2 },
+    perTertiary: 1,
     universalPool: 4,
     // SR5 caps a starting skill at 6. Growth is where 7+ lives.
     skillCap: 6,
@@ -1632,6 +1650,13 @@
       // happen is half of what building the first runner teaches.
       tertiary: entry && picks.secondaries
         ? entry.list.slice(1).filter((s) => picks.secondaries.indexOf(s) === -1) : [],
+      // The purses, SIZED TO THEIR TIER — see STARTER's note on why
+      // these are per-skill and not flat.
+      secondaryPoints: entry
+        ? secondaryCount * STARTER.perSecondary[arch] : 0,
+      tertiaryPoints: entry && picks.secondaries
+        ? entry.list.slice(1).filter((s) => picks.secondaries.indexOf(s) === -1).length * STARTER.perTertiary
+        : 0,
       // THE OVERFLOW: everything they are allowed that their class
       // list does not already speak for. Perception and Firearms are
       // nobody's property — they are here on every build where the

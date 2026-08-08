@@ -38,6 +38,7 @@
   window.MJ = window.MJ || {};
 
   const esc = MJ.text.esc, nm = MJ.text.nm, num = MJ.text.num;
+  const ok = (s) => '<span class="w-ok">' + s + "</span>";
   const dim = (s) => '<span class="dimmed">' + s + "</span>";
 
   // Skill ids are camelCase in the model and want spaces on a screen.
@@ -163,6 +164,12 @@
     // buy different units: attribute POINTS are +1 rating each, skill
     // ranks are a rank each.
     const buy = { attributes: {}, skills: {} };
+    // A SPEND STEP IS NOT DONE WHEN THE PURSE EMPTIES — it is done
+    // when the player says so. Without this, placing the last point
+    // threw them onto the next question with no chance to look at what
+    // they had just built, and "back" could not return them to it
+    // because the step reported itself finished.
+    const settled = new Set();
 
     function menuNow() { return MJ.creationMenu(picks); }
 
@@ -295,16 +302,22 @@
                 base: base[a],
               }));
           }, "attributes"),
+        // Sized to their tier: a specialist's one secondary is worth
+        // twice a generalist's, and a tertiary is worth one apiece to
+        // anybody. See STARTER in runner.js.
         spend("secondarySpend", "How good are they at those?",
-          "ranks across the secondaries they picked",
+          "ranks across the secondaries they picked — " +
+            STARTER.perSecondary[picks.trueArchetype === "specialist" ? "specialist" : "generalist"] +
+            " apiece, because a " + (picks.trueArchetype || "generalist") + " goes " +
+            (picks.trueArchetype === "specialist" ? "deep" : "wide"),
           () => !!(picks.secondaries && picks.secondaries.length),
-          STARTER.secondaryPool,
+          m.secondaryPoints,
           () => (picks.secondaries || []).map((s) => ({ value: s, label: words(s), cap: STARTER.skillCap, base: 0 })),
           "skills"),
         spend("tertiarySpend", "And the rest of the trade?",
-          "ranks across what the class list left over — this tier IS the remainder",
+          "one rank apiece across what the class list left over — this tier IS the remainder",
           () => !!(picks.secondaries && picks.secondaries.length) && m.tertiary.length > 0,
-          STARTER.tertiaryPool,
+          m.tertiaryPoints,
           () => m.tertiary.map((s) => ({ value: s, label: words(s), cap: STARTER.skillCap, base: 0 })),
           "skills"),
         spend("universalSpend", "What else can they do?",
@@ -336,15 +349,44 @@
 
     function nextStep() {
       for (const s of steps()) {
-        // A SPEND STEP IS DONE WHEN THE PURSE IS EMPTY. It cannot be
-        // "answered" like a choice, and leaving points unspent is not
-        // a thing a player should be able to do by accident — the
-        // build is fixed-size and every point is theirs.
-        if (s.spendStep) { if (s.left() > 0) return s; continue; }
+        // Settled means the player pressed continue on it. Spending
+        // the last point is not consent to move on, and un-settling a
+        // step is how "back" returns them to it with every point still
+        // where they put it and still refundable.
+        if (s.spendStep) { if (!settled.has(s.id)) return s; continue; }
         const v = picks[s.id];
         if (v === undefined || (Array.isArray(v) && s.multi > 0 && v.length !== s.multi)) return s;
       }
       return null;
+    }
+
+    // Walk back one answer. A choice is forgotten; a spend step is
+    // merely re-opened — the points stay allocated so they can be
+    // moved rather than re-earned.
+    function goBack() {
+      const last = history.pop();
+      if (!last) return;
+      if (settled.has(last)) settled.delete(last);
+      else delete picks[last];
+      paint();
+    }
+
+    // Changing an earlier answer can strand purchases: pick three
+    // secondaries, spend on them, go back and swap one, and the ranks
+    // for the dropped skill are still in the ledger where no row can
+    // see them — invisible to the purse and still applied at build.
+    // Anything not on some current tier's menu is refunded.
+    function pruneOrphans() {
+      const m = menuNow();
+      const live = new Set([].concat(
+        picks.secondaries || [], m.tertiary || [], m.universal || []));
+      for (const s of Object.keys(buy.skills)) {
+        if (!live.has(s)) delete buy.skills[s];
+      }
+      const attrs = shellAttributes();
+      for (const a of Object.keys(buy.attributes)) {
+        if (!(a in attrs)) delete buy.attributes[a];
+      }
     }
 
     function paint() {
@@ -394,16 +436,15 @@
             history.push(step.id);
             step.set(value);
           }
+          // Changing an answer can change which tiers exist; refund
+          // anything the new shape has no row for.
+          pruneOrphans();
           paint();
         },
         onAction: (id) => {
           if (id === "cancel") return cancel();
           if (id === "doneMulti") { if (!picks[step.id]) step.set([]); return paint(); }
-          if (id === "back") {
-            const last = history.pop();
-            if (last) delete picks[last];
-            paint();
-          }
+          if (id === "back") return goBack();
         },
       });
     }
@@ -421,49 +462,66 @@
         const bought = put[r.value] || 0;
         const at = r.base + bought;
         const full = at >= r.cap;
+        // A ROW WITH POINTS IN IT IS NEVER DEAD. Marking full or
+        // exhausted rows disabled made the refund unreachable at
+        // exactly the moment it was wanted — the click handler skips
+        // disabled buttons, so a maxed attribute could not be clicked
+        // to give a point back and the purse could only be emptied
+        // wholesale. Dead now means genuinely inert: nothing bought
+        // here and no room for more.
         return {
           html: nm(r.label) + " " + num(at) +
             (r.base ? dim(" (" + r.base + " + " + bought + ")") : bought ? dim(" (+" + bought + ")") : ""),
-          meta: full ? dim("at the cap for this build")
-            : left <= 0 ? dim("nothing left to spend")
+          meta: bought
+            ? dim("click to take one back") + (full ? dim(" · at the cap") : "")
+            : full ? dim("already at the cap for this build")
+            : left <= 0 ? dim("nothing left to spend — take a point off something else")
             : dim("costs 1 · cap " + r.cap),
           tone: bought ? "opt-on" : "",
-          dead: full || left <= 0,
+          dead: !bought && (full || left <= 0),
         };
       });
+      const spent = Object.keys(put).some((k) => put[k] && rows.some((r) => r.value === k));
       MJ.decide.open({
         title: "BUILD YOUR RUNNER",
         subtitle: dim(step.sub) + " · " + num(left) + dim(" of " + step.budget + " left"),
         present: picksPanel(picks, m),
         transcript: [],
         heading: nm(step.ask) +
-          '<div class="ask">' + num(left) + " to spend. " +
-          dim("Nothing is committed until you sign — take points back with “undo a point”.") + "</div>",
+          '<div class="ask">' +
+          (left > 0 ? num(left) + " to spend. " : ok("All spent. ")) +
+          dim("Nothing is committed until you sign — click a row again to take a point back.") + "</div>",
         options: options,
         actions: [
-          Object.keys(put).some((k) => put[k]) ? { id: "undo", label: "undo a point" } : null,
+          spent ? { id: "reset", label: "take it all back" } : null,
           history.length ? { id: "back", label: "back" } : null,
           { id: "cancel", label: "cancel" },
+          // ONLY appears once the purse is empty, and it is the only
+          // way forward. Placing the last point no longer decides for
+          // them.
+          left <= 0 ? { id: "next", label: "that's the build", tone: "warn-btn" } : null,
         ].filter(Boolean),
         onChoose: (opt, i) => {
           const r = rows[i];
-          if (!r || step.left() <= 0) return;
-          if (r.base + (put[r.value] || 0) >= r.cap) return;
-          put[r.value] = (put[r.value] || 0) + 1;
+          if (!r) return;
+          // CLICK TO BUY, CLICK AGAIN TO SELL BACK. Reallocating was
+          // the thing there was no way to do: the only refund was a
+          // blind "undo the last point" that could not reach the row
+          // you actually wanted to change.
+          const held = put[r.value] || 0;
+          if (r.base + held >= r.cap || step.left() <= 0) {
+            if (held > 0) { put[r.value] = held - 1; if (!put[r.value]) delete put[r.value]; }
+            return paint();
+          }
+          put[r.value] = held + 1;
           paint();
         },
         onAction: (id) => {
           if (id === "cancel") return cancel();
-          if (id === "back") {
-            const last = history.pop();
-            if (last) delete picks[last];
-            return paint();
-          }
-          if (id === "undo") {
-            // Hand back the last thing bought in THIS purse.
-            const mine = rows.map((x) => x.value).filter((v) => put[v]);
-            const giveBack = mine[mine.length - 1];
-            if (giveBack) { put[giveBack] -= 1; if (!put[giveBack]) delete put[giveBack]; }
+          if (id === "back") return goBack();
+          if (id === "next") { settled.add(step.id); history.push(step.id); return paint(); }
+          if (id === "reset") {
+            for (const r of rows) delete put[r.value];
             return paint();
           }
         },
@@ -504,11 +562,7 @@
         ],
         onAction: (id) => {
           if (id === "cancel") return cancel();
-          if (id === "back") {
-            const last = history.pop();
-            if (last) delete picks[last];
-            return paint();
-          }
+          if (id === "back") return goBack();
           MJ.decide.close();
           opts.onDone && opts.onDone(runner, spec());
         },

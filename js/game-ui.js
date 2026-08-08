@@ -316,27 +316,38 @@
   // legs, and WHICH PILLAR each leg is — a two-leg data-then-astral
   // job needs a different bench than two physical smash-and-grabs.
   const DOMAIN_LABEL = { physical: "Physical", data: "Data", astral: "Astral" };
+
+  // ── THE CLOCK, IN ONE PLACE ────────────────────────────────────
+  // DAYS REMAINING, INCLUSIVE OF TODAY. The model kills a job when
+  // `day > expiryDay`, so a job whose expiryDay IS today is still live
+  // — today is its last day. Reading `expiryDay - day` and calling
+  // zero "expired" put an EXPIRED badge and a working Accept button on
+  // the same still-valid offer.
+  //
+  // "3 days left -> 2 days left -> last day -> off the board". There is
+  // no expired state a player should ever see: settleDay advances the
+  // day BEFORE sweeping the board, so a dead offer is gone before the
+  // word could be true. It survives below only as a tell that a sweep
+  // failed.
+  //
+  // BOTH the title and the detail read these. The first version
+  // inlined the clock in jobTitle and then referenced that `const`
+  // from jobDetail — a different function — which threw a
+  // ReferenceError every time a contract card was opened and made the
+  // whole board unusable. Two callers, one definition.
+  const daysLeft = (job) => job.expiryDay - S.day + 1;
+  function clockFor(job) {
+    const left = daysLeft(job);
+    return left <= 0 ? "expired" : left === 1 ? "last day" : left + " days left";
+  }
+
   function jobTitle(job) {
     const pillars = job.missions.map((m) => DOMAIN_LABEL[m.payloadDomain] || m.payloadDomain).join("/");
     const n = job.missions.length;
     // Price, legs, what each leg is, and how long you have — the four
     // things a contract is judged on, in that order. The clock comes
     // last and in amber because it is the one that is running.
-    // DAYS REMAINING, INCLUSIVE OF TODAY. The model kills a job when
-    // `day > expiryDay`, so a job whose expiryDay IS today is still
-    // live — today is its last day. This read `expiryDay - day` and
-    // called zero "expired", which put an EXPIRED badge and a working
-    // Accept button on the same still-valid offer (found live). Off by
-    // one at both ends: it also called two days left "today".
-    // "2 days left" -> "last day" -> gone. There is no "expired"
-    // state a player should ever see on the board: a job is not dead
-    // until the day AFTER its last day, and the day cannot turn
-    // without settleDay running, so the offer can always be cleared
-    // before that word would be true. "expired" survives here only as
-    // a tell that something failed to sweep.
-    const left = job.expiryDay - S.day + 1;
-    const clock = left <= 0 ? "expired" : left === 1 ? "last day"
-      : left + " days left";
+    const clock = clockFor(job);
     // The other end of the Locations link: an accepted job carries its
     // number, and every job names WHERE by the location numbers the
     // Locations tab already uses — closed, the title alone says which
@@ -361,9 +372,9 @@
   }
 
   function jobDetail(job, withStatus) {
-    const left = job.expiryDay - S.day;
+    const left = daysLeft(job);
     return `<div class="det"><span class="dk">terms</span>¥${job.pay} <span class="muted">· rush x${job.rushMultiplier.toFixed(2)} · ${job.daysPerMission}d per leg · ` +
-        `<span class="${left <= 1 ? "warn" : "muted"}">expires day ${job.expiryDay} (${clock})</span>${job.chained ? ' · <span class="warn">CHAINED</span>' : ""}</span></div>` +
+        `<span class="${left <= 1 ? "warn" : "muted"}">expires day ${job.expiryDay} (${clockFor(job)})</span>${job.chained ? ' · <span class="warn">CHAINED</span>' : ""}</span></div>` +
       `<div class="det"><span class="dk">legs</span>${job.missions.map((m, k) => legLineFull(job, m, k, withStatus)).join("")}</div>`;
   }
 
