@@ -109,6 +109,30 @@ drives.
 ### 2e. Stances — flagged previously as the seam a visual layer rewrites.
 Unchanged; see `SYSTEM-STATE.md`.
 
+### 2f. Movement — **landed, out of a fight only**
+Clicking a square walks the selected body there. Two budgets, one path:
+`tactical.reachable(run, body, {free})` and `tactical.moveTo(run, body, x, y,
+{free})`. Free out of a fight — the whole room is walkable, nothing is counting
+seconds — and bounded by `moveLeft` inside one.
+
+**`t.inFight` is the flag, and nothing sets it.** `runCombat` still resolves a
+firefight end to end with the console shut, so there is no in-combat moment for
+the player to hold; the budgeted branch is written and untriggered. When the
+player's seat opens (P2.2/P2.3) the flag flips and the view needs no change.
+
+**Position currently decides nothing.** `tactical.canReach` exists and no model
+code consults it — `missionPrompt` offers melee from across the room. Wiring it
+would make "walk over, then swing" the melee grammar, at the cost of a beat
+model where an approach can be *temporarily* unavailable for a reason that is
+about geometry rather than about the crew. That is a design call, not a repair.
+
+### 2g. `reseat` is idempotent, and must stay that way
+It gives everybody in the current room a legal square and *keeps whatever is
+already placed*. The first version re-dealt the floor on every call, which was
+invisible while nobody could move (the deal is a pure function of the room, so
+it kept landing on the same squares) and silently undid every player move the
+moment they could. Anything that adds bodies mid-room places only the newcomers.
+
 ---
 
 ## 3. THINGS THAT WOULD BREAK THE PLAN
