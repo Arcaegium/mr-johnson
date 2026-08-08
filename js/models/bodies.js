@@ -170,6 +170,53 @@
     });
   }
 
+  // ── Calling one up ─────────────────────────────────────────────
+  // SR5's summoning test: Conjuring + Magic against the spirit's own
+  // Force, and THE NET HITS ARE THE SERVICES. That is the whole
+  // tension of the roll — reach for a Force 6 and it resists you
+  // harder, so the strong spirit that answers may owe you one favour
+  // while a Force 2 owes you four.
+  //
+  // Drain rides the same law as every cast (core/resolve.js's
+  // resistDrain), and applyDrain writes both tracks and can drop the
+  // caster, because a conjurer who overreaches should be able to put
+  // themselves on the floor doing it.
+  //
+  // NOT A PANIC BUTTON. This is the ordinary thing a conjuring mage
+  // does on a run, offered before the door and at every beat after
+  // it, and the framing everywhere says so.
+  function canSummon(runner) {
+    if (!runner) return false;
+    const sk = MJ.getEffectiveSkills(runner);
+    return (sk.conjuring || 0) > 0 && ((runner.attributes && runner.attributes.magic) || 0) > 0;
+  }
+
+  function summon(rng, run, conjurer, element, force) {
+    if (!canSummon(conjurer)) return { ok: false, error: "not a conjurer" };
+    const sk = MJ.getEffectiveSkills(conjurer);
+    const magic = conjurer.attributes.magic || 0;
+    const f = Math.max(1, Math.min(MJ.maxForceFor(conjurer), force || magic));
+
+    const pool = Math.max(0, (sk.conjuring || 0) + magic +
+      (MJ.gearBonusFor ? MJ.gearBonusFor(conjurer, "conjuring") : 0));
+    const mine = MJ.countHits(MJ.rollDicePool(rng, pool));
+    const theirs = MJ.countHits(MJ.rollDicePool(rng, f));
+    const net = mine - theirs;
+
+    // Drain first: it is owed whether or not anything answered.
+    const drain = MJ.resistDrain(rng, conjurer, f);
+    if (drain.damage > 0) MJ.applyDrain(run || null, conjurer, drain);
+
+    if (net <= 0) {
+      return { ok: true, success: false, force: f, element: element,
+               pool: pool, hits: mine, resisted: theirs, drain: drain };
+    }
+    const spirit = makeSpirit(element, f, net, conjurer);
+    if (run) join(run, spirit);
+    return { ok: true, success: true, force: f, element: element, spirit: spirit,
+             pool: pool, hits: mine, resisted: theirs, services: net, drain: drain };
+  }
+
   // ── The four drone roles ───────────────────────────────────────
   // A drone is a MACHINE: it does not owe services and it does not
   // evaporate, it runs until it is broken or landed. What it does is
@@ -305,6 +352,8 @@
     DRONE_ROLE_IDS: DRONE_ROLE_IDS,
     makeBody: makeBody,
     makeSpirit: makeSpirit,
+    canSummon: canSummon,
+    summon: summon,
     makeDrone: makeDrone,
     isExtraBody: isExtraBody,
     servicesLeft: servicesLeft,

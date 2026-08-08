@@ -369,7 +369,12 @@
     // and spirits land (Phase D) they join this same list — each row
     // takes 1/N of the stripe by flex, so the panel resizes itself
     // to however many the player is responsible for.
-    const bodies = run.runners || [];
+    // EVERY BODY THE PLAYER IS RESPONSIBLE FOR, which is what this
+    // column was built to flex to. Runners, plus whatever a conjurer
+    // called up or a rigger is flying — one list, from the clock, so
+    // the panel and the turn order can never disagree about who is
+    // here.
+    const bodies = MJ.tactical ? MJ.tactical.bodiesOf(run) : (run.runners || []);
     if (!bodies.length) return "";
     const sustaining = run.sustaining || [];
     // NO NUMBERS ON THE TRACKS — the ticks are the truth and their
@@ -1133,13 +1138,115 @@
       });
     }
 
+    // ── CALLING ONE UP ──────────────────────────────────────────
+    // A conjurer summons on a run the way a mage casts on one: at the
+    // door and at any beat after it. This is NOT an emergency measure
+    // and the screen does not present it as one — it is the ordinary
+    // thing a conjuring mage is for, and the reason to bring one.
+    //
+    // Element first, then Force, because the element is what you want
+    // and the Force is how hard you are willing to reach for it. Net
+    // hits on the summoning test ARE the services, so the strong one
+    // that answers may owe you a single favour.
+    function openSummon(conjurer, back) {
+      const B = MJ.bodies;
+      const maxF = MJ.maxForceFor(conjurer);
+      const rows = B.ELEMENT_IDS.map((id) => {
+        const e = B.ELEMENTS[id];
+        return { id: id, html: nm(e.label), meta: '<span class="dimmed">' + esc(e.blurb) + "</span>" };
+      });
+      MJ.decide.open({
+        title: esc(entry.label || run.kind),
+        subtitle: '<span class="dimmed">the circle</span>',
+        site: siteStrip(run),
+        present: presentPanel(run, { obstacle: run.obstacles[run.index] }),
+        party: partyPanel(run),
+        transcript: transcript,
+        heading: nm(conjurer.identity.handle) +
+          '<span class="dimmed"> — Conjuring ' +
+          num(MJ.getEffectiveSkills(conjurer).conjuring || 0) + "d, Magic " +
+          num(conjurer.attributes.magic || 0) + "</span>" +
+          '<div class="ask">What answers?</div>',
+        options: rows.map((r) => ({ html: r.html, meta: r.meta })),
+        actions: [{ id: "back", label: "not now" }],
+        onChoose: (opt, i) => openForce(conjurer, rows[i].id, maxF, back),
+        onAction: back,
+      });
+    }
+
+    function openForce(conjurer, element, maxF, back) {
+      const B = MJ.bodies;
+      const e = B.ELEMENTS[element];
+      const magic = conjurer.attributes.magic || 0;
+      const rungs = [];
+      for (const f of [1, Math.ceil(magic / 2), magic, magic + 1, maxF]) {
+        const v = Math.max(1, Math.min(maxF, Math.round(f)));
+        if (rungs.indexOf(v) === -1) rungs.push(v);
+      }
+      rungs.sort((a, b) => a - b);
+      MJ.decide.open({
+        title: esc(entry.label || run.kind),
+        subtitle: '<span class="dimmed">the circle · ' + esc(e.label) + "</span>",
+        site: siteStrip(run),
+        present: presentPanel(run, { obstacle: run.obstacles[run.index] }),
+        party: partyPanel(run),
+        transcript: transcript,
+        heading: nm(e.label) +
+          '<div class="ask">How hard do they reach? ' +
+          '<span class="dimmed">Force buys the body. It also resists the call, ' +
+          'and the hits you have left over are the services it owes.</span></div>',
+        options: rungs.map((f) => {
+          const probe = B.makeSpirit(element, f, 1, conjurer);
+          const over = f > magic;
+          return {
+            html: "Force " + num(f) + (over ? " " + no("(overreach)") : ""),
+            meta: '<span class="dimmed">armour ' + probe.loadout.armour +
+              " · speed " + MJ.tactical.speedFor(probe) +
+              " · drain resists " + f + "d" +
+              (over ? " · past their Magic — this one bites back" : "") + "</span>",
+          };
+        }),
+        actions: [{ id: "back", label: "back" }],
+        onChoose: (opt, i) => {
+          const res = B.summon(run.rng, run, conjurer, element, rungs[i]);
+          const el = B.ELEMENTS[element].label;
+          if (!res.ok) { transcript.push(no(res.error)); return (back || step)(); }
+          if (res.success) {
+            transcript.push(nm(conjurer.identity.handle) + '<span class="dimmed"> calls up a </span>' +
+              nm(el) + '<span class="dimmed"> at Force ' + res.force + " (" +
+              res.pool + "d → " + res.hits + " vs " + res.resisted + ") — </span>" +
+              ok("it owes " + res.services + " service" + (res.services === 1 ? "" : "s")) +
+              (res.drain.damage > 0 ? '<span class="dimmed"> · drain ' + res.drain.damage + "</span>" : ""));
+          } else {
+            transcript.push(nm(conjurer.identity.handle) + '<span class="dimmed"> reaches for a </span>' +
+              nm(el) + '<span class="dimmed"> at Force ' + res.force + " (" +
+              res.pool + "d → " + res.hits + " vs " + res.resisted + ") — </span>" +
+              no("nothing answers") +
+              (res.drain.damage > 0 ? '<span class="dimmed"> · drain ' + res.drain.damage + " anyway</span>" : ""));
+          }
+          // Back where they came from — the door if they were at the
+          // door, the beat if they were mid-run. Summoning is not a
+          // step in the walk, it is something done during one.
+          (back || step)();
+        },
+        onAction: () => openSummon(conjurer, back),
+      });
+    }
+
     // WHOSE TURN THE PLAYER IS THINKING ABOUT. Held across repaints
     // by identity, not index — the roster order never changes mid-run
     // but a downed runner should not stay selected.
     let selected = null;
 
+    // A SUMMONED BODY IS A BODY YOU CAN GIVE ORDERS TO. It appears in
+    // the crew column and it answers when selected, same as anyone —
+    // that is the entire point of it being in the formation rather
+    // than being a buff. A slumped rigger is still listed (they are
+    // lying right there) but cannot be told to do anything.
     function selectableBodies() {
-      return (run.runners || []).filter((r) => !run.downed || !run.downed.has(r));
+      const all = MJ.tactical ? MJ.tactical.bodiesOf(run) : (run.runners || []);
+      return all.filter((r) => (!run.downed || !run.downed.has(r)) &&
+        (!MJ.bodies || MJ.bodies.canAct(r)));
     }
 
     function step() {
@@ -1203,7 +1310,18 @@
           dead: !castable,
         };
       });
-      const options = shown.map(optionFor).concat(casts.map((c) => ({ html: c.html, meta: c.meta, dead: c.dead })));
+      // A conjurer's own line, beside the grimoire's. Offered on every
+      // beat because that is when it is wanted, not only at the door.
+      const conj = MJ.bodies && MJ.bodies.canSummon(who) && !who.slumped
+        ? [{
+            html: nm(who.identity.handle) + '<span class="dimmed"> — </span>call up a spirit',
+            meta: '<span class="dimmed">conjuring ' +
+              (MJ.getEffectiveSkills(who).conjuring || 0) + "d · it owes you services, and goes when the run does</span>",
+          }]
+        : [];
+      const options = shown.map(optionFor)
+        .concat(casts.map((c) => ({ html: c.html, meta: c.meta, dead: c.dead })))
+        .concat(conj);
       // Stalled asks the MODEL's question (all approaches, spell verbs
       // included) — the funnel changes where spells are clicked, not
       // whether they count as ways through.
@@ -1232,6 +1350,7 @@
           if (o && MJ.missionFaceFirst(run, o)) step();
         },
         onChoose: (opt, i) => {
+          if (i >= shown.length + casts.length) return openSummon(who, step);
           if (i >= shown.length) {
             const c = casts[i - shown.length];
             return openGrimoire(c.mage, ctx,
@@ -1313,7 +1432,14 @@
 
     function stepPrep() {
       const casters = MJ.grimoire.castersIn(run);
-      if (!casters.length) return step();
+      // Calling one up before the door is the SAME decision as putting
+      // Armor up before the door: done out here where nothing is
+      // watching, because doing it six feet from a guard is a
+      // different act with a different price.
+      const conjurers = (MJ.bodies
+        ? run.runners.filter((r) => MJ.bodies.canSummon(r) && (!run.downed || !run.downed.has(r)))
+        : []);
+      if (!casters.length && !conjurers.length) return step();
       const ctx = { run: run }; // NO obstacle: they are not at one yet
       const rows = casters.map((mage) => {
         const castable = MJ.grimoire.entriesFor(mage, ctx).filter((e) => e.available).length;
@@ -1343,7 +1469,12 @@
         heading: nm("Outside") + '<span class="dimmed"> — nothing is watching yet</span>' +
           (holding.length ? '<div class="dimmed">✦ holding: ' + holding.join(", ") + "</div>" : "") +
           '<div class="ask">Anything to put up first?</div>',
-        options: rows.map((r) => ({ html: r.html, meta: r.meta, dead: r.dead })),
+        options: rows.map((r) => ({ html: r.html, meta: r.meta, dead: r.dead }))
+          .concat(conjurers.map((c) => ({
+            html: nm(c.identity.handle) + '<span class="dimmed"> — </span>call up a spirit',
+            meta: '<span class="dimmed">conjuring ' +
+              (MJ.getEffectiveSkills(c).conjuring || 0) + "d · out here, where nothing is watching</span>",
+          }))),
         // Standing at the door is still a decision point — the player
         // can look at what is waiting inside and decide not to today.
         // The day is spent for this crew (they went, they came back),
@@ -1354,6 +1485,7 @@
           { id: "go", label: "go in", tone: "warn-btn" },
         ],
         onChoose: (opt, i) => {
+          if (i >= rows.length) return openSummon(conjurers[i - rows.length], stepPrep);
           const r = rows[i];
           if (r && !r.dead) openGrimoire(r.mage, ctx, "", stepPrep);
         },
