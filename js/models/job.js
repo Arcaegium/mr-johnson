@@ -142,7 +142,46 @@
   // mission's target from accidentally being the same faction
   // that's hiring the job (client != target, per §06's "hired by
   // someone to hit someone else").
-  const REUSE_RATIO = 0.4; // tuning dial, per the current understanding's own language
+  // ── How often the board reaches for a building you already know ──
+  // This was a flat 0.4, and a flat 40% is wrong at both ends. Early
+  // it is catastrophic: a new crew only draws safe-rung work, so the
+  // matching pool is two or three buildings and every repeat lands on
+  // the same ones — measured live at 8 mission slots yielding 5.7
+  // distinct sites. Late it is still wrong, because PERCEPTION IS NOT
+  // CALIBRATED: people count repeats and discount novelty, so a true
+  // 40% reads as "it's always the same places" long before it is.
+  //
+  // THE MAP NEVER GOING STALE IS THE REPLAYABILITY. Permutations of
+  // fresh sites are what lets the same crew keep playing as they
+  // level, so reuse has to stay a rare flavour note for a very long
+  // time. Recon is what you do BEFORE a mission; scavenging and data
+  // hauls are what you do when there is no mission. Neither one needs
+  // the board to hand you the same building twice.
+  //
+  // So the chance scales with how much of the world you have actually
+  // seen, and it stretches out a very long way:
+  //
+  //     100 sites known ->  1%
+  //   1,000 sites known ->  5%
+  //  10,000 sites known -> 25% (the cap)
+  //
+  // Ten times the world for five times the chance — a power law, and
+  // the exponent falls straight out of those two anchors rather than
+  // being tuned by hand. Below a hundred it rounds to nothing, which
+  // is exactly right: a player's first dozen contracts should be a
+  // dozen new buildings.
+  const REUSE_AT_100 = 0.01;
+  const REUSE_GROWTH = Math.log10(5);   // 5x the chance per 10x the sites
+  const REUSE_K = REUSE_AT_100 / Math.pow(100, REUSE_GROWTH);
+  const REUSE_CAP = 0.25;
+
+  // `known` is the whole pool the player has seen, not the band-matched
+  // shortlist: the question is how big their world is, and whether a
+  // reuse is POSSIBLE is a separate matter the caller settles.
+  function reuseChanceFor(known) {
+    if (!known || known <= 0) return 0;
+    return Math.min(REUSE_CAP, REUSE_K * Math.pow(known, REUSE_GROWTH));
+  }
   const CHAINED_JOB_CHANCE = 0.35; // share of multi-mission contracts that are order-gated chains (placeholder)
 
   // siteProvider (optional): { mint(value, orientation) } — the
@@ -159,7 +198,7 @@
     if (excludeFaction) {
       candidates = candidates.filter((s) => s.identity.owningFaction !== excludeFaction);
     }
-    if (candidates.length > 0 && rng.chance(REUSE_RATIO)) {
+    if (candidates.length > 0 && rng.chance(reuseChanceFor((sitePool || []).length))) {
       return { site: rng.pick(candidates), wasReused: true };
     }
     const value = rng.int(band.min, band.max);
@@ -336,6 +375,7 @@
   MJ.TIER_BANDS = TIER_BANDS;
   MJ.tierForValue = tierForValue;
   MJ.boardRungFor = boardRungFor;
+  MJ.reuseChanceFor = reuseChanceFor;
   // Contract-layer helper: a job COMPLETES when its success criteria
   // are met — for the current "allMissions" criteria, every included
   // mission resolved (by the dispatch layer, models/mission.js).

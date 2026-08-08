@@ -448,7 +448,13 @@
     for (const j of S.jobs) {
       if (j.paid || j.expired) continue;
       j.missions.forEach((m, k) => {
-        if (m.site !== site) return;
+        // A DONE LEG IS NOT A REASON TO COME BACK. The job can still be
+        // open — three legs, one finished — but this ADDRESS has no
+        // outstanding business, and leaving the marker on it kept
+        // sending the player to a building with nothing left to do
+        // there. The dispatch list below already dropped resolved legs;
+        // the header badge was the half that stayed stale.
+        if (m.resolved || m.site !== site) return;
         marks.push(`Job #${j.contractNumber} Target ${k + 1}` +
           (j.chained ? ' <span class="w-warn">· CHAINED</span>' : ""));
       });

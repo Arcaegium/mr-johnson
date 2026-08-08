@@ -836,28 +836,44 @@
 
   // ── Class 6: aliasing safety ────────────────────────────────────
   function class6_aliasing() {
-    // Templates must stay pristine through heavy generation.
+    // Templates must stay pristine through heavy generation. The pool
+    // is KEPT rather than discarded — the reuse check below needs a
+    // realistically sized world, and generating one twice is waste.
     const templatesBefore = snap(MJ.OBSTACLE_TEMPLATES);
     const rng = MJ.makeRNG("stress-alias");
+    const world = [];
     for (let i = 0; i < 1500; i++) {
       const s = MJ.generateSite(rng.fork("s" + i));
       MJ.generateSecurityEstimate(rng.fork("e" + i), s);
+      world.push(s);
     }
     check(snap(MJ.OBSTACLE_TEMPLATES) === templatesBefore, "C6: obstacle templates were mutated by instance generation");
 
     // Estimates are first-write-wins across job reuse.
-    let reuseProved = false;
-    for (let i = 0; i < 300 && !reuseProved; i++) {
-      const r2 = MJ.makeRNG("stress-alias2-" + i);
-      const site = MJ.generateSite(r2.fork("s"));
-      MJ.generateSecurityEstimate(r2.fork("e"), site);
-      const est = snap(site.estimatedSecurity);
-      const { job } = MJ.generateJob(r2.fork("j"), [site], 1);
-      if (!job.missions.some((m) => m.site === site)) continue;
-      reuseProved = true;
-      check(snap(site.estimatedSecurity) === est, "C6: reuse re-rolled a site's handed estimate");
+    //
+    // THE POOL HAS TO BE A REAL WORLD. This used to hand generateJob a
+    // pool of ONE site and hope the reuse roll landed — which worked
+    // only while reuse was a flat 40%. Under the stretched curve
+    // (1% at a hundred sites known, 5% at a thousand) a pool of one
+    // reuses essentially never, and the probe failed for the entirely
+    // correct reason that the game stopped doing the thing it was
+    // waiting for. Fifteen hundred known sites is a world where reuse
+    // genuinely happens, so the invariant gets tested instead of the
+    // dice.
+    const estBefore = new Map();
+    for (const s of world) estBefore.set(s, snap(s.estimatedSecurity));
+    let reused = 0;
+    for (let i = 0; i < 200; i++) {
+      const { job } = MJ.generateJob(MJ.makeRNG("stress-alias2-" + i), world, 1);
+      for (const m of job.missions) {
+        if (!estBefore.has(m.site)) continue;   // freshly minted, not a reuse
+        reused += 1;
+        check(snap(m.site.estimatedSecurity) === estBefore.get(m.site),
+          "C6: reuse re-rolled a site's handed estimate");
+      }
     }
-    check(reuseProved, "C6: reuse probe never reused (300 tries — suspicious)");
+    check(reused > 0,
+      "C6: the reuse probe needs reuse to actually happen (0 in 200 jobs against a 1,500-site world)");
 
     // securityState is never silently re-initialized.
     const r3 = MJ.makeRNG("stress-alias3");
@@ -1022,6 +1038,28 @@
   // the §09 "pull from the universe seed on demand" contract.
   function class8_registry() {
     const U = "stress-universe";
+
+    // ── THE MAP MUST NEVER GO STALE ──────────────────────────────
+    // Reuse is a rare flavour note for a very long time, by ruling:
+    // fresh permutations are the replayability, and the reuse chance
+    // has to stretch out far enough that a player's first hundred
+    // buildings are a hundred buildings. These three anchors ARE the
+    // ruling — a curve that drifts off them is the bug.
+    const pct = (n) => MJ.reuseChanceFor(n) * 100;
+    check(Math.abs(pct(100) - 1) < 0.01, "C8: 1% reuse at 100 sites known (got " + pct(100).toFixed(2) + ")");
+    check(Math.abs(pct(1000) - 5) < 0.01, "C8: 5% reuse at 1,000 sites known (got " + pct(1000).toFixed(2) + ")");
+    check(Math.abs(pct(10000) - 25) < 0.01, "C8: 25% reuse at 10,000 sites known (got " + pct(10000).toFixed(2) + ")");
+    check(pct(100000) === 25 && pct(1e9) === 25, "C8: and 25% is the hard cap, forever");
+    check(pct(0) === 0, "C8: a player who knows nothing can reuse nothing");
+    // Monotonic, and negligible while the world is small.
+    check(pct(10) < 0.5 && pct(50) < 1,
+      "C8: the first fifty buildings are essentially all new (10 -> " + pct(10).toFixed(2) +
+      "%, 50 -> " + pct(50).toFixed(2) + "%)");
+    let prev = -1;
+    for (const n of [1, 10, 100, 1000, 10000, 100000]) {
+      check(pct(n) >= prev, "C8: reuse never decreases as the world grows (" + n + ")");
+      prev = pct(n);
+    }
 
     // Determinism: same universe + same index = byte-identical site.
     const a = snap(MJ.mintSite(U, 42, { value: 5, orientation: "matrix" }));
