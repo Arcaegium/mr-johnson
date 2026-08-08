@@ -322,8 +322,14 @@
     // Price, legs, what each leg is, and how long you have — the four
     // things a contract is judged on, in that order. The clock comes
     // last and in amber because it is the one that is running.
-    const left = job.expiryDay - S.day;
-    const clock = left <= 0 ? "expired" : left === 1 ? "today" : left + "d left";
+    // DAYS REMAINING, INCLUSIVE OF TODAY. The model kills a job when
+    // `day > expiryDay`, so a job whose expiryDay IS today is still
+    // live — today is its last day. This read `expiryDay - day` and
+    // called zero "expired", which put an EXPIRED badge and a working
+    // Accept button on the same still-valid offer (found live). Off by
+    // one at both ends: it also called two days left "today".
+    const left = job.expiryDay - S.day + 1;
+    const clock = left <= 0 ? "expired" : left === 1 ? "last day" : left + "d left";
     // The other end of the Locations link: an accepted job carries its
     // number, and every job names WHERE by the location numbers the
     // Locations tab already uses — closed, the title alone says which
@@ -350,7 +356,7 @@
   function jobDetail(job, withStatus) {
     const left = job.expiryDay - S.day;
     return `<div class="det"><span class="dk">terms</span>¥${job.pay} <span class="muted">· rush x${job.rushMultiplier.toFixed(2)} · ${job.daysPerMission}d per leg · ` +
-        `<span class="${left <= 1 ? "warn" : "muted"}">expires day ${job.expiryDay} (${left}d left)</span>${job.chained ? ' · <span class="warn">CHAINED</span>' : ""}</span></div>` +
+        `<span class="${left <= 1 ? "warn" : "muted"}">expires day ${job.expiryDay} (${clock})</span>${job.chained ? ' · <span class="warn">CHAINED</span>' : ""}</span></div>` +
       `<div class="det"><span class="dk">legs</span>${job.missions.map((m, k) => legLineFull(job, m, k, withStatus)).join("")}</div>`;
   }
 
@@ -578,9 +584,28 @@
           if (!S.knownSites.length) return lookup + emptyNote("no known sites — accept a job, search, or call one in");
           return lookup + MJ.siteListView(S.knownSites, S.day).map((row, i) => {
             const site = S.knownSites[i];
+            const t = siteTier(site);
+            // ── WHAT THE ROW SAYS, AND WHY ────────────────────────
+            // LEFT ends with the threat grade, because "how hard is
+            // this place" is the question a list of addresses is
+            // actually being scanned for, and it was the one thing
+            // only findable by opening the card.
+            //
+            // RIGHT used to read "v1 physical" — the site's VALUE (a
+            // 1-10 generation budget the job board matches tiers
+            // against) and its orientation. The value is what the
+            // grade on the left is derived from, so printing both was
+            // the same fact twice in two notations, one of them
+            // internal. What is left is the half the grade does NOT
+            // carry: which axis this place leans into, and therefore
+            // which specialist it wants.
             return entry(keyFor(site, "s"),
-              `${row.universeIndex !== null ? "#" + row.universeIndex + " " : ""}<b>${esc(row.district)}</b> <span class="muted">(${esc(row.owningFaction)})</span>${targetMarks(site)}`,
-              `v${row.value} ${esc(row.orientation)}`, () => siteDetail(row, site));
+              `${row.universeIndex !== null ? "#" + row.universeIndex + " " : ""}<b>${esc(row.district)}</b> ` +
+              `<span class="muted">(${esc(row.owningFaction)})</span> ${tierTag(t.tier, t.sure)}${targetMarks(site)}`,
+              row.orientation === "balanced"
+                ? '<span class="muted">no lean</span>'
+                : `<span class="muted">leans</span> ${esc(row.orientation)}`,
+              () => siteDetail(row, site));
           }).join("");
         } },
     ],

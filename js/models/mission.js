@@ -201,6 +201,22 @@
   // between a paid run and a profitable one.
   const DATA_PER_NODE = 2;
 
+  // ── WHAT PAYDATA IS ACTUALLY WORTH ──────────────────────────────
+  // A paydata run is a SCAVENGE — nobody hired you, there is no
+  // contract and no fee, and the files are the entire reason to go.
+  // They were counted and logged and never sold, so the one kind of
+  // run whose whole premise is "the data IS the pay" paid nothing at
+  // all.
+  //
+  // Priced off the HOST's own rating, because that is what decides
+  // whose secrets these are: a rating-2 back office keeps rosters, a
+  // rating-9 arcology keeps things people kill over. Against
+  // NUYEN_PER_MISSION_VALUE (600 a leg), a mid host emptied with a
+  // Mk1 deck lands near one contracted leg — right for a whole run's
+  // work, and the deck you brought is the cap, which is what makes a
+  // bigger deck worth buying.
+  const NUYEN_PER_FILE = 100;
+
   function deckStorageFor(runners) {
     let best = 0;
     for (const r of runners) {
@@ -224,7 +240,11 @@
       n.ice.every((i) => run.neutralized.has(i) || run.tasks.some((t) => t.obstacle === i.label && t.success)));
     const files = Math.min(storage, reached.length * DATA_PER_NODE);
     if (files <= 0) return null;
-    return { files: files, storage: storage, nodesLooted: reached.length };
+    const rating = (run.site && run.site.security && run.site.security.matrix) || 1;
+    return {
+      files: files, storage: storage, nodesLooted: reached.length,
+      nuyen: files * NUYEN_PER_FILE * rating,
+    };
   }
 
   // An astral run: one mage, projecting. No crew walks in, no walls
@@ -1044,7 +1064,17 @@
     // measured as 6 dispatches in 131 that were promised a move and
     // then had none.
     const ground = missionGround(mission);
-    for (const thing of (ground && ground.obstacles) || []) {
+    const standing = (ground && ground.obstacles) || [];
+    // AN EMPTY BUILDING IS NOT AN IMPOSSIBLE ONE. The loop below
+    // returns ok the moment it finds one thing somebody can act on, so
+    // a route with nothing on it fell straight through to "nobody can
+    // act on anything here" — reported live on a run-down Puyallup
+    // warehouse that had no security at all, told the player their
+    // decker was useless, and then completed instantly with 0 of 0
+    // cleared. A place with nothing in the way is the easiest dispatch
+    // in the game, not the hardest.
+    if (!standing.length) return { ok: true, empty: true };
+    for (const thing of standing) {
       for (const act of MJ.actsFor(thing)) {
         if (!bodies && !act.def.anywhere && planes.indexOf(MJ.verbPlane(act.def)) === -1) continue;
         if (!act.effective) continue;

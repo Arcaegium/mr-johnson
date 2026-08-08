@@ -692,6 +692,16 @@ body { padding-bottom: 76px; }
   box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.45);
 }
 .framebar .frame { border-bottom: none; background: transparent; }
+/* The day's controls, right-aligned in the gutter that never scrolls.
+   Save / Play Day / quick resolve / rewind, in that order — the four
+   things reached for every single day, kept off the page top where
+   advancing the day meant scrolling past the whole hub to find it. */
+.framectl {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+  padding: 0 12px 9px;
+}
+@media (max-width: 720px) { .framectl { justify-content: stretch; } }
 .framebar .plan-card {
   border-top: none; border-bottom: 1px solid var(--line);
   max-height: 46vh; overflow-y: auto;

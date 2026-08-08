@@ -18,15 +18,12 @@
       <div id="statline" class="statline">No game running.</div>
       <div class="controls" style="margin-top:10px">
         <input type="text" id="universe-seed" placeholder="universe seed (blank = fresh entropy)" />
+        <!-- STARTING and LOADING a game live up here, because they are
+             things you do once. The four controls you reach for every
+             single day moved into the bottom gutter, where they are
+             always in reach without scrolling back to the top. -->
         <button data-act="new-game">New Game</button>
         <button data-act="load-game">Continue (Load)</button>
-        <button data-act="save-game">Save</button>
-        <button data-act="end-day" style="border-color: var(--accent); color: var(--accent)">Play Day &raquo;</button>
-        <button data-act="quick-day" class="sm" title="AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME — the skip button">quick resolve</button>
-        <!-- Only appears once a morning is on file. Runners die on
-             jobs, and the player is never shut out of that decision. -->
-        <button data-act="rewind-day" class="sm" hidden
-                title="Put the day back the way it was this morning — everything today did is discarded, and the dice are fresh if you play it again">&laquo; rewind the day</button>
       </div>
     </header>
 
@@ -49,6 +46,19 @@
        plan opens upward out of it. -->
   <div class="framebar">
     <div id="frame" class="frame"></div>
+    <!-- THE DAY'S CONTROLS, WHERE THE DAY IS. Save / Play / Quick /
+         Rewind, right-aligned, in the gutter that never scrolls —
+         advancing the day used to mean scrolling back up past the
+         whole hub to find the button. -->
+    <div class="framectl">
+      <button data-act="save-game" class="sm">Save</button>
+      <button data-act="end-day" style="border-color: var(--accent); color: var(--accent)">Play Day &raquo;</button>
+      <button data-act="quick-day" class="sm" title="AUTO-RESOLVE IS SCAFFOLDING, NOT THE GAME — the skip button">quick resolve</button>
+      <!-- Only appears once a morning is on file. Runners die on
+           jobs, and the player is never shut out of that decision. -->
+      <button data-act="rewind-day" class="sm" hidden
+              title="Put the day back the way it was this morning — everything today did is discarded, and the dice are fresh if you play it again">&laquo; rewind the day</button>
+    </div>
   </div>
 
   <!-- Modules, loaded in dependency order (no build step) -->

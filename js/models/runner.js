@@ -548,13 +548,19 @@
   // Essence: everyone starts at 6.0 (tabletop default). Cyber-origin
   // runners already carry some augmentation, so a modest chunk is
   // pre-spent to reflect gear they came to market with (§04).
-  function generateEssence(rng, origin) {
-    const max = 6.0;
-    let current = max;
-    if (origin === "cyber") {
-      current = Math.round((max - rng.range(0.5, 2.5)) * 100) / 100;
-    }
-    return { current, max };
+  // EVERYONE STARTS WHOLE. Essence is 6 and comes down for chrome that
+  // is actually on the sheet — nothing else.
+  //
+  // This used to dock a cyber-origin runner a random 0.5-2.5 for
+  // implants nobody could name, which meant the number was a mood
+  // rather than a ledger: two identical deckers had different Magic
+  // ceilings and different soak for no readable reason, and a datajack
+  // that DID appear on the sheet had to be paid for twice or not at
+  // all. Personal kit deducts what it grants (see armory.js), and the
+  // implant path already deducts what it implants, so the figure is
+  // now the sum of things you can point at.
+  function generateEssence() {
+    return { current: 6.0, max: 6.0 };
   }
 
   // ── Skill spread: the heart of the Specialist/Generalist shape ─
@@ -1411,7 +1417,7 @@
     // growth uses for the rest of their career.
     const pool = options.karma || r.int(BIRTH_KARMA.min, BIRTH_KARMA.max);
     const attrs = baseAttributes(metatypeId, focus.family, origin);
-    const essence = generateEssence(r, origin);
+    const essence = generateEssence();
     const skillTiers = buildSkillTiers(r, focus, trueArchetype, origin, options.secondaries);
 
     // The allocator reads the finished shape — attributeCeiling wants

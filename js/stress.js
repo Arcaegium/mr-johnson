@@ -3752,9 +3752,17 @@
 
     // A bounce is a fact about the wall, learned by trying, and
     // thereafter marked rather than deleted.
+    // CONSTRUCT THE CONDITION, DO NOT HUNT FOR IT. This used to stage
+    // a T9 maglock sixty times and wait for a natural bounce, which
+    // works only while the staged crew happens to be too weak to kick
+    // through one. It is a probe about how a bounce is REPORTED, and
+    // it went red the day generation changed and handed the same seed
+    // a stronger fighter — the probe starving, not the rule breaking.
+    // Walking the tiers up to 10 makes the bounce a certainty rather
+    // than a coincidence.
     let learned = false;
-    for (let i = 0; i < 60 && !learned; i++) {
-      const s = stage("bnc" + i, "maglock", 9);
+    for (let i = 0; i < 120 && !learned; i++) {
+      const s = stage("bnc" + i, "maglock", 8 + (i % 3));
       const opt = MJ.missionPrompt(s.run).options.find((o) => o.verbId === "kick" && o.available);
       if (!opt) continue;
       const t = MJ.missionChoose(s.run, { approach: "kick", runner: opt.runner });

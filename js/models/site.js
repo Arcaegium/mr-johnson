@@ -629,11 +629,29 @@
         if (budget <= 0) break;
         const isMobile = mobileSlotSet.has(slot);
         const typeId = rng.weighted(isMobile ? mobileWeighted : staticWeighted);
-        // The band slides with depth. One draw, same as before.
+        // ── THE BAND LEANS WITH DEPTH; IT DOES NOT CLOSE ───────────
+        // A GHOST RUN HAS TO STAY POSSIBLE. The first version cut the
+        // band down by depth — deep ground rolled [value, value+1] and
+        // the doorway [value-1, value] — which made the deep end
+        // reliably hard rather than probably hard: measured 0% of deep
+        // obstacles below the axis, and runs tipping to threatening
+        // went from 29% to 50%. Better guards ARE posted near better
+        // targets, but a player who does their homework and plays
+        // attentively deserves a real shot at walking out unseen, and
+        // certainty took that away.
+        //
+        // So the whole band stays open everywhere and depth only
+        // WEIGHTS it. Two draws inside the band, keep the higher one
+        // deep and the lower one at the door — the extremes stay
+        // reachable at both ends, the middle of the distribution
+        // moves. Same one call to rng.int per obstacle plus one more
+        // only where the lean applies.
         const d = slot.depth === undefined ? 0.5 : slot.depth;
-        const lo = d >= 0.67 ? securityValue : tierLo;
-        const hi = d <= 0.33 ? securityValue : tierHi;
-        const tier = rng.int(Math.min(lo, hi), Math.max(lo, hi));
+        let tier = rng.int(tierLo, tierHi);
+        if (d >= 0.67 || d <= 0.33) {
+          const other = rng.int(tierLo, tierHi);
+          tier = d >= 0.67 ? Math.max(tier, other) : Math.min(tier, other);
+        }
         slot[fieldName].push(generateObstacleInstance(rng, typeId, tier, projection));
         budget--;
       }

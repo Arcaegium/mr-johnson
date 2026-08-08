@@ -242,6 +242,16 @@
   function acceptJob(session, boardIndex) {
     const entry = session.board[boardIndex];
     if (!entry) return { ok: false, error: "no such offer" };
+    // A CLOSED WINDOW IS CLOSED. Offers are only swept off the board at
+    // settleDay, so between the window closing and the day ending an
+    // expired offer sat there with a working Accept button — and it
+    // could be taken, run, and PAID (found live). The sweep is
+    // housekeeping; this is the rule.
+    if (session.day > entry.job.expiryDay) {
+      logLine(session, "too late for " + entry.job.hiringFaction + "'s offer — that window closed on day " +
+        entry.job.expiryDay, "job", { faction: entry.job.hiringFaction, expiryDay: entry.job.expiryDay });
+      return { ok: false, error: "that offer's window has closed" };
+    }
     session.board.splice(boardIndex, 1);
     entry.job.contractNumber = ++session.contractCounter;
     session.jobs.push(entry.job);
@@ -693,6 +703,13 @@
     if (res.dataHaul) {
       logLine(session, "  pulled " + res.dataHaul.files + " datafile(s) from " +
         res.dataHaul.nodesLooted + " node(s) — deck storage " + res.dataHaul.storage);
+      // AND FENCED. A paydata run has no contract behind it; the files
+      // are the pay, and until now they were counted and never sold.
+      if (res.dataHaul.nuyen > 0) {
+        MJ.earn(session.save, res.dataHaul.nuyen);
+        logLine(session, "  fenced the haul for " + res.dataHaul.nuyen + " nuyen",
+          "money", { amount: res.dataHaul.nuyen });
+      }
     }
     if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);
     if (res.bonusItem) {
