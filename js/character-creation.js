@@ -458,27 +458,21 @@
       const put = buy[step.ledger];
       const rows = step.rowsFor();
       const left = step.left();
-      const options = rows.map((r) => {
+      // MINUS AND PLUS PER ROW. A single click that both buys and
+      // sells can only ever cycle one point back and forth, which is
+      // not an allocator. Each row gets its own two buttons and the
+      // purse total is the only thing that gates them.
+      const steppers = rows.map((r) => {
         const bought = put[r.value] || 0;
         const at = r.base + bought;
         const full = at >= r.cap;
-        // A ROW WITH POINTS IN IT IS NEVER DEAD. Marking full or
-        // exhausted rows disabled made the refund unreachable at
-        // exactly the moment it was wanted — the click handler skips
-        // disabled buttons, so a maxed attribute could not be clicked
-        // to give a point back and the purse could only be emptied
-        // wholesale. Dead now means genuinely inert: nothing bought
-        // here and no room for more.
         return {
           html: nm(r.label) + " " + num(at) +
             (r.base ? dim(" (" + r.base + " + " + bought + ")") : bought ? dim(" (+" + bought + ")") : ""),
-          meta: bought
-            ? dim("click to take one back") + (full ? dim(" · at the cap") : "")
-            : full ? dim("already at the cap for this build")
-            : left <= 0 ? dim("nothing left to spend — take a point off something else")
-            : dim("costs 1 · cap " + r.cap),
+          meta: full ? dim("at the cap") : dim("cap " + r.cap),
           tone: bought ? "opt-on" : "",
-          dead: !bought && (full || left <= 0),
+          canMinus: bought > 0,
+          canPlus: !full && left > 0,
         };
       });
       const spent = Object.keys(put).some((k) => put[k] && rows.some((r) => r.value === k));
@@ -490,8 +484,8 @@
         heading: nm(step.ask) +
           '<div class="ask">' +
           (left > 0 ? num(left) + " to spend. " : ok("All spent. ")) +
-          dim("Nothing is committed until you sign — click a row again to take a point back.") + "</div>",
-        options: options,
+          dim("Nothing is committed until you sign.") + "</div>",
+        steppers: steppers,
         actions: [
           spent ? { id: "reset", label: "take it all back" } : null,
           history.length ? { id: "back", label: "back" } : null,
@@ -501,19 +495,18 @@
           // them.
           left <= 0 ? { id: "next", label: "that's the build", tone: "warn-btn" } : null,
         ].filter(Boolean),
-        onChoose: (opt, i) => {
+        onAdjust: (i, delta) => {
           const r = rows[i];
           if (!r) return;
-          // CLICK TO BUY, CLICK AGAIN TO SELL BACK. Reallocating was
-          // the thing there was no way to do: the only refund was a
-          // blind "undo the last point" that could not reach the row
-          // you actually wanted to change.
           const held = put[r.value] || 0;
-          if (r.base + held >= r.cap || step.left() <= 0) {
-            if (held > 0) { put[r.value] = held - 1; if (!put[r.value]) delete put[r.value]; }
-            return paint();
+          if (delta > 0) {
+            if (step.left() <= 0 || r.base + held >= r.cap) return;
+            put[r.value] = held + 1;
+          } else {
+            if (held <= 0) return;
+            put[r.value] = held - 1;
+            if (!put[r.value]) delete put[r.value];
           }
-          put[r.value] = held + 1;
           paint();
         },
         onAction: (id) => {

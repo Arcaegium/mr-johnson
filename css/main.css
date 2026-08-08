@@ -301,6 +301,25 @@ a.navlink:hover { text-decoration: underline; }
 /* A taken option in a multi-pick step. */
 button.opt.opt-on { border-color: var(--accent-2); background: #101b1d; }
 
+/* A stepper row: minus, plus, then the label and its cap. Buttons
+   cannot nest, so this is a div rather than one big .opt. */
+.steprow {
+  display: flex; align-items: center; gap: 10px;
+  margin: 7px 0; padding: 8px 12px;
+  background: #0d131a; border: 1px solid var(--line); border-radius: 2px;
+}
+.steprow.opt-on { border-color: var(--accent-2); background: #101b1d; }
+.stepmain { flex: 1 1 auto; font-size: 17px; }
+.stepmeta { color: var(--dim); font-size: 14px; white-space: nowrap; }
+button.stepbtn {
+  flex: 0 0 auto; width: 30px; height: 30px; padding: 0;
+  background: #131c25; border: 1px solid var(--line); color: var(--ink);
+  font-family: var(--mono); font-size: 18px; line-height: 1; cursor: pointer;
+  border-radius: 2px;
+}
+button.stepbtn:hover:not(:disabled) { border-color: var(--accent-2); color: var(--accent-2); }
+button.stepbtn:disabled { opacity: 0.28; cursor: default; }
+
 /* When the choice column is closed, the question rides down with the
    buttons rather than disappearing with the column. */
 .modal-foot { display: flex; align-items: center; gap: 18px; }

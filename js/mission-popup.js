@@ -51,9 +51,15 @@
     host.style.display = "none";
     document.body.appendChild(host);
     host.addEventListener("click", (e) => {
-      const el = e.target.closest("[data-pick],[data-side],[data-body],[data-peer]");
+      const el = e.target.closest("[data-pick],[data-side],[data-body],[data-peer],[data-adjust]");
       if (!el || !current) return;
-      if (el.dataset.peer !== undefined) {
+      if (el.dataset.adjust !== undefined) {
+        // A STEPPER, not a toggle: "i:+1" / "i:-1". A row that both
+        // buys and sells on the same click can only ever cycle one
+        // point, which is no way to allocate a purse.
+        const [i, d] = el.dataset.adjust.split(":");
+        current.onAdjust && current.onAdjust(+i, +d);
+      } else if (el.dataset.peer !== undefined) {
         // Face a different thing in the same room.
         current.onFacePeer && current.onFacePeer(+el.dataset.peer);
       } else if (el.dataset.body !== undefined) {
@@ -95,7 +101,18 @@
   function paint() {
     const s = current;
     if (!s) return;
-    const opts = (s.options || []).map((o, i) =>
+    // `steppers` — rows that are ADJUSTED rather than chosen, each
+    // with its own minus and plus. Buttons cannot nest, so a stepper
+    // row is a div rather than one big .opt.
+    const opts = s.steppers
+      ? s.steppers.map((r, i) =>
+          `<div class="steprow${r.tone ? " " + r.tone : ""}">` +
+          `<button class="stepbtn" data-adjust="${i}:-1"${r.canMinus ? "" : " disabled"}>&minus;</button>` +
+          `<button class="stepbtn" data-adjust="${i}:1"${r.canPlus ? "" : " disabled"}>+</button>` +
+          `<span class="stepmain">${r.html}</span>` +
+          (r.meta ? `<span class="stepmeta">${r.meta}</span>` : "") +
+          "</div>").join("")
+      : (s.options || []).map((o, i) =>
       // An approach the crew cannot take is disabled in the DOM as
       // well as dimmed in the CSS, so a keyboard and a screen reader
       // are told the same thing the eye is. The handler still guards
