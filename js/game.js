@@ -181,33 +181,48 @@
   }
 
   // ── The board (layer 3: arrivals) ───────────────────────────────
-  // Asking around for a lane biases the MINT, but the number on the
-  // card is MJ.jobThreat — the site's CURRENT posture, which starts
-  // below the ceiling the mint band set. Biasing alone therefore does
-  // not put the asked-for number on the card, so every offer is
-  // re-dealt until the grade the player will actually READ lands in
-  // its target band. Which band that is comes off a per-slot roll:
-  // ONE IN FOUR ignores the request and takes the normal deal, because
-  // the word going out is a request and not an order, and a lane with
-  // nothing above or below it is a lane with nothing to reach for.
+  // ASKING FOR T1 MEANS T1. The filter used to accept anything in the
+  // asked-for tier's BAND, and since `safe` is 1-3 and generation
+  // skews to the top of a band, "any T1 work?" measured as T1:3%,
+  // T2:29%, T3:52% — the one thing they asked for was the one thing
+  // they almost never got.
+  //
+  // It targets the RUNG now, tolerance one either side, so a T1
+  // request reads mostly T1 with some T2.
+  //
+  // And the quarter that ignores the request DRIFTS rather than
+  // JUMPS. It used to redeal off the normal board rotation, which
+  // includes `stretch` — so asking for T1 could hand back a T10, a
+  // suicide offer dressed as an answer. A step or two away is a real
+  // alternative; nine rungs away is noise.
   const OFF_REQUEST_SHARE = 0.25;
-  const REDEAL_TRIES = 6;
+  const OFF_REQUEST_DRIFT = 3;
+  const REDEAL_TRIES = 8;
 
   function refreshBoard(session, rngOverride, wantTier) {
     const rng = rngOverride || MJ.makeRNG(session.universeSeed + "|board|" + Date.now() + "|" + Math.random());
     const opts = { siteProvider: siteProviderFor(session), wantTier: wantTier || null };
     session.board = MJ.generateBoard(rng, session.knownSites, session.day, session.save.johnson.boardCapacity, opts);
     if (wantTier) {
-      const asked = MJ.tierForValue(wantTier);
       for (let i = 0; i < session.board.length; i++) {
-        const rung = rng.chance(OFF_REQUEST_SHARE) ? MJ.boardRungFor(i) : asked;
-        const band = MJ.TIER_BANDS[rung];
-        const dealt = Object.assign({}, opts, { tierBias: rung });
-        const inLane = () => {
-          const t = MJ.jobThreat(session.board[i].job, session.day).tier;
-          return t >= band.min && t <= band.max;
-        };
-        for (let n = 0; n < REDEAL_TRIES && !inLane(); n++) {
+        const drift = rng.chance(OFF_REQUEST_SHARE)
+          ? rng.int(1, OFF_REQUEST_DRIFT) * (rng.chance(0.5) ? 1 : -1) : 0;
+        const target = Math.max(1, Math.min(10, wantTier + drift));
+        const dealt = Object.assign({}, opts, {
+          tierBias: MJ.tierForValue(target), wantValue: target,
+        });
+        // EXACT FIRST, THEN CLOSE. A site's shown grade is its
+        // strongest axis, and the band law lets any axis sit a point
+        // above the site's value — so a value-1 building very often
+        // READS T2, and a tolerance-only rule settles for that
+        // immediately. Spending the first half of the tries hunting
+        // the exact rung and only then accepting a neighbour is what
+        // makes "mostly T1, some T2" instead of the reverse.
+        const off = () => Math.abs(MJ.jobThreat(session.board[i].job, session.day).tier - target);
+        const exactTries = Math.floor(REDEAL_TRIES / 2);
+        for (let n = 0; n < REDEAL_TRIES; n++) {
+          const need = n < exactTries ? 0 : 1;
+          if (off() <= need) break;
           session.board[i] = MJ.generateJob(rng, session.knownSites, session.day, dealt);
         }
       }
@@ -947,6 +962,7 @@
       universeIndex: site.identity.universeIndex,
       tags: site.tags,
       intel: site.intel,
+      securityReport: site.securityReport || null,
       estimatedSecurity: site.estimatedSecurity || null,
       knownMeta: site.knownMeta || null,
       securityState: site.securityState || null,
@@ -1053,6 +1069,7 @@
       if (rec.universeIndex !== undefined && rec.universeIndex !== null) site.identity.universeIndex = rec.universeIndex;
       site.tags = (rec.tags || []).map((t) => (t.expiryDay === null ? Object.assign({}, t, { expiryDay: Infinity }) : t));
       site.intel = rec.intel || {};
+      if (rec.securityReport) site.securityReport = rec.securityReport;
       if (rec.knownMeta) site.knownMeta = rec.knownMeta;
       if (rec.securityState) site.securityState = rec.securityState;
       session.knownSites.push(site);

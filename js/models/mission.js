@@ -827,13 +827,26 @@
   // Everything still standing on the same ground as the thing in
   // front of them — same rooms, not yet dealt with, not already
   // behind them.
+  // SAME LEG, NOT SAME ROOM — and the difference is a door.
+  //
+  // A door belongs to BOTH the rooms it joins: routeObstacles stamps
+  // an edge maglock with `rooms: [here, next]`, which is right for
+  // witnessing (a door is visible from either side) and catastrophic
+  // for this. Standing at that maglock, every guard in the NEXT room
+  // shared a room with it, so they were offered as things "also in
+  // this room" — and facing one swapped it to the front, which walked
+  // the crew through a closed door into a room they had not opened.
+  // Reported live: room 1 listed room 2's guards, and clicking one
+  // put the crew in room 2 with the door still locked behind them.
+  //
+  // `leg` is where the crew actually IS. A door met on the way out of
+  // leg N is leg N; what is behind it is leg N+1 and stays there.
   function missionRoomPeers(run) {
     const here = run.obstacles[run.index];
-    if (!here || !here.rooms) return [];
+    if (!here || here.leg === undefined) return [];
     return run.obstacles.filter((o, i) =>
-      i > run.index && o !== here && o.rooms &&
-      !run.neutralized.has(o) && !run.groupPassed.has(o) &&
-      o.rooms.some((r) => here.rooms.indexOf(r) !== -1));
+      i > run.index && o !== here && o.leg === here.leg &&
+      !run.neutralized.has(o) && !(run.groupPassed && run.groupPassed.has(o)));
   }
 
   // Face that one instead. A SWAP, not a re-sort: the chosen obstacle
@@ -844,6 +857,9 @@
   function missionFaceFirst(run, obstacle) {
     const at = run.obstacles.indexOf(obstacle);
     if (at <= run.index) return false;
+    // The peer list is the gate — and it is a LEG gate, so this can
+    // reorder what is in front of the crew and can never reach past a
+    // door into ground they have not opened.
     if (missionRoomPeers(run).indexOf(obstacle) === -1) return false;
     const cur = run.obstacles[run.index];
     run.obstacles[run.index] = obstacle;
@@ -2569,6 +2585,13 @@
     // there and met the place's own security; responders are excluded
     // because a squad that turned up because of the noise says nothing
     // about what the site normally fields.
+    // THE SECURITY EVALUATION SURVIVES THE NIGHT. Same rule as the
+    // rest of the record: it is what the crew MET, filed under the day
+    // they met it, and it goes stale like everything else. Written
+    // here rather than from the console so an auto-resolved run files
+    // the same report a played one does.
+    if (MJ.recordSecurityReport) MJ.recordSecurityReport(site, run, day);
+
     const confirmedAxes = new Set(
       obstacles.slice(0, run.index).filter(isStanding).map((o) => o.projection));
     // A recon sweep is the exception: LOOKING is the whole job, so it

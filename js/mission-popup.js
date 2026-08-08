@@ -51,9 +51,13 @@
     host.style.display = "none";
     document.body.appendChild(host);
     host.addEventListener("click", (e) => {
-      const el = e.target.closest("[data-pick],[data-side],[data-body],[data-peer],[data-adjust]");
+      const el = e.target.closest("[data-pick],[data-side],[data-body],[data-peer],[data-adjust],[data-square]");
       if (!el || !current) return;
-      if (el.dataset.adjust !== undefined) {
+      if (el.dataset.square !== undefined) {
+        // A square on the tactical grid: walk the selected body there.
+        const [x, y] = el.dataset.square.split(",");
+        current.onSquare && current.onSquare(+x, +y);
+      } else if (el.dataset.adjust !== undefined) {
         // A STEPPER, not a toggle: "i:+1" / "i:-1". A row that both
         // buys and sells on the same click can only ever cycle one
         // point, which is no way to allocate a purse.
@@ -97,6 +101,10 @@
     host.style.display = "none";
     host.innerHTML = ""; // leave nothing behind to be queried or clicked
   }
+
+  const logBody = (lines) => (lines && lines.length)
+    ? lines.join("<br>")
+    : '<span class="dimmed">nothing yet — this is where the night gets written down</span>';
 
   function paint() {
     const s = current;
@@ -148,18 +156,33 @@
         "</div>" +
         (s.site ? `<div class="modal-site">${s.site}</div>` : "") +
         (s.future ? `<div class="modal-future">${s.future}</div>` : "") +
-        (s.present ? `<div class="modal-present">${s.present}</div>` : "") +
+        // THE PRESENT IS TWO COLUMNS. Left: the room, drawn, and what
+        // is known about the thing in it. Right: the two logs — what
+        // has happened (the action log) and what it adds up to (the
+        // security evaluation). The grid left a tall empty gutter
+        // beside itself and the transcript was down the bottom out of
+        // sight; putting the night's record in that gutter fills the
+        // space with the one thing the player kept looking for.
+        (s.present
+          ? '<div class="modal-present">' +
+            `<div class="present-main">${s.present}</div>` +
+            '<div class="present-side">' +
+              '<div class="pane-k">the action log</div>' +
+              '<div class="modal-transcript">' + logBody(s.transcript) + "</div>" +
+              (s.ledger
+                ? '<div class="pane-k">security evaluation</div>' +
+                  `<div class="modal-ledger">${s.ledger}</div>` : "") +
+            "</div></div>"
+          : "") +
         (s.result ? `<div class="modal-result">${s.result}</div>` : "") +
-        // ALWAYS RENDERED, empty or not. Dropping the pane when the
+        // ALWAYS RENDERED, empty or not — on the screens that have no
+        // present pane to hang it beside. Dropping the pane when the
         // log was empty left the whole bottom half of the column as
         // dead space on the first beat of every run, and then made
         // the layout jump the moment the first line landed.
-        (s.transcript
+        (!s.present && s.transcript
           ? '<div class="modal-past"><div class="pane-k">the run so far</div>' +
-            '<div class="modal-transcript">' +
-            (s.transcript.length ? s.transcript.join("<br>")
-              : '<span class="dimmed">nothing yet — this is where the night gets written down</span>') +
-            "</div></div>" : "") +
+            '<div class="modal-transcript">' + logBody(s.transcript) + "</div></div>" : "") +
         // With no choice column, the question and the way out both
         // belong at the foot of the column that IS on screen. The
         // heading used to render ONLY inside the side column, so a
@@ -629,7 +652,7 @@
     lethal:  "#e05858",
   };
 
-  function tacticalGrid(run) {
+  function tacticalGrid(run, mover) {
     const T = MJ.tactical;
     if (!T || !run.tactical) return "";
     const t = run.tactical;
@@ -641,23 +664,44 @@
     const cy = (y) => PAD + y * CELL + CELL / 2;
     const bits = [];
 
-    // The floor. Plain squares — the room is the stage, not the show.
+    // WHO IS BEING MOVED. Out of a fight that is whichever body the
+    // player has selected in the crew column — they can walk anyone
+    // anywhere in the room, because nothing is counting seconds yet.
+    // In one it is whoever the clock says is up, and the squares are
+    // bounded by what that body has left.
+    //
+    // `t.inFight` is the seam, and today nothing sets it: a firefight
+    // is still resolved end-to-end inside runCombat with the popup
+    // shut, so there is no in-combat moment for the player to hold.
+    // When that opens up (P2.2/P2.3, the player's seat) this view
+    // needs no change — the flag flips and the budget starts biting.
+    const free = !t.inFight;
+    const active = free ? (mover || T.whoseTurn(run)) : T.whoseTurn(run);
+    const canMove = !!(active && active.identity &&
+      (!MJ.bodies || MJ.bodies.canAct(active)) &&
+      (free || !t.acted.has(active)));
+    // The model decides where the legal squares are; the view only
+    // paints them. Asking T.reachable both times is what keeps
+    // "highlighted" and "accepted" the same set.
+    const legalKeys = new Set(canMove
+      ? T.reachable(run, active, { free: free }).map((p) => p.x + "," + p.y) : []);
+
+    // The floor. A square is the control — click it and the selected
+    // body walks there, so there is nothing to line up with anything.
     for (let y = 0; y < t.grid.h; y++) {
       for (let x = 0; x < t.grid.w; x++) {
+        const ok = legalKeys.has(x + "," + y);
         bits.push(`<rect x="${PAD + x * CELL}" y="${PAD + y * CELL}" width="${CELL}" height="${CELL}" ` +
-          `fill="none" stroke="var(--line)" stroke-width="0.6"/>`);
-      }
-    }
-
-    // WHERE THE ACTIVE BODY COULD GET TO. Only on their own turn, and
-    // only what the clock says is legal — the view never invents a
-    // move the model would refuse.
-    const active = T.whoseTurn(run);
-    if (active && active.identity) {
-      for (const p of T.reachable(run, active)) {
-        bits.push(`<rect x="${PAD + p.x * CELL + 2}" y="${PAD + p.y * CELL + 2}" ` +
-          `width="${CELL - 4}" height="${CELL - 4}" fill="rgba(90,169,201,0.10)" ` +
-          `stroke="var(--accent-2)" stroke-width="0.7" stroke-dasharray="2 2"/>`);
+          `fill="${ok ? "rgba(90,169,201,0.09)" : "transparent"}" stroke="var(--line)" stroke-width="0.6"` +
+          (ok ? ` class="tacsq" data-square="${x},${y}"` : "") + "/>");
+        if (ok && !free) {
+          // In a fight the allowance is real, so the reachable box is
+          // drawn. Out of one the whole room is reachable and outlining
+          // every tile would be noise.
+          bits.push(`<rect x="${PAD + x * CELL + 2}" y="${PAD + y * CELL + 2}" ` +
+            `width="${CELL - 4}" height="${CELL - 4}" fill="none" ` +
+            `stroke="var(--accent-2)" stroke-width="0.7" stroke-dasharray="2 2" pointer-events="none"/>`);
+        }
       }
     }
 
@@ -681,18 +725,85 @@
       bits.push(`<title>${esc(name)}${b.tier ? " T" + b.tier : ""}</title>`);
     }
 
-    // Who is up, and what they have left.
-    const who = active
-      ? (active.identity ? nm(active.identity.handle) : nm(active.label)) +
-        '<span class="dimmed"> — ' + num(t.moveLeft.get(active) || 0) + " of " +
-        T.speedFor(active) + " squares" +
-        (t.acted.has(active) ? ", acted" : ", action ready") + "</span>"
+    // Who is being moved, and on what terms. Naming the round while
+    // nothing is counting rounds would be a lie with a number on it,
+    // so out of a fight the line says what is actually true: this one
+    // is selected, and the room is theirs to walk.
+    const name = active
+      ? (active.identity ? nm(active.identity.handle) : nm(active.label))
       : '<span class="dimmed">nobody</span>';
+    const terms = !active ? ""
+      : free
+        ? '<span class="dimmed"> — ' + (canMove
+            ? "click a square to move them" : "cannot be moved") + "</span>"
+        : '<span class="dimmed"> — ' + num(t.moveLeft.get(active) || 0) + " of " +
+          T.speedFor(active) + " squares" +
+          (t.acted.has(active) ? ", acted" : ", action ready") + "</span>";
     return '<div class="pane-k">this room' +
       (room ? ' <span class="dimmed">· ' + esc(room.label) + " · " + esc(room.size) + "</span>" : "") +
       "</div>" +
       `<div class="tacgrid"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${bits.join("")}</svg></div>` +
-      '<div class="tacturn"><span class="dk">round ' + t.round + " · up:</span> " + who + "</div>";
+      '<div class="tacturn"><span class="dk">' +
+      (free ? "moving:" : "round " + t.round + " · up:") + "</span> " + name + terms + "</div>";
+  }
+
+  // ── THE SECURITY EVALUATION LOG ────────────────────────────────
+  // Beside the action log, and deliberately a different KIND of
+  // reading. The transcript is a list of moments — this is the same
+  // night compiled into a picture of the building, and it fills in as
+  // the crew earns it.
+  //
+  // Everything here is a count of things actually met. See
+  // securityCensus for why it is not a readout of the site: a
+  // percentage of obstacles nobody has stood in front of would hand
+  // over the one thing this game makes you buy.
+  const KIND_WORD = {
+    guard: "guards", camera: "cameras", maglock: "locked doors",
+    spirit: "bound spirits", ward: "wards", drone: "drones",
+    barrierIce: "barrier ICE", patrolIce: "patrol ICE", blackIce: "black ICE",
+  };
+  const kindWord = (t) => KIND_WORD[t] || (t + "s");
+
+  function securityLedger(run) {
+    if (!MJ.securityCensus) return "";
+    const c = MJ.securityCensus(run);
+    if (!c.met) {
+      return '<div class="led-empty">nothing met yet — this fills in as the crew ' +
+        "works out what the place is made of</div>";
+    }
+    const rows = [];
+    rows.push('<div class="led-line"><span class="dk">response floor</span> ' + num("T" + c.floor) +
+      '<span class="dimmed"> — hardest thing met of ' + c.met + "</span></div>");
+    for (const k of c.kinds) {
+      // Share once the sample can carry one, count while it cannot.
+      // "100% guards" off one guard is a number that lies.
+      const weight = k.share !== null
+        ? num(k.share + "%")
+        : num(k.n) + '<span class="dimmed"> met</span>';
+      const notes = [];
+      if (k.armed) notes.push(k.armed === k.n ? "all armed" : k.armed + " armed");
+      if (k.watching) notes.push(k.watching === k.n ? "all watching" : k.watching + " watching");
+      if (k.gone) notes.push(k.gone + " down");
+      rows.push('<div class="led-line">' + weight + " " + esc(kindWord(k.type)) +
+        ' <span class="dimmed">· up to T' + k.hardest +
+        (notes.length ? " · " + notes.join(", ") : "") + "</span></div>");
+    }
+    // WHAT IT COST TO FIND OUT, kept separate and marked as bought.
+    // The denominator is how many of that kind were actually tried,
+    // never how many exist — the crew knows what it swung at.
+    const paid = [];
+    for (const k of c.kinds) {
+      for (const im of k.immune) {
+        paid.push('<div class="led-line led-paid">' + esc(kindWord(k.type)) + " here shrug off " +
+          nm(im.skill) + ' <span class="dimmed">· ' + im.n + " of " + Math.max(im.n, k.tried) +
+          " tried</span></div>");
+      }
+    }
+    if (paid.length) {
+      rows.push('<div class="led-sub">learned the hard way</div>');
+      rows.push(paid.join(""));
+    }
+    return rows.join("");
   }
 
   // ── THE FUTURE: the ground ahead ───────────────────────────────
@@ -728,7 +839,7 @@
     if (!outside && MJ.tactical && run.site && run.site.layout) {
       MJ.tactical.begin(run);
       MJ.tactical.reseat(run);
-      const grid = tacticalGrid(run);
+      const grid = tacticalGrid(run, opts && opts.mover);
       if (grid) out.push(grid);
     }
     out.push('<div class="pane-k">' + (outside ? "on the pavement" : "in the room") + "</div>");
@@ -1414,9 +1525,10 @@
           '<span class="dimmed"> of </span>' + num(prompt.total),
         site: siteStrip(run),
         future: futurePanel(run),
-        present: presentPanel(run, prompt),
+        present: presentPanel(run, prompt, { mover: who }),
         party: partyPanel(run, bodies.indexOf(who)),
         transcript: transcript,
+        ledger: securityLedger(run),
         heading: nm(who.identity.handle) +
           '<div class="ask">' + (stalled
             ? no("Nothing left to try here.")
@@ -1427,6 +1539,15 @@
           { id: "withdraw", label: "withdraw the crew", tone: "warn-btn" },
         ].filter(Boolean),
         onSelectBody: (i) => { selected = bodies[i] || selected; step(); },
+        // WALKING IS NOT A TURN. Moving the selected body changes
+        // where they are standing and nothing else: no roll, no clock,
+        // no beat. It matters because reach already reads position —
+        // a blade needs the next square, a gun does not.
+        onSquare: (x, y) => {
+          const t = run.tactical;
+          if (!t) return;
+          if (MJ.tactical.moveTo(run, who, x, y, { free: !t.inFight })) step();
+        },
         onFacePeer: (i) => {
           const o = run.obstacles[i];
           if (o && MJ.missionFaceFirst(run, o)) step();

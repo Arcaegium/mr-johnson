@@ -270,10 +270,43 @@ a.navlink:hover { text-decoration: underline; }
 .modal-present {
   padding: 14px 26px 16px; border-bottom: 1px solid var(--line);
   /* The present never scrolls away: it is what the player is deciding
-     about, so it is pinned between the route and the log. */
-  flex: 0 0 auto;
+     about, so it is pinned between the route and the log. It takes
+     the rest of the column because the logs live inside it now, and
+     a log with nowhere to grow is a log nobody reads. */
+  flex: 1 1 auto; min-height: 0; overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 340px);
+  gap: 22px; align-items: stretch;
 }
+/* The grid drew a tall empty gutter beside itself. The night's record
+   goes in it: what happened, then what it adds up to. Both scroll
+   inside their own box — a log that pushes the column taller than the
+   window takes the evaluation off the bottom of the screen with it. */
+.present-main { min-width: 0; min-height: 0; overflow-y: auto; }
+.present-side {
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.present-side .modal-transcript {
+  flex: 1 1 40%; min-height: 90px;
+  padding-bottom: 10px; font-size: 15px; line-height: 1.7;
+}
+.present-side .pane-k { flex: none; margin-top: 2px; }
+.modal-ledger {
+  flex: 0 1 auto; min-height: 0; max-height: 55%; overflow-y: auto;
+  border-top: 1px solid var(--line); padding: 8px 0 4px;
+  font-size: 15px; line-height: 1.65;
+}
+.led-line { margin-bottom: 3px; }
+.led-sub {
+  color: var(--accent); font-size: 0.6rem; letter-spacing: 0.16em;
+  text-transform: uppercase; margin: 8px 0 4px;
+}
+.led-paid { color: var(--dim); }
+.led-empty { color: var(--dim); line-height: 1.6; }
 .ob-name { font-size: 1.2rem; line-height: 1.4; }
+/* A square you can walk to says so under the cursor. */
+.tacsq { cursor: pointer; }
+.tacsq:hover { fill: rgba(90, 169, 201, 0.26); }
 
 /* ── The tactical view ──────────────────────────────────────────
    The room the crew is standing in, square by square. A SECOND
@@ -359,6 +392,12 @@ button.peer:hover { border-color: var(--accent); color: var(--accent); }
 }
 
 @media (max-width: 1500px) { .modal-side { flex-basis: 360px; } }
+/* Below this the gutter is not a gutter any more — stack the logs
+   under the room rather than squeezing both into slivers. */
+@media (max-width: 1180px) {
+  .modal-present { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .present-side { max-height: none; }
+}
 @media (max-width: 1280px) {
   .modal-shell { flex-wrap: wrap; height: auto; }
   .modal-side { flex: 1 1 100%; }
@@ -447,7 +486,15 @@ button.peer:hover { border-color: var(--accent); color: var(--accent); }
 .modal-heading { padding: 18px 26px 8px; line-height: 1.55; }
 .modal-heading .ask { color: var(--dim); margin-top: 10px; font-size: 17px; }
 .modal-options { padding: 10px 26px 16px; overflow-y: auto; }
-.modal-actions { padding: 15px 26px; border-top: 1px solid var(--line); text-align: right; }
+/* FOUR BUTTONS IN A 440px COLUMN WRAP, and inline-block buttons with
+   only a text-align to arrange them ran into each other when they did.
+   A flex row with a real gap wraps cleanly and keeps the confirming
+   action visually apart from the destructive one beside it. */
+.modal-actions {
+  padding: 15px 26px; border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end;
+}
+.modal-actions button { margin: 0; }
 
 button.opt {
   display: block; width: 100%; text-align: left;
@@ -665,6 +712,21 @@ button.warn-btn:hover { background: #d4735e; color: var(--bg); }
   border-top: 1px solid var(--line);
   font-size: 0.86rem;
 }
+
+/* The security report: a card inside a card. Same head grammar as an
+   entry so it reads as one, its own toggle so it does not fight one. */
+.report { border: 1px solid var(--line); border-radius: 2px; margin: 0 0 10px; }
+.report.open { background: #0b1017; }
+.report.stale .etitle { color: var(--dim); }
+.report-head {
+  padding: 6px 8px; cursor: pointer;
+  display: flex; gap: 8px; align-items: baseline; border-radius: 2px;
+}
+.report-head:hover { background: #131c26; }
+.report-head .chev { color: var(--dim); width: 10px; flex: none; }
+.report-head .etitle { flex: 1; }
+.report-head .etag { color: var(--dim); font-size: 0.76rem; flex: none; }
+.report-body { padding: 8px 10px 2px 26px; border-top: 1px solid var(--line); }
 
 /* A labelled block inside an expanded entry. */
 .det { margin-bottom: 8px; }

@@ -136,6 +136,128 @@
     );
   }
 
+  // ── THE SECURITY EVALUATION ────────────────────────────────────
+  // What the crew has WORKED OUT about this place by being in it.
+  //
+  // The obvious build is a readout of the site: "60% guards, 25%
+  // doors, 15% cameras". That is a lie dressed as a statistic — it
+  // reports obstacles nobody has stood in front of, on a route the
+  // crew has not walked, and it hands over for free the one thing
+  // this game makes you buy. It would also break the green light: a
+  // card that can be right about rooms you have never entered means
+  // the player is never wrong for a reason they earned.
+  //
+  // So the census counts WHAT HAS BEEN MET, and nothing else. Every
+  // number in it is a number the crew could have kept on a notepad.
+  // It divides by what the knowledge cost:
+  //
+  //   SEEN     type, tier, armed, what it watches. Free — you looked.
+  //   LEARNED  immunities, out of run.discovered. One attempt each.
+  //
+  // Counts while the sample is small, shares once it is big enough to
+  // mean anything: "100% of guards" off one guard is a lie with a
+  // number on it, and SHARE_FLOOR is where it stops being one.
+  const SHARE_FLOOR = 5;
+
+  // Everything the crew can already see: what they have got past, what
+  // is in front of them, and whatever shares that ground. `leg` is
+  // where they actually are — a door met on the way out of leg N is
+  // leg N, and what is behind it stays behind it.
+  function metObstacles(run) {
+    const here = run.obstacles && run.obstacles[run.index];
+    const leg = here && here.leg !== undefined ? here.leg : Infinity;
+    return (run.obstacles || []).filter((o, i) =>
+      i <= run.index || (o.leg !== undefined && o.leg <= leg));
+  }
+
+  function securityCensus(run) {
+    const met = metObstacles(run);
+    const kinds = new Map();
+    let floor = 0;
+    for (const o of met) {
+      const type = o.type || "obstacle";
+      if (!kinds.has(type)) {
+        kinds.set(type, {
+          type: type, n: 0, hardest: 0, armed: 0, watching: 0,
+          gone: 0, tried: 0, immune: new Map(), planes: new Set(),
+        });
+      }
+      const k = kinds.get(type);
+      k.n += 1;
+      k.hardest = Math.max(k.hardest, o.tier || 0);
+      if (o.fights) k.armed += 1;
+      if ((o.senses || []).length) k.watching += 1;
+      if (run.neutralized && run.neutralized.has(o)) k.gone += 1;
+      k.planes.add(o.projection || "physical");
+      floor = Math.max(floor, o.tier || 0);
+      // What an attempt bought. Counted against the number of this
+      // type actually TRIED, so "2 of 2" reads as the small sample it
+      // is rather than as a fact about every guard in the building.
+      const tries = run.attempts && run.attempts.get(o);
+      if (tries && Object.keys(tries).length) k.tried += 1;
+      const disc = run.discovered && run.discovered.get(o);
+      if (disc) {
+        for (const skill of Object.keys(disc)) {
+          k.immune.set(skill, (k.immune.get(skill) || 0) + 1);
+        }
+      }
+    }
+    const list = [...kinds.values()].sort((a, b) => b.n - a.n || b.hardest - a.hardest);
+    for (const k of list) {
+      k.share = met.length >= SHARE_FLOOR ? Math.round((k.n / met.length) * 100) : null;
+      k.planes = [...k.planes];
+      k.immune = [...k.immune.entries()].map(([skill, n]) => ({ skill: skill, n: n }));
+    }
+    return { met: met.length, floor: floor, kinds: list, sampled: met.length >= SHARE_FLOOR };
+  }
+
+  // WHAT SURVIVES THE NIGHT. The census is a live tally; this is the
+  // note the crew keeps. Stamped with the day it was taken, because
+  // the only honest reason for a green light to be wrong is that the
+  // intel went stale (see the green light invariant) — a report that
+  // never ages could never be wrong for a reason the player earned.
+  //
+  // Merged, not replaced: a second run on the same building adds what
+  // it saw to what was already known. The high-water mark is kept for
+  // the floor, because meeting a T5 once proves the place fields one.
+  function recordSecurityReport(site, run, day) {
+    if (!site || !run) return null;
+    const census = securityCensus(run);
+    if (!census.met) return site.securityReport || null;
+    const prior = site.securityReport;
+    const kinds = {};
+    if (prior) {
+      for (const k of prior.kinds || []) kinds[k.type] = Object.assign({}, k);
+    }
+    for (const k of census.kinds) {
+      const at = kinds[k.type] || (kinds[k.type] = { type: k.type, n: 0, hardest: 0, armed: 0, watching: 0, immune: [] });
+      at.n += k.n;
+      at.hardest = Math.max(at.hardest, k.hardest);
+      at.armed += k.armed;
+      at.watching += k.watching;
+      const bySkill = {};
+      for (const im of at.immune) bySkill[im.skill] = im.n;
+      for (const im of k.immune) bySkill[im.skill] = (bySkill[im.skill] || 0) + im.n;
+      at.immune = Object.keys(bySkill).map((s) => ({ skill: s, n: bySkill[s] }));
+    }
+    const list = Object.values(kinds).sort((a, b) => b.n - a.n);
+    const seen = list.reduce((a, k) => a + k.n, 0);
+    for (const k of list) k.share = seen >= SHARE_FLOOR ? Math.round((k.n / seen) * 100) : null;
+    site.securityReport = {
+      dayTaken: day,
+      firstSeen: (prior && prior.firstSeen !== undefined) ? prior.firstSeen : day,
+      visits: ((prior && prior.visits) || 0) + 1,
+      met: seen,
+      floor: Math.max((prior && prior.floor) || 0, census.floor),
+      kinds: list,
+    };
+    return site.securityReport;
+  }
+
+  MJ.SECURITY_SHARE_FLOOR = SHARE_FLOOR;
+  MJ.metObstacles = metObstacles;
+  MJ.securityCensus = securityCensus;
+  MJ.recordSecurityReport = recordSecurityReport;
   MJ.isStanding = isStanding;
   MJ.INTEL_FRESH_DAYS = INTEL_FRESH_DAYS;
   MJ.RECON_SAMPLE = RECON_SAMPLE;

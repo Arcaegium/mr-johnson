@@ -42,6 +42,7 @@
     crewTab: "hired",   // section of the dispatch dialog
     scout: "",          // market class filter
     boardTier: "",      // job board threat filter — "" is any work
+    report: null,       // site key whose security report is expanded
   };
 
   // A dispatch is four runners, whatever the roster holds. The design
@@ -522,6 +523,57 @@
       `</div></div>`;
   }
 
+  // ── THE SECURITY REPORT ─────────────────────────────────────────
+  // What crews have worked out about this building by walking it,
+  // kept between visits. It is a NOTE, not a spec sheet: every line
+  // counts things somebody actually met, and it carries the day it
+  // was taken because a report that never ages could never be wrong
+  // for a reason the player earned.
+  //
+  // Its own card rather than another `det` row, because a place run
+  // six times has a lot to say and none of it is what you open a site
+  // to check. Not `entry()` — that tracks ONE open card for the whole
+  // screen, so nesting one would shut the site it lives in.
+  const REPORT_WORD = {
+    guard: "guards", camera: "cameras", maglock: "locked doors",
+    spirit: "bound spirits", ward: "wards", drone: "drones",
+    barrierIce: "barrier ICE", patrolIce: "patrol ICE", blackIce: "black ICE",
+  };
+  const reportWord = (t) => REPORT_WORD[t] || t + "s";
+
+  function securityReportCard(site) {
+    const rep = site.securityReport;
+    const key = keyFor(site, "s");
+    const open = UI.report === key;
+    if (!rep) {
+      return `<div class="det"><span class="dk">security report</span>` +
+        `<span class="muted">nothing filed — nobody has been inside</span></div>`;
+    }
+    const age = S.day - rep.dayTaken;
+    const stale = age > (MJ.INTEL_FRESH_DAYS || 7);
+    const head = `<div class="report-head" data-act="site-report" data-sk="${key}">` +
+      `${chev(open)}<span class="etitle">security report</span>` +
+      `<span class="etag">${rep.met} met over ${rep.visits} visit${rep.visits === 1 ? "" : "s"} · ` +
+      `floor T${rep.floor} · ` +
+      (stale ? `<span class="warn">day ${rep.dayTaken}, ${age} days old</span>`
+             : `day ${rep.dayTaken}`) + `</span></div>`;
+    if (!open) return `<div class="report${stale ? " stale" : ""}">${head}</div>`;
+    const lines = rep.kinds.map((k) => {
+      const weight = k.share !== null && k.share !== undefined
+        ? `<b>${k.share}%</b>` : `<b>${k.n}</b> met`;
+      const notes = [];
+      if (k.armed) notes.push(k.armed === k.n ? "all armed" : `${k.armed} armed`);
+      if (k.watching) notes.push(k.watching === k.n ? "all watching" : `${k.watching} watching`);
+      return `<div class="det"><span class="dk">${esc(reportWord(k.type))}</span>${weight} ` +
+        `<span class="muted">· up to T${k.hardest}${notes.length ? " · " + notes.join(", ") : ""}</span></div>` +
+        k.immune.map((im) => `<div class="det"><span class="dk"></span>` +
+          `<span class="muted">shrugs off</span> ${esc(im.skill)} <span class="muted">(${im.n} seen)</span></div>`).join("");
+    }).join("");
+    return `<div class="report open${stale ? " stale" : ""}">${head}<div class="report-body">${lines}` +
+      (stale ? `<div class="det"><span class="dk"></span><span class="warn">this is old — the place has had ${age} days to change</span></div>` : "") +
+      `</div></div>`;
+  }
+
   function siteDetail(row, site) {
     return `<div class="det"><span class="dk">address</span>` +
         (row.name ? `<span class="ink">"${esc(row.name)}"</span>${row.theme ? ` <span class="muted">· ${esc(row.theme)}</span>` : ""}` : '<span class="muted">no key on file</span>') + `</div>` +
@@ -529,6 +581,7 @@
         `P:${fmtAxis(row.security.physical)} A:${fmtAxis(row.security.astral)} M:${fmtAxis(row.security.matrix)}` +
         (row.suppression ? ' <span class="warn">softened today</span>' : "") +
         (row.tags.length ? ` <span class="muted">[${esc(row.tags.join(", "))}]</span>` : "") + `</div>` +
+      securityReportCard(site) +
       siteIntents(site);
   }
 
@@ -1123,6 +1176,13 @@
         UI.entry = keyFor(site, "s");
         UI.focus = null;
       }
+      render(); return;
+    }
+    // Its own toggle, deliberately: UI.entry is the ONE open card on
+    // the screen, and reusing it here would close the site the report
+    // is filed under.
+    if (action === "site-report") {
+      UI.report = UI.report === el.dataset.sk ? null : el.dataset.sk;
       render(); return;
     }
     if (action === "crew-tab") { UI.crewTab = el.dataset.ct; UI.entry = null; render(); return; }

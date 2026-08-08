@@ -190,10 +190,19 @@
   // universe-fixed buildings and only the CONTRACT is timestamped.
   // Without a provider (tests, bench), sites generate off the
   // passed rng as before.
-  function matchSite(rng, sitePool, tierId, orientation, excludeFaction, siteProvider) {
+  // `wantValue` — a specific rung, not a band. A player asking the
+  // street for T1 work means T1, and a band-wide draw hands them the
+  // top of the band nearly every time: measured at T1:3% / T2:29% /
+  // T3:52% when the answer to "any T1 jobs?" should have been mostly
+  // T1. The band is still what a REUSED site has to fall inside,
+  // because a site's value is already fixed and cannot be asked to
+  // move; the mint is where the request actually bites.
+  function matchSite(rng, sitePool, tierId, orientation, excludeFaction, siteProvider, wantValue) {
     const band = TIER_BANDS[tierId];
+    const lo = wantValue ? Math.max(1, wantValue - 1) : band.min;
+    const hi = wantValue ? Math.min(10, wantValue + 1) : band.max;
     let candidates = (sitePool || []).filter(
-      (s) => s.identity.value >= band.min && s.identity.value <= band.max
+      (s) => s.identity.value >= lo && s.identity.value <= hi
     );
     if (excludeFaction) {
       candidates = candidates.filter((s) => s.identity.owningFaction !== excludeFaction);
@@ -201,7 +210,16 @@
     if (candidates.length > 0 && rng.chance(reuseChanceFor((sitePool || []).length))) {
       return { site: rng.pick(candidates), wasReused: true };
     }
-    const value = rng.int(band.min, band.max);
+    // Centred on what was asked for: the rung itself twice as often as
+    // either neighbour, so "mostly T1 and some T2" is what a T1
+    // request actually produces.
+    const value = wantValue
+      ? Math.max(1, Math.min(10, rng.weighted([
+          { item: wantValue, weight: 2 },
+          { item: wantValue - 1, weight: 1 },
+          { item: wantValue + 1, weight: 1 },
+        ])))
+      : rng.int(band.min, band.max);
     const mint = () => (siteProvider ? siteProvider.mint(value, orientation, excludeFaction) : MJ.generateSite(rng, { value, orientation }));
     let site = mint();
     let guard = 0;
@@ -229,7 +247,7 @@
   }
 
   // ── One mission: the actual dispatch unit ───────────────────────
-  function generateMission(rng, sitePool, hiringFaction, siteProvider, tierBias) {
+  function generateMission(rng, sitePool, hiringFaction, siteProvider, tierBias, wantValue) {
     const familyId = rng.pick(FAMILY_IDS);
     const family = JOB_FAMILIES[familyId];
     const verbId = rng.pick(family.verbs);
@@ -237,7 +255,7 @@
     const tierId = tierBias || rng.pick(TIER_IDS);
     const orientation = DOMAIN_TO_ORIENTATION[domain];
 
-    const { site, wasReused } = matchSite(rng, sitePool, tierId, orientation, hiringFaction, siteProvider);
+    const { site, wasReused } = matchSite(rng, sitePool, tierId, orientation, hiringFaction, siteProvider, wantValue);
     const tier = tierForValue(site.identity.value);
     const intendedCrew = rollIntendedCrew(rng, familyId);
 
@@ -292,7 +310,7 @@
     const missions = [];
     const siteResults = [];
     for (let i = 0; i < missionCount; i++) {
-      const { mission, site, wasReused } = generateMission(r, sitePool, hiringFaction, options.siteProvider, options.tierBias);
+      const { mission, site, wasReused } = generateMission(r, sitePool, hiringFaction, options.siteProvider, options.tierBias, options.wantValue);
       missions.push(mission);
       siteResults.push({ site, wasReused });
     }
@@ -364,7 +382,12 @@
     const results = [];
     for (let i = 0; i < (count || 6); i++) {
       const rung = want || boardRungFor(i);
-      results.push(generateJob(rng, sitePool, currentDay, Object.assign({}, options, { tierBias: rung })));
+      results.push(generateJob(rng, sitePool, currentDay, Object.assign({}, options, {
+        tierBias: rung,
+        // The RUNG the player asked for, not just its band — see
+        // matchSite. Absent when nobody asked for anything.
+        wantValue: options.wantTier || null,
+      })));
     }
     return results;
   }

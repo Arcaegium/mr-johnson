@@ -155,6 +155,41 @@
     return Math.min(p.x, p.y, grid.w - 1 - p.x, grid.h - 1 - p.y);
   }
 
+  // ── SOME THINGS ARE BOLTED TO WALLS ────────────────────────────
+  // A maglock is a DOOR: it is in a wall, and if it is an edge
+  // obstacle it is in the wall facing the room it leads to. A camera
+  // is screwed to a wall or a ceiling corner and watches the floor
+  // from there. Neither of them stands in the middle of a room, and
+  // drawing them there made a floor plan read like a chessboard.
+  //
+  // Everything else — people, spirits, drones — walks on the floor
+  // and stands where it likes.
+  const WALL_MOUNTED = { maglock: true, camera: true };
+  const isWallMounted = (o) => !!(o && WALL_MOUNTED[o.type]);
+  const onEdge = (grid, p) => ringOf(grid, p) === 0;
+
+  // Which wall a thing should be on, when it leads somewhere. The
+  // route graph draws the walk left-to-right, so a door OUT of this
+  // room reads as the right-hand wall and the way IN as the left —
+  // which makes the two pictures agree about direction without the
+  // grid having to know anything about how the graph is laid out.
+  function wallFor(grid, o, roomId) {
+    if (!o || !o.where) return null;
+    if (o.where.kind === "edge") {
+      return o.where.from === roomId ? "right" : "left";
+    }
+    if (o.where.kind === "entry") return "left";
+    return null;
+  }
+
+  function onWall(grid, p, wall) {
+    if (wall === "right") return p.x === grid.w - 1;
+    if (wall === "left") return p.x === 0;
+    if (wall === "top") return p.y === 0;
+    if (wall === "bottom") return p.y === grid.h - 1;
+    return onEdge(grid, p);
+  }
+
   // Deal squares to a set of occupants, farthest-in first or
   // nearest-the-door first, breaking ties on the occupant's own
   // hash so two guards do not both want the same square.
@@ -165,8 +200,18 @@
     const out = new Map();
     for (const o of occupants) {
       const seed = hash(bodyKey(o) + "|" + (opts.salt || ""));
-      const free = all.filter((p) => !taken.has(p.x + "," + p.y));
+      let free = all.filter((p) => !taken.has(p.x + "," + p.y));
       if (!free.length) break;
+      // A wall-mounted thing takes a wall square, and the wall its
+      // door actually leads through where it has one. Falls back
+      // through "any wall" to "anywhere" so a crowded room can never
+      // fail to place something.
+      if (isWallMounted(o)) {
+        const wall = wallFor(grid, o, opts.roomId);
+        const wanted = wall && free.filter((p) => onWall(grid, p, wall));
+        const anyWall = free.filter((p) => onEdge(grid, p));
+        free = (wanted && wanted.length) ? wanted : (anyWall.length ? anyWall : free);
+      }
       // Sort by how well the square suits this kind of occupant,
       // then pick a stable one out of the best few so a room does
       // not line everybody up on one tile.
@@ -206,10 +251,18 @@
     return state;
   }
 
-  // Put everyone somewhere legal for where the run currently is.
-  // Called at begin and whenever the crew changes rooms — the beat
-  // model moves the crew as a unit between obstacles, so until the
-  // turn loop drives movement this is what keeps positions honest.
+  // Give everybody in this room a legal square — and NOTHING ELSE.
+  //
+  // A REPAINT IS NOT A REDEPLOYMENT. The panel calls this on every
+  // beat, and the first version re-dealt the whole floor each time.
+  // That was invisible while nobody could move: the deal is a pure
+  // function of the room, so it kept landing on the same squares. The
+  // moment the player could walk somewhere, the next repaint silently
+  // marched them back. So: same room, same positions. Only the ones
+  // with nowhere legal to stand get dealt a square.
+  //
+  // A thing already placed stays placed even once it is neutralized —
+  // a dropped guard is still lying there, and the view dims it.
   function reseat(run) {
     const t = run.tactical;
     if (!t) return;
@@ -220,26 +273,59 @@
 
     // What is standing in this room: the obstacle in front of the
     // crew and anything else that shares its ground.
-    const present = (run.obstacles || []).filter((o) =>
-      o.rooms && o.rooms.indexOf(roomId) !== -1 &&
+    const inRoom = (run.obstacles || []).filter((o) =>
+      o.rooms && o.rooms.indexOf(roomId) !== -1);
+    const present = inRoom.filter((o) =>
       !run.neutralized.has(o) && !(run.groupPassed && run.groupPassed.has(o)));
-    // Hostiles stand deeper in; the crew comes in from the edge.
-    const foes = dealSquares(grid, present, { deep: true, salt: "foe" + roomId });
     const crew = bodiesOf(run);
-    const mine = dealSquares(grid, crew, {
-      deep: false, salt: "crew" + roomId, taken: [...foes.values()],
+
+    const moved = t.roomId !== roomId;
+    const keep = new Map();
+    if (!moved) {
+      for (const [b, p] of t.pos) {
+        if (p.roomId !== roomId) continue;
+        if (inRoom.indexOf(b) !== -1 || crew.indexOf(b) !== -1) keep.set(b, p);
+      }
+    }
+    const held = [...keep.values()];
+    const unplaced = (list) => list.filter((o) => !keep.has(o));
+
+    // Hostiles stand deeper in; the crew comes in from the edge.
+    // WALLS FIRST. A door and a camera have only a handful of legal
+    // squares between them; letting the floor-standers take the room
+    // first could leave a maglock with no wall to be in.
+    const wallThings = unplaced(present.filter(isWallMounted));
+    const floorThings = unplaced(present.filter((o) => !isWallMounted(o)));
+    const walls = dealSquares(grid, wallThings, {
+      salt: "wall" + roomId, roomId: roomId, taken: held,
+    });
+    const foes = dealSquares(grid, floorThings, {
+      deep: true, salt: "foe" + roomId, roomId: roomId,
+      taken: held.concat([...walls.values()]),
+    });
+    const mine = dealSquares(grid, unplaced(crew), {
+      deep: false, salt: "crew" + roomId, roomId: roomId,
+      taken: held.concat([...walls.values()]).concat([...foes.values()]),
     });
 
     t.pos = new Map();
+    for (const [b, p] of keep) t.pos.set(b, p);
+    for (const [o, p] of walls) t.pos.set(o, { roomId: roomId, x: p.x, y: p.y });
     for (const [o, p] of foes) t.pos.set(o, { roomId: roomId, x: p.x, y: p.y });
     for (const [b, p] of mine) t.pos.set(b, { roomId: roomId, x: p.x, y: p.y });
     t.roomId = roomId;
     t.grid = grid;
     t.order = turnOrder(crew.concat(present));
-    t.at = 0;
-    t.moveLeft = new Map();
-    t.acted = new Set();
-    for (const b of t.order) t.moveLeft.set(b, speedFor(b));
+    // A new room is a new clock. Standing in the same one, whatever
+    // has already been spent stays spent.
+    if (moved) {
+      t.at = 0;
+      t.round = 1;
+      t.moveLeft = new Map();
+      t.acted = new Set();
+    }
+    if (t.at >= t.order.length) t.at = 0;
+    for (const b of t.order) if (!t.moveLeft.has(b)) t.moveLeft.set(b, speedFor(b));
   }
 
   function roomOf(run, roomId) {
@@ -272,14 +358,21 @@
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
   }
 
-  // Where this body could get to with what it has left. Occupied
-  // squares are out; everything else inside the room is fair.
-  function reachable(run, body) {
+  // Where this body could get to. Occupied squares are out;
+  // everything else inside the room is fair.
+  //
+  // TWO BUDGETS, ONE PATH. Nothing is counting seconds until the
+  // shooting starts, so out of a fight the whole room is walkable and
+  // `free` says so; in one, the allowance is what the round left you.
+  // Both go through here so "where can I go" and "did the move take"
+  // can never disagree — the view marks exactly the squares the model
+  // would accept.
+  function reachable(run, body, opts) {
     const t = run.tactical;
     if (!t) return [];
     const from = posOf(run, body);
     if (!from) return [];
-    const left = t.moveLeft.get(body) || 0;
+    const left = (opts && opts.free) ? Infinity : (t.moveLeft.get(body) || 0);
     const taken = new Set();
     for (const [other, p] of t.pos) {
       if (other !== body && p.roomId === from.roomId) taken.add(p.x + "," + p.y);
@@ -295,15 +388,18 @@
 
   // Spend movement to get there. Returns what it cost, or 0 if the
   // square was not legally reachable — the caller never has to
-  // guess whether the move happened.
-  function moveTo(run, body, x, y) {
+  // guess whether the move happened. A free walk costs nothing off
+  // the round's allowance, because there is no round yet.
+  function moveTo(run, body, x, y, opts) {
     const t = run.tactical;
     if (!t) return 0;
-    const ok = reachable(run, body).find((p) => p.x === x && p.y === y);
+    const ok = reachable(run, body, opts).find((p) => p.x === x && p.y === y);
     if (!ok) return 0;
     const from = posOf(run, body);
     t.pos.set(body, { roomId: from.roomId, x: x, y: y });
-    t.moveLeft.set(body, (t.moveLeft.get(body) || 0) - ok.cost);
+    if (!(opts && opts.free)) {
+      t.moveLeft.set(body, (t.moveLeft.get(body) || 0) - ok.cost);
+    }
     return ok.cost;
   }
 
