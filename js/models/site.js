@@ -660,14 +660,48 @@
     const slots = nodes.length;
     let budget = Math.round(slots * (rating / 10));
     if (budget < 1 && rating >= 1) budget = 1;
+    // ── BLACK ICE GUARDS WHAT IS WORTH KILLING OVER ──────────────
+    // Ice used to be scattered uniformly over every node but the
+    // entry, with the type rolled off the host rating alone. Measured
+    // over 500 hosts: Black ICE sat at a flat ~20-25% on EVERY node
+    // type — least often on the CPU, at 16% — and 45% of it was
+    // guarding an SPU or a slave node, which is to say guarding
+    // nothing. That is the "what is T7 Black ICE doing just sitting
+    // around" a playtest asked about, and it was a fair question:
+    // lethal ice is what a corporation puts on the thing it cannot
+    // afford to lose, not a hazard sprinkled through the lobby.
+    //
+    // So the LETHAL tier is gated on the node having something worth
+    // dying for — canHoldObjective is already exactly that property,
+    // and it is already on the table. Barrier and Patrol ice stay
+    // available everywhere: a wall across a public node and a sentry
+    // walking it are ordinary security, and it is only the killer that
+    // needs a reason to be standing there.
+    const iceTypesFor = (node) => [
+      { item: "barrierIce", weight: 4 },
+      { item: "patrolIce", weight: 3 },
+      { item: "blackIce",
+        weight: NODE_TYPES[node.type].canHoldObjective ? Math.max(1, Math.floor(rating / 3)) : 0 },
+    ].filter((e) => e.weight > 0);   // never rely on weighted()'s float fallback
+
+    // THE DEEP END IS GUARDED FIRST. The objective node had no ice at
+    // all on 41% of hosts, so the thing the crawl exists to reach was
+    // more often than not standing open — the Matrix equivalent of a
+    // vault with the door off. The first point of the budget goes
+    // there; the rest scatter as before.
     let guard = 0;
+    let first = true;
     while (budget > 0 && guard++ < 200) {
-      const node = nodes[rng.int(1, nodes.length - 1)]; // never the entry
-      const type = rng.weighted([
-        { item: "barrierIce", weight: 4 },
-        { item: "patrolIce", weight: 3 },
-        { item: "blackIce", weight: Math.max(1, Math.floor(rating / 3)) },
-      ]);
+      // The draw happens either way. Skipping it on the guaranteed
+      // first placement would consume one fewer number from the
+      // stream and shift every roll after it for the whole universe —
+      // which is a real cost for nothing: measured, it moved the soak
+      // from 110,638 assertions to 96,832 purely by handing the same
+      // seeds a different world.
+      const scattered = nodes[rng.int(1, nodes.length - 1)];
+      const node = first ? nodes[nodes.length - 1] : scattered;
+      first = false;
+      const type = rng.weighted(iceTypesFor(node));
       const tier = Math.max(1, Math.min(10, rating + rng.int(-1, 1)));
       node.ice.push(generateObstacleInstance(rng, type, tier, "matrix"));
       budget -= 1;

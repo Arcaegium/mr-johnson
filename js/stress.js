@@ -1061,6 +1061,47 @@
       prev = pct(n);
     }
 
+    // ── BLACK ICE GUARDS WHAT IS WORTH KILLING OVER ──────────────
+    // Lethal ice is what a corporation puts on the thing it cannot
+    // afford to lose. It used to scatter uniformly: measured over 500
+    // hosts, a flat ~20-25% of the ice on EVERY node type was Black
+    // ICE — least often on the CPU — and 45% of it guarded an SPU or
+    // a slave node, which is to say guarded nothing.
+    //
+    // And the deep end, the thing the crawl exists to reach, had no
+    // ice at all on 41% of hosts.
+    {
+      let hosts = 0, black = 0, onNothing = 0, objGuarded = 0, total = 0;
+      for (let s = 0; s < 300; s++) {
+        const site = MJ.mintSite("c8-ice", s, {});
+        const h = site.host;
+        if (!h || !h.nodes.length) continue;
+        hosts += 1;
+        const last = h.nodes.length - 1;
+        let objHasIce = false;
+        h.nodes.forEach((n, i) => {
+          for (const o of n.ice) {
+            total += 1;
+            if (o.type === "blackIce") {
+              black += 1;
+              // canHoldObjective is the property that means "there is
+              // something here" — the same one generation gates on.
+              if (!MJ.NODE_TYPES[n.type].canHoldObjective) onNothing += 1;
+            }
+            if (i === last) objHasIce = true;
+          }
+        });
+        if (objHasIce) objGuarded += 1;
+      }
+      check(hosts > 200 && total > 500, "C8: the ice probe needs a real sample");
+      check(black > 0, "C8: Black ICE still exists (" + black + " of " + total + ")");
+      check(onNothing === 0,
+        "C8: Black ICE may never guard a node that holds nothing (" + onNothing + " of " + black + ")");
+      check(objGuarded === hosts,
+        "C8: the objective node is ALWAYS guarded — a host whose deep end stands open is a vault " +
+        "with the door off (" + objGuarded + " of " + hosts + ")");
+    }
+
     // Determinism: same universe + same index = byte-identical site.
     const a = snap(MJ.mintSite(U, 42, { value: 5, orientation: "matrix" }));
     const b = snap(MJ.mintSite(U, 42, { value: 5, orientation: "matrix" }));
