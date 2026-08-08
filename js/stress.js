@@ -3608,6 +3608,67 @@
   // confirmation is not in question. What this class holds is the read
   // WHILE INSIDE, and the one thing that must never count as evidence.
   function class23_knowing() {
+    // ── THE PAYDATA GREEN LIGHT READS KNOWLEDGE, NOT THE HOST ──────
+    // A dead network is a guaranteed nothing — measured over 6000
+    // sites, a matrix rating of 0 holds no data on 100% of hosts, a
+    // rating of 1 on 76%. So the card has to say so. What it must
+    // NEVER do is say so from the host's actual contents: that hands
+    // the player a fact they did not buy. It refuses only on a FRESH
+    // CONFIRMED reading, warns on a guess, and stays quiet on a live
+    // host.
+    {
+      const deckerWithDeck = (s) => {
+        for (let k = 0; k < 200; k++) {
+          const c = MJ.mintRunner("c23-dk", s * 200 + k);
+          if ((c.gear || []).some((g) => MJ.ITEM_TEMPLATES[g.templateId].category === "deck")) return c;
+        }
+        return null;
+      };
+      let dead = 0, deadRefused = 0, guessed = 0, guessWarned = 0, live = 0, liveClean = 0, leaked = 0;
+      for (let i = 0; i < 120; i++) {
+        const thin = MJ.mintSite("c23-thin", i, { value: 3, condition: "flooded" });
+        const rich = MJ.mintSite("c23-rich", i, { value: 7, condition: "wired" });
+        for (const site of [thin, rich]) {
+          MJ.initSecurityState(MJ.makeRNG("c23s" + i + site.identity.name), site);
+          MJ.generateSecurityEstimate(MJ.makeRNG("c23e" + i + site.identity.name), site);
+        }
+        const d = deckerWithDeck(i);
+        if (!d) continue;
+        const ask = (site) => MJ.dispatchViable([d], site, MJ.createMatrixMission(site, { wantData: true }), 4);
+
+        // Unreconned: a guess only. Never a refusal, whatever the host
+        // actually holds — that would be knowledge nobody paid for.
+        const guess = ask(thin);
+        guessed += 1;
+        if (guess.thin) guessWarned += 1;
+        if (!guess.ok) leaked += 1;
+
+        // Reconned: the crew has looked, so the card may refuse.
+        thin.intel = thin.intel || {};
+        thin.intel.matrix = { snapshot: { security: {
+          physical: thin.security.physical, astral: thin.security.astral, matrix: thin.security.matrix,
+        } }, dayTaken: 3 };
+        if (thin.security.matrix <= 0) {
+          dead += 1;
+          if (!ask(thin).ok) deadRefused += 1;
+        }
+        // A live host is never flagged at all.
+        if (rich.security.matrix >= 4) {
+          const v = ask(rich);
+          live += 1;
+          if (v.ok && !v.thin) liveClean += 1;
+        }
+      }
+      check(leaked === 0,
+        "C23: an unreconned host may never be REFUSED — that is the host's contents leaking (" + leaked + " of " + guessed + ")");
+      check(guessed > 50 && guessWarned / guessed > 0.6,
+        "C23: a thin network reading must warn before the day is spent (" + guessWarned + " of " + guessed + ")");
+      check(dead > 10 && deadRefused === dead,
+        "C23: a CONFIRMED dead host must be refused (" + deadRefused + " of " + dead + ")");
+      check(live > 10 && liveClean === live,
+        "C23: a live host must be offered with nothing on it (" + liveClean + " of " + live + ")");
+    }
+
     const crew = [MJ.mintRunner("c23-crew", 1)];
     crew[0].market.hired = { tier: "permanent", missionsRemaining: 99, blockSize: 99 };
     let run = null;

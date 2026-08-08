@@ -949,16 +949,17 @@
     // their own reason to send a body somewhere — it just refuses to
     // let them find out by spending the day.
     const viable = runners.length && site && mission && MJ.dispatchViable
-      ? MJ.dispatchViable(runners, site, mission) : { ok: true };
+      ? MJ.dispatchViable(runners, site, mission, S.day) : { ok: true };
     // The boilerplate is only true of the "nobody can act" wall. A
     // paydata crew with no deck can attempt every node on the route —
     // what they cannot do is come home with anything, and telling them
     // there is nothing to attempt would be a second, false, reason.
-    const wall = viable.ok ? "" :
-      `<div class="lane-wall">✗ ${esc(viable.reason)}` +
-      (viable.reason && viable.reason.indexOf("deck") !== -1 ? ""
-        : `<span class="dimmed"> — this dispatch has nothing they can attempt</span>`) +
-      `</div>`;
+    const wall = viable.ok
+      ? (viable.thin ? `<div class="lane-thin">⚠ ${esc(viable.thin)}</div>` : "")
+      : `<div class="lane-wall">✗ ${esc(viable.reason)}` +
+        (viable.reason && viable.reason.indexOf("deck") !== -1 ? ""
+          : `<span class="dimmed"> — this dispatch has nothing they can attempt</span>`) +
+        `</div>`;
     if (!rows.length) return wall;
     return wall + `<div class="lanes">` + rows.map((r) => {
       // A "~" on the RIGHT of the slash only. What the crew brings is

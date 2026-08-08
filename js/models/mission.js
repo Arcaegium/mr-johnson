@@ -1090,21 +1090,49 @@
   // Derived exactly the way the run will derive it — the same plane
   // rule, the same verb table, the same effective skills — so the
   // warning and the menu can never disagree.
-  function dispatchViable(runners, site, mission) {
+  function dispatchViable(runners, site, mission, day) {
     const planes = MJ.missionPlanes(mission);
     if (!planes) return { ok: true };               // support work: no ground to walk
     const bodies = planes.indexOf("physical") !== -1;
     const upright = (runners || []).filter((r) => r);
     if (!upright.length) return { ok: false, reason: "nobody is going" };
-    // A PAYDATA RUN WITH NOTHING TO CARRY DATA IN. The green light
-    // promises the crew is qualified for the dispatch, and the whole
-    // dispatch here is the files: clearing every node and coming home
-    // with nothing is not a hard run, it is a wasted day. Storage is
-    // the deck, and 95% of paydata dispatches were going out without
-    // one — silently, and reported as a bug in the payout.
-    if (mission && mission.kind === "matrixRun" && mission.wantData &&
-        deckStorageFor(upright) <= 0) {
-      return { ok: false, reason: "nobody has a deck — there is nothing to carry the files home in" };
+    // ── A PAYDATA RUN THAT CANNOT PAY ────────────────────────────
+    // The green light promises the crew is qualified for the dispatch,
+    // and the whole dispatch here is the files: clearing every node
+    // and coming home with nothing is not a hard run, it is a wasted
+    // day. Two ways that happens, and they are different failures.
+    if (mission && mission.kind === "matrixRun" && mission.wantData) {
+      // NOTHING TO CARRY IT IN. Storage is the deck, and a crew
+      // without one can work the whole host and take none of it.
+      if (deckStorageFor(upright) <= 0) {
+        return { ok: false, reason: "nobody has a deck — there is nothing to carry the files home in" };
+      }
+      // NOTHING ON IT TO TAKE. What a host holds tracks its rating and
+      // nothing else — measured over 6000 sites: at matrix 0, 100% of
+      // hosts hold no data at all; at 1, 76%; at 5, 13%. So a dead
+      // network is a day spent for a guaranteed nothing, which was
+      // reported live as "no nuyen on data hauls" against a FLOODED
+      // site (matrix -3).
+      //
+      // KEYED ON WHAT THE CREW KNOWS, never on the host itself. Only a
+      // FRESH CONFIRMED reading refuses the run — that is knowledge
+      // they bought by looking, and refusing on the true contents
+      // would hand them a fact they never earned. An estimate, or a
+      // confirmation that has gone stale, is a warning instead: being
+      // wrong about a guess is the game, and stale intel is the ONLY
+      // licensed way for a green light to be wrong.
+      const known = site && day !== undefined && MJ.siteIntelView
+        ? (MJ.siteIntelView(site, day) || {}).matrix : null;
+      if (known) {
+        const sure = known.confirmed && known.confirmed.fresh;
+        if (sure && known.confirmed.value <= 0) {
+          return { ok: false, reason: "the host is dead — there is nothing on it to take" };
+        }
+        const read = known.confirmed ? known.confirmed.value : known.estimated;
+        if (!sure && read <= 1) {
+          return { ok: true, thin: "a network reading this thin usually holds nothing worth fencing — a matrix recon would say for certain" };
+        }
+      }
     }
     const eff = upright.map((r) => MJ.getEffectiveSkills(r));
     // THE GROUND THIS DISPATCH WOULD WALK, not the whole site — a
