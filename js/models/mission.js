@@ -773,7 +773,7 @@
       const o = run.obstacles[i];
       if (!o || o.reengaged || run.neutralized.has(o)) continue;
       if (!o.fights) continue;                       // eyes alone cannot chase
-      if ((o.senses || []).indexOf(plane) === -1 && o.projection !== plane) continue;
+      if (!sensesPlane(o, plane) && o.projection !== plane) continue;
       o.reengaged = true;
       rejoin.push(o);
     }
@@ -1174,12 +1174,12 @@
   function sneakGroupFor(run, obstacle) {
     if (!obstacle || !obstacle.rooms) return [obstacle];
     const plane = runPlane(run);
-    if ((obstacle.senses || []).indexOf(plane) === -1) return [obstacle];
+    if (!sensesPlane(obstacle, plane)) return [obstacle];
     const group = [obstacle];
     for (let i = run.index + 1; i < run.obstacles.length; i++) {
       const o = run.obstacles[i];
       if (run.neutralized.has(o) || (run.groupPassed && run.groupPassed.has(o))) continue;
-      if ((o.senses || []).indexOf(plane) === -1) continue;
+      if (!sensesPlane(o, plane)) continue;
       if (!o.rooms || !o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1)) continue;
       group.push(o);
     }

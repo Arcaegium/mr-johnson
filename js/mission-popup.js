@@ -745,7 +745,10 @@
     const here = [];
     for (const o of run.obstacles) {
       if (o === obstacle || run.neutralized.has(o)) continue;
-      if (!o.senses || o.senses.indexOf(plane) === -1) continue;
+      // Through MJ.sensesPlane, never an inline check: "can this thing
+      // perceive an act here" is the question a vision arc replaces,
+      // and it has to have exactly one place to be replaced in.
+      if (!MJ.sensesPlane(o, plane)) continue;
       if (!o.rooms || !o.rooms.some((r) => obstacle.rooms.indexOf(r) !== -1)) continue;
       here.push(o.label + (o.fights ? "" : " (eyes only)"));
     }

@@ -548,20 +548,52 @@
     return { roomIds, astralObstacles: [] };
   }
 
+  // ── DEPTH: HOW FAR IN, AND THEREFORE HOW MUCH IT IS WORTH ───────
+  // The chain runs room[N-1] -> ... -> room[0], and room 0 is the
+  // Objective Room. So the room ID IS the depth, backwards: 0 is the
+  // thing they came for, N-1 is the doorway. Normalised to 0..1 with
+  // 1 meaning "the deep end", because that is what every weighting
+  // below actually wants to ask.
+  //
+  // Stamped onto each slot as it is collected, because the slot list
+  // is a flat mix of shapes — entry points know their room, edges know
+  // two, a room's own post slots knew nothing at all, and a patrol
+  // walks several.
+  function depthOf(roomId, roomCount) {
+    if (roomCount <= 1) return 1;
+    return (roomCount - 1 - roomId) / (roomCount - 1);
+  }
+
+  function stampDepth(slot, roomId, roomCount) {
+    slot.depth = depthOf(roomId, roomCount);
+    return slot;
+  }
+
   // Spends a security axis's coverage budget across its own set of
   // slots, reshuffling each full pass so it spreads as evenly as the
   // budget allows — a second obstacle only ever stacks onto a slot
   // once every slot already has one, never by early-shuffle luck
-  // piling extras into one place. (Concentrating security nearer the
-  // objective room is a deliberate future refinement — see the build
-  // plan backlog — not yet modeled; today every slot is an equal
-  // draw.) The fractional remainder of the coverage target resolves
-  // by weighted coin flip, so the long-run average matches the exact
-  // percentage even though any single site rounds to a whole number.
+  // piling extras into one place. The fractional remainder of the
+  // coverage target resolves by weighted coin flip, so the long-run
+  // average matches the exact percentage even though any single site
+  // rounds to a whole number.
   // `cond` leans WHICH type each slot buys. The budget decides how
   // much a site fields; the weights decide what it fields, which is
   // where a derelict block and a corporate tower of the same rating
   // stop resembling each other.
+  //
+  // ── THE HARD ONES STAND NEAR THE PRIZE ──────────────────────────
+  // Tier used to be one flat roll across the site's whole band, so a
+  // T9 trooper was as likely to be leaning on the front door as
+  // guarding the vault, and a route had no shape to read. Now the
+  // band SLIDES with depth: the doorway gets its bottom, the deep end
+  // gets its top, the middle gets all of it. The site's own band is
+  // untouched — a T5 building still fields T4-T6 — this only decides
+  // WHERE inside it you meet which.
+  //
+  // The point is pacing the player can rely on. Meeting something hard
+  // should mean "there is something good on the other side of this",
+  // and that only works if it is true.
   function distributeObstacles(rng, allSlots, mobileSlotSet, securityValue, staticTypes, mobileTypes, fieldName, projection, cond) {
     const target = allSlots.length * (securityValue / 10);
     const base = Math.floor(target);
@@ -580,13 +612,29 @@
     const tierLo = Math.max(1, securityValue - 1);
     const tierHi = Math.min(10, securityValue + 1);
     let guardLoop = 0;
+    let firstPass = true;
     while (budget > 0 && guardLoop++ < 200) {
-      const pass = rng.shuffle(allSlots);
+      let pass = rng.shuffle(allSlots);
+      // THE DEEP END IS FUNDED FIRST. Same rule the host's objective
+      // node gets: the thing the run exists to reach is never the one
+      // room nobody was posted to. A stable reorder of an
+      // already-shuffled pass, so it costs no extra draws and cannot
+      // shift the stream.
+      if (firstPass) {
+        firstPass = false;
+        const deep = pass.filter((s) => (s.depth || 0) >= 0.999);
+        if (deep.length) pass = deep.concat(pass.filter((s) => (s.depth || 0) < 0.999));
+      }
       for (const slot of pass) {
         if (budget <= 0) break;
         const isMobile = mobileSlotSet.has(slot);
         const typeId = rng.weighted(isMobile ? mobileWeighted : staticWeighted);
-        slot[fieldName].push(generateObstacleInstance(rng, typeId, rng.int(tierLo, tierHi), projection));
+        // The band slides with depth. One draw, same as before.
+        const d = slot.depth === undefined ? 0.5 : slot.depth;
+        const lo = d >= 0.67 ? securityValue : tierLo;
+        const hi = d <= 0.33 ? securityValue : tierHi;
+        const tier = rng.int(Math.min(lo, hi), Math.max(lo, hi));
+        slot[fieldName].push(generateObstacleInstance(rng, typeId, tier, projection));
         budget--;
       }
     }
@@ -794,12 +842,21 @@
     }
 
     // Physical coverage: rooms' post-slots + edges + entries +
-    // patrols, funded by security.physical.
+    // patrols, funded by security.physical. Each slot is stamped with
+    // HOW FAR IN it sits, because that is what decides both who gets
+    // posted there and how hard they are.
+    //
+    //   an entry point   is a way IN, so it is the shallowest thing
+    //                    there is, whatever room it opens onto
+    //   an edge          is as deep as the deeper room it joins, which
+    //                    is the LOWER id — the chain runs inward
+    //   a post slot      is exactly as deep as its room
+    //   a patrol         is as deep as the deepest room it walks
     const physicalSlots = [
-      ...entryPoints,
-      ...edges,
-      ...rooms.flatMap((r) => r.postSlots),
-      ...patrols,
+      ...entryPoints.map((e) => stampDepth(e, roomCount - 1, roomCount)),
+      ...edges.map((e) => stampDepth(e, Math.min(e.from, e.to), roomCount)),
+      ...rooms.flatMap((r) => r.postSlots.map((s) => stampDepth(s, r.id, roomCount))),
+      ...patrols.map((p) => stampDepth(p, Math.min(...p.roomIds), roomCount)),
     ];
     distributeObstacles(rng, physicalSlots, new Set(patrols), security.physical, PHYSICAL_OBSTACLE_TYPES, PHYSICAL_PATROL_TYPES, "physicalObstacles", "physical", cond);
 
@@ -814,7 +871,13 @@
     // Astral coverage: rooms themselves (a room can be warded or
     // hold a stationed spirit) + spirit zones, funded by
     // security.astral — its own slot pool, not physical's.
-    const astralSlots = [...rooms, ...spiritZones];
+    // The astral answers to the same geography — a ward is thickest
+    // where the thing worth warding is, and a spirit is stationed
+    // where it matters. Same depth stamp, same sliding band.
+    const astralSlots = [
+      ...rooms.map((r) => stampDepth(r, r.id, roomCount)),
+      ...spiritZones.map((z) => stampDepth(z, Math.min(...z.roomIds), roomCount)),
+    ];
     distributeObstacles(rng, astralSlots, new Set(spiritZones), security.astral, ASTRAL_ROOM_TYPES, ASTRAL_ZONE_TYPES, "astralObstacles", "astral", cond);
 
     return { rooms, edges, entryPoints, patrols, spiritZones };
