@@ -574,6 +574,14 @@
   // call so the weapon and its quality can never be fetched from
   // different items.
   function combatLoadoutFor(runner) {
+    // A BODY THAT IS NOT A PERSON CARRIES NOTHING AND IS STILL ARMED.
+    // A spirit's claws and a drone's turret are not gear it picked up
+    // — there is no shopping trip, no issue slip, and nothing to take
+    // off it. Such a body declares its own loadout and this returns
+    // that verbatim, so every reader downstream (the fight, the
+    // Penetrate gate, the crew panel) sees one shape whatever kind of
+    // thing it is looking at.
+    if (runner && runner.loadout) return runner.loadout;
     const skills = MJ.getEffectiveSkills(runner);
     let best = null;
     for (const item of runner.gear || []) {

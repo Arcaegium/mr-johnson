@@ -2618,6 +2618,13 @@
       suppression = { axis: axis, level: applySuppression(site, axis, day) };
     }
 
+    // NOTHING BORROWED IS KEPT. A spirit goes when the run ends
+    // whether or not its services are spent, and a rigger who is
+    // still flying a drone wakes up in their own body wherever they
+    // left it. Both are run-scoped by ruling: services are actions in
+    // THIS mission and the binding does not survive it.
+    if (MJ.bodies) MJ.bodies.releaseAll(run);
+
     const result = {
       kind: kind, success: success, karmaAward: karmaAward,
       // How far the crew actually got — not how long the route grew.
