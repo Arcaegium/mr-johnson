@@ -229,17 +229,29 @@
     return best; // 0 with no deck — nothing to carry it in
   }
 
+  // AN EMPTY HAUL HAS TO SAY WHY. Returning null for all three ways
+  // of coming home with nothing meant a paydata run — the one dispatch
+  // whose entire premise is that the data IS the pay — logged SUCCESS,
+  // paid zero, and explained nothing. Reported live: a crew with no
+  // deck cleared the ICE, was told they had succeeded, and was never
+  // told that nobody had brought anything to carry files in. Measured
+  // after: 95% of paydata dispatches go out with no deck on the crew.
   function haulData(run) {
+    const empty = (why) => ({ files: 0, nuyen: 0, nodesLooted: 0, storage: deckStorageFor(run.runners), why: why });
     const route = run.mission && run.hostRoute;
-    if (!route || !route.dataNodes || !route.dataNodes.length) return null;
+    if (!route || !route.dataNodes || !route.dataNodes.length) {
+      return empty("nothing on this host was holding files worth taking");
+    }
     const storage = deckStorageFor(run.runners);
-    if (storage <= 0) return null;
+    if (storage <= 0) {
+      return empty("nobody brought a deck — there was nothing to carry it home in");
+    }
     // Only nodes whose ice you actually cleared are worth looting —
     // you cannot pull files out of a node still fighting you.
     const reached = route.dataNodes.filter((n) =>
       n.ice.every((i) => run.neutralized.has(i) || run.tasks.some((t) => t.obstacle === i.label && t.success)));
     const files = Math.min(storage, reached.length * DATA_PER_NODE);
-    if (files <= 0) return null;
+    if (files <= 0) return empty("the nodes holding files were never opened");
     const rating = (run.site && run.site.security && run.site.security.matrix) || 1;
     return {
       files: files, storage: storage, nodesLooted: reached.length,
@@ -799,8 +811,19 @@
     }
     // They come to where the crew actually is, so they witness the
     // same ground — a response team is the definition of more eyes.
+    //
+    // AND THAT MEANS THE LEG TOO. `rooms` alone was enough while the
+    // room was the only notion of "here", but the leg is what says
+    // where the crew IS (see missionRoomPeers) — so a squad tagged
+    // with the room and not the leg arrived, was standing in front of
+    // the crew, and was invisible to everything that asks what shares
+    // this ground: not listed as a peer, not drawn on the grid, not
+    // counted in the census.
     const here = run.obstacles[run.index];
-    for (const o of spawned) o.rooms = (here && here.rooms) || [];
+    for (const o of spawned) {
+      o.rooms = (here && here.rooms) || [];
+      o.leg = here ? here.leg : undefined;
+    }
     // A rejoining unit is the SAME obstacle, moved: spliced out of
     // where it was standing and back in ahead of the crew, so the
     // route never grows a duplicate of somebody and the census still
@@ -809,6 +832,7 @@
       const at = run.obstacles.indexOf(o);
       if (at !== -1 && at < run.index) { run.obstacles.splice(at, 1); run.index -= 1; }
       o.rooms = (here && here.rooms) || o.rooms;
+      o.leg = here ? here.leg : o.leg;
       o.label = o.label.indexOf("Alerted ") === 0 ? o.label : "Alerted " + o.label;
     }
     // They arrive in front of you — next, not at the end of the route.
@@ -1072,6 +1096,16 @@
     const bodies = planes.indexOf("physical") !== -1;
     const upright = (runners || []).filter((r) => r);
     if (!upright.length) return { ok: false, reason: "nobody is going" };
+    // A PAYDATA RUN WITH NOTHING TO CARRY DATA IN. The green light
+    // promises the crew is qualified for the dispatch, and the whole
+    // dispatch here is the files: clearing every node and coming home
+    // with nothing is not a hard run, it is a wasted day. Storage is
+    // the deck, and 95% of paydata dispatches were going out without
+    // one — silently, and reported as a bug in the payout.
+    if (mission && mission.kind === "matrixRun" && mission.wantData &&
+        deckStorageFor(upright) <= 0) {
+      return { ok: false, reason: "nobody has a deck — there is nothing to carry the files home in" };
+    }
     const eff = upright.map((r) => MJ.getEffectiveSkills(r));
     // THE GROUND THIS DISPATCH WOULD WALK, not the whole site — a
     // recon meets a sample, and a matrix recon selects on presence

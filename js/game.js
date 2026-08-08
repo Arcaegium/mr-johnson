@@ -175,8 +175,11 @@
 
   function siteProviderFor(session) {
     return {
-      mint: (value, orientation, excludeOwner) =>
-        MJ.mintSite(session.universeSeed, session.siteMintIndex++, { value: value, orientation: orientation, excludeOwner: excludeOwner }),
+      mint: (value, orientation, excludeOwner, condition) =>
+        MJ.mintSite(session.universeSeed, session.siteMintIndex++, {
+          value: value, orientation: orientation,
+          excludeOwner: excludeOwner, condition: condition || undefined,
+        }),
     };
   }
 
@@ -207,7 +210,13 @@
       for (let i = 0; i < session.board.length; i++) {
         const drift = rng.chance(OFF_REQUEST_SHARE)
           ? rng.int(1, OFF_REQUEST_DRIFT) * (rng.chance(0.5) ? 1 : -1) : 0;
-        const target = Math.max(1, Math.min(10, wantTier + drift));
+        // DOWN AS WELL AS UP. Clamping the off-request quarter at 1
+        // turned every downward drift from a T1 request into an
+        // upward one, so "some of the board is deliberately not what
+        // you asked for" meant "all of it is harder". Zero is a real
+        // rung now — an unsecured building — so the band under T1 has
+        // a floor to drift onto.
+        const target = Math.max(0, Math.min(10, wantTier + drift));
         const dealt = Object.assign({}, opts, {
           tierBias: MJ.tierForValue(target), wantValue: target,
         });
@@ -716,14 +725,22 @@
       (res.healed ? " — closed " + res.healed : ""),
       "roster", { runners: [res.patient], wounds: res.woundsNow, healed: res.healed || 0 });
     if (res.dataHaul) {
-      logLine(session, "  pulled " + res.dataHaul.files + " datafile(s) from " +
-        res.dataHaul.nodesLooted + " node(s) — deck storage " + res.dataHaul.storage);
-      // AND FENCED. A paydata run has no contract behind it; the files
-      // are the pay, and until now they were counted and never sold.
-      if (res.dataHaul.nuyen > 0) {
-        MJ.earn(session.save, res.dataHaul.nuyen);
-        logLine(session, "  fenced the haul for " + res.dataHaul.nuyen + " nuyen",
-          "money", { amount: res.dataHaul.nuyen });
+      // WHY IT WAS EMPTY, when it was empty. A run whose whole point
+      // is the files and which logs nothing at all about them reads as
+      // broken even when the arithmetic is right.
+      if (!res.dataHaul.files) {
+        logLine(session, "  came home with no data — " + res.dataHaul.why);
+      } else {
+        logLine(session, "  pulled " + res.dataHaul.files + " datafile(s) from " +
+          res.dataHaul.nodesLooted + " node(s) — deck storage " + res.dataHaul.storage);
+        // AND FENCED. A paydata run has no contract behind it; the
+        // files are the pay, and until now they were counted and never
+        // sold.
+        if (res.dataHaul.nuyen > 0) {
+          MJ.earn(session.save, res.dataHaul.nuyen);
+          logLine(session, "  fenced the haul for " + res.dataHaul.nuyen + " nuyen",
+            "money", { amount: res.dataHaul.nuyen });
+        }
       }
     }
     if (res.discovered) logLine(session, "  found: site #" + res.discovered.universeIndex + " in " + res.discovered.district);

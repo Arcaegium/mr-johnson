@@ -199,8 +199,13 @@
   // move; the mint is where the request actually bites.
   function matchSite(rng, sitePool, tierId, orientation, excludeFaction, siteProvider, wantValue) {
     const band = TIER_BANDS[tierId];
-    const lo = wantValue ? Math.max(1, wantValue - 1) : band.min;
-    const hi = wantValue ? Math.min(10, wantValue + 1) : band.max;
+    // ZERO IS AN ASK. `wantValue` is a rung, and rung 0 — an unsecured
+    // building — is a real one, so the test has to be "was a rung
+    // named", not "is it truthy". Reading it as falsy sent every
+    // request for the softest work there is down the random path.
+    const asked = wantValue !== null && wantValue !== undefined;
+    const lo = asked ? Math.max(1, wantValue - 1) : band.min;
+    const hi = asked ? Math.min(10, wantValue + 1) : band.max;
     let candidates = (sitePool || []).filter(
       (s) => s.identity.value >= lo && s.identity.value <= hi
     );
@@ -210,17 +215,39 @@
     if (candidates.length > 0 && rng.chance(reuseChanceFor((sitePool || []).length))) {
       return { site: rng.pick(candidates), wasReused: true };
     }
-    // Centred on what was asked for: the rung itself twice as often as
-    // either neighbour, so "mostly T1 and some T2" is what a T1
-    // request actually produces.
-    const value = wantValue
-      ? Math.max(1, Math.min(10, rng.weighted([
-          { item: wantValue, weight: 2 },
-          { item: wantValue - 1, weight: 1 },
-          { item: wantValue + 1, weight: 1 },
-        ])))
-      : rng.int(band.min, band.max);
-    const mint = () => (siteProvider ? siteProvider.mint(value, orientation, excludeFaction) : MJ.generateSite(rng, { value, orientation }));
+    // ── GRADE = VALUE + LIFT, SO DEAL THE PAIR ───────────────────
+    // A site's shown grade is its strongest axis, and its condition
+    // adds a flat shift to one — so choosing the value and letting the
+    // condition fall where it may was choosing one of two terms and
+    // hoping. Six of the eight conditions put a value-1 building above
+    // T1 all by themselves, which is why "any T1 work?" answered with
+    // T3s no matter how many times the board redealt.
+    //
+    // Pick the lift first, take the value that lands the pair on the
+    // asked-for rung, then take a condition that actually lifts by
+    // that much. The whole condition table stays in play — a T5 ask
+    // can be a wired value-2 or a raw value-5, which are two very
+    // different nights at the same grade.
+    let value, condition = null;
+    if (asked) {
+      // A name only encodes values 1-10, so the softest thing that can
+      // be MINTED is a value-1 building — an unsecured one is that
+      // building with a condition that took its axes away, which is
+      // exactly the lift-0 pick below.
+      const floor = Math.max(1, wantValue);
+      const want = Math.min(MJ.MAX_CONDITION_LIFT, Math.max(0, floor - 1));
+      const lift = Math.min(want, rng.weighted([
+        { item: 0, weight: 3 }, { item: 1, weight: 3 },
+        { item: 2, weight: 2 }, { item: 3, weight: 2 },
+      ]));
+      value = Math.max(1, Math.min(10, floor - lift));
+      condition = rng.pick(MJ.conditionsWithLift(floor - value));
+    } else {
+      value = rng.int(band.min, band.max);
+    }
+    const mint = () => (siteProvider
+      ? siteProvider.mint(value, orientation, excludeFaction, condition)
+      : MJ.generateSite(rng, { value, orientation, condition: condition || undefined }));
     let site = mint();
     let guard = 0;
     while (excludeFaction && site.identity.owningFaction === excludeFaction && guard++ < 10) {

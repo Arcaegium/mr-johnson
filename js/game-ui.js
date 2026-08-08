@@ -69,10 +69,13 @@
   // dice it takes to beat the worst thing that site can field. The
   // raw 1-10 value is a generation budget and was never something a
   // player could hold a dossier up against.
+  // An axis that fields nothing says so in words. "0d" reads as a
+  // measurement that came out low; "none" reads as what it is.
+  const axisDice = (n) => (n > 0 ? n + "d" : "none");
   function fmtAxis(v) {
     return v.confirmed
-      ? `<span class="good">${MJ.diceForSecurity(v.confirmed.value)}d✓${v.confirmed.fresh ? "" : '<span class="warn">stale</span>'}</span>`
-      : `<span class="muted">~${MJ.diceForSecurity(v.estimated)}d</span>`;
+      ? `<span class="good">${axisDice(MJ.diceForSecurity(v.confirmed.value))}✓${v.confirmed.fresh ? "" : '<span class="warn">stale</span>'}</span>`
+      : `<span class="muted">~${axisDice(MJ.diceForSecurity(v.estimated))}</span>`;
   }
 
   function fmtContract(r) {
@@ -443,10 +446,18 @@
   function armoryWidget(cats) {
     const held = S.save.armory.items.filter((it) => !it.consumed &&
       cats.indexOf(MJ.ITEM_TEMPLATES[it.templateId].category) !== -1);
-    const rows = held.map((it) => entry(keyFor(it, "i"),
+    // ── ON THE RACKS, THEN THE SHOP, THEN WHAT IS ALREADY ISSUED ──
+    // Gear in somebody's hands is settled: it is not what the player
+    // opened the armoury to click. Leaving it in one list meant an
+    // ever-growing wall of kit standing between them and the two
+    // things they came for — what is spare, and what is for sale.
+    const row = (it) => entry(keyFor(it, "i"),
       `${esc(it.label)} <span class="muted">T${MJ.effectiveTier(it)}</span>`,
       it.issuedTo ? esc(it.issuedTo.identity.handle) : "storage",
-      () => itemDetail(it))).join("");
+      () => itemDetail(it));
+    const spare = held.filter((it) => !it.issuedTo);
+    const issued = held.filter((it) => it.issuedTo);
+    const rows = spare.map(row).join("");
     const shop = cats.map((cat) => {
       const ids = Object.keys(MJ.ITEM_TEMPLATES).filter((id) => MJ.ITEM_TEMPLATES[id].category === cat);
       if (!ids.length) return "";
@@ -457,8 +468,23 @@
           (craftable ? `<button class="sm" data-act="craft-item" data-tpl="${id}" title="build it — better than the shop's, and it costs days">⚒</button>` : "");
       }).join(" ") + "</div>";
     }).join("");
-    return (rows || emptyNote("nothing on the racks")) +
-      `<div class="det" style="margin-top:8px"><span class="dk">buy · ⚒ build</span></div>` + shop;
+    // Grouped by who is carrying it, because "what has Raven got" is
+    // the question an assigned list gets asked.
+    const byRunner = new Map();
+    for (const it of issued) {
+      if (!byRunner.has(it.issuedTo)) byRunner.set(it.issuedTo, []);
+      byRunner.get(it.issuedTo).push(it);
+    }
+    const assigned = issued.length
+      ? `<div class="sect-k">assigned</div>` +
+        [...byRunner.entries()].map(([who, list]) =>
+          `<div class="det"><span class="dk">${esc(who.identity.handle)}</span>` +
+          `<span class="muted">${list.length} item${list.length === 1 ? "" : "s"}</span></div>` +
+          list.map(row).join("")).join("")
+      : "";
+    return (rows || emptyNote("nothing spare on the racks")) +
+      `<div class="det" style="margin-top:8px"><span class="dk">buy · ⚒ build</span></div>` + shop +
+      assigned;
   }
 
   // ── Locations ───────────────────────────────────────────────────
@@ -924,9 +950,15 @@
     // let them find out by spending the day.
     const viable = runners.length && site && mission && MJ.dispatchViable
       ? MJ.dispatchViable(runners, site, mission) : { ok: true };
+    // The boilerplate is only true of the "nobody can act" wall. A
+    // paydata crew with no deck can attempt every node on the route —
+    // what they cannot do is come home with anything, and telling them
+    // there is nothing to attempt would be a second, false, reason.
     const wall = viable.ok ? "" :
       `<div class="lane-wall">✗ ${esc(viable.reason)}` +
-      `<span class="dimmed"> — this dispatch has nothing they can attempt</span></div>`;
+      (viable.reason && viable.reason.indexOf("deck") !== -1 ? ""
+        : `<span class="dimmed"> — this dispatch has nothing they can attempt</span>`) +
+      `</div>`;
     if (!rows.length) return wall;
     return wall + `<div class="lanes">` + rows.map((r) => {
       // A "~" on the RIGHT of the slash only. What the crew brings is

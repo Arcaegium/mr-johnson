@@ -613,15 +613,18 @@
         // obstacles on this route were minted from. Reading
         // state.axes[a].current here quoted the site's staffing level
         // at a crew who were about to meet its hardware.
+        // An axis that fields nothing reads "none", not "0d" and not
+        // the same 4d a live one gets — see SECURITY_FLOOR.
+        const dice = (n) => (n > 0 ? n + "d" : "none");
         if (p && p.proven) {
-          cells.push(chip(a, ok(MJ.diceForSecurity(run.site.security[a]) + "d✓"), "v-sure"));
+          cells.push(chip(a, ok(dice(MJ.diceForSecurity(run.site.security[a])) + "✓"), "v-sure"));
         } else {
           // Contact corrects the guess upward as it happens: meet a
           // tier-5 on a place pencilled at ~3 and it reads ~5, because
           // you have MET a five.
           const shown = Math.max(est === null ? 0 : est, (p && p.maxTier) || 0);
           cells.push(chip(a, '<span class="dimmed">~</span>' +
-            (shown ? num(MJ.diceForSecurity(shown) + "d") : '<span class="dimmed">?</span>')));
+            (shown ? num(dice(MJ.diceForSecurity(shown))) : '<span class="dimmed">?</span>')));
         }
       }
     }
@@ -656,8 +659,12 @@
     const T = MJ.tactical;
     if (!T || !run.tactical) return "";
     const t = run.tactical;
-    const room = (run.site.layout && run.site.layout.rooms || [])
-      .find((r) => r.id === t.roomId);
+    // A dispatch with no floor plan behind it — a recon sample — has
+    // no room to name, and naming one anyway put "objective room" over
+    // ground the crew is not standing in.
+    const room = t.hasRoom
+      ? (run.site.layout && run.site.layout.rooms || []).find((r) => r.id === t.roomId)
+      : null;
     const CELL = 34, PAD = 10;
     const W = t.grid.w * CELL + PAD * 2, H = t.grid.h * CELL + PAD * 2;
     const cx = (x) => PAD + x * CELL + CELL / 2;
@@ -739,7 +746,7 @@
         : '<span class="dimmed"> — ' + num(t.moveLeft.get(active) || 0) + " of " +
           T.speedFor(active) + " squares" +
           (t.acted.has(active) ? ", acted" : ", action ready") + "</span>";
-    return '<div class="pane-k">this room' +
+    return '<div class="pane-k">' + (t.hasRoom ? "this room" : "the ground here") +
       (room ? ' <span class="dimmed">· ' + esc(room.label) + " · " + esc(room.size) + "</span>" : "") +
       "</div>" +
       `<div class="tacgrid"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${bits.join("")}</svg></div>` +
@@ -1108,7 +1115,13 @@
       if (res.karmaAward) cells.push(cell("karma", num("+" + res.karmaAward) + '<span class="dimmed"> each</span>'));
       if (res.yield) cells.push(cell("salvage", num(res.yield.amount) + " " + esc(String(res.yield.kind).replace("resource:", ""))));
       if (res.bonusItem) cells.push(cell("found", nm(res.bonusItem.label)));
-      if (res.dataHaul) cells.push(cell("data haul", num(res.dataHaul.files || res.dataHaul.amount || 0) + " files"));
+      if (res.dataHaul) {
+        const files = res.dataHaul.files || res.dataHaul.amount || 0;
+        cells.push(cell("data haul", files
+          ? num(files) + " files" + (res.dataHaul.nuyen
+              ? '<br><span class="dimmed">fenced for </span>' + num(res.dataHaul.nuyen) : "")
+          : no("nothing") + '<br><span class="dimmed">' + esc(res.dataHaul.why || "") + "</span>"));
+      }
       // Pay is a JOB-level event that lands when the day settles, not
       // when a leg finishes — so the honest thing to say here is
       // whether this leg CLOSED the contract, and what that is worth.

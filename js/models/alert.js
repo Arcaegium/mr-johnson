@@ -72,7 +72,13 @@
     const axes = {};
     for (const axis of AXES) {
       const max = site.security[axis];
-      const min = Math.max(1, Math.min(max, Math.round(max * rng.range(MIN_FRACTION_LOW, MIN_FRACTION_HIGH))));
+      // NOTHING MOBILISES NOTHING. The floor of 1 assumed every axis
+      // fields something; an unsecured one has a ceiling of 0, and
+      // flooring the standing posture at 1 put min above max and
+      // inverted the band. The draw is taken either way so the stream
+      // does not shift on sites that have no dead axis.
+      const roll = Math.round(max * rng.range(MIN_FRACTION_LOW, MIN_FRACTION_HIGH));
+      const min = max <= 0 ? 0 : Math.max(1, Math.min(max, roll));
       axes[axis] = { min: min, current: min, max: max };
     }
     site.securityState = {

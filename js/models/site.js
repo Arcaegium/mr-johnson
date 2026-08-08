@@ -101,12 +101,32 @@
   // a strongly-leaned site reads as genuinely lopsided (the current understanding's
   // "astrally naked" example), not just "usually a bit lower."
   // Balanced sites instead spread all three around Value evenly.
+  // ── ZERO MEANS UNSECURED ───────────────────────────────────────
+  // The floor used to be 1, which said every building in the world
+  // fields SOMETHING on every axis — a flooded warehouse whose
+  // electronics have been underwater for a year still had a Matrix
+  // presence, because the clamp would not let the condition's -3 land.
+  // That is the table refusing to mean what it says.
+  //
+  // Zero costs nothing to support: distributeObstacles funds a plane
+  // at `slots * rating/10`, so a rating of 0 already buys nothing and
+  // places nothing. What it buys is the bottom of the scale — a site
+  // that reads T0 because there is genuinely nothing there — and with
+  // it a two-sided band under T1, which is what a T1 request needs to
+  // land on T1 instead of being pushed upward by its own floor.
+  //
+  // The NAME still only encodes values 1-10, so nothing here mints a
+  // value-0 site: an unsecured building is a value-1 one whose
+  // condition took its axes away. It round-trips through its own name
+  // exactly like every other site.
+  const SECURITY_FLOOR = 0;
+
   function deriveSecurity(rng, value, orientation) {
     if (orientation === "balanced") {
-      const vary = () => Math.max(1, Math.min(10, value + rng.int(-BALANCED_SPREAD, BALANCED_SPREAD)));
+      const vary = () => Math.max(SECURITY_FLOOR, Math.min(10, value + rng.int(-BALANCED_SPREAD, BALANCED_SPREAD)));
       return { physical: vary(), astral: vary(), matrix: vary() };
     }
-    const discounted = Math.max(1, Math.round(value * ORIENTATION_DISCOUNT));
+    const discounted = Math.max(SECURITY_FLOOR, Math.round(value * ORIENTATION_DISCOUNT));
     const security = { physical: discounted, astral: discounted, matrix: discounted };
     security[orientation] = value;
     return security;
@@ -1311,6 +1331,40 @@
     };
   }
 
+  // ── WHAT A CONDITION DOES TO THE GRADE ─────────────────────────
+  // A site's shown grade is its STRONGEST axis, and a condition adds
+  // a flat shift to each — so the grade moves by the biggest shift the
+  // condition carries, and nothing else. That single number is what a
+  // caller asking for a rung actually needs:
+  //
+  //     grade  ≈  value + lift(condition)
+  //
+  // Measured at value 1, against the natural spread of conditions:
+  // raw 1.18, flooded 1.22, bustling 2.19, derelict 2.12, posh 3.23,
+  // fortified 3.33, haunted 4.17, wired 4.19 — which is 1 + lift in
+  // every case. Derived from the table rather than written beside it,
+  // so a condition that is retuned cannot leave this behind.
+  function conditionLift(id) {
+    const cond = CONDITIONS[id];
+    if (!cond) return 0;
+    return Math.max(0, ...["physical", "astral", "matrix"].map((a) => cond.security[a] || 0));
+  }
+  const LIFT_INDEX = (() => {
+    const by = {};
+    for (const id of Object.keys(CONDITIONS)) {
+      const l = conditionLift(id);
+      (by[l] = by[l] || []).push(id);
+    }
+    return by;
+  })();
+  // Every condition that moves the grade by exactly this much. Falls
+  // back to the flattest ones there are, so a caller asking for a lift
+  // nothing provides still gets the closest thing to it.
+  function conditionsWithLift(lift) {
+    return LIFT_INDEX[lift] || LIFT_INDEX[0] || Object.keys(CONDITIONS);
+  }
+  const MAX_CONDITION_LIFT = Math.max(...Object.keys(LIFT_INDEX).map(Number));
+
   // The condition's shift to the security triple, applied BEFORE
   // anything is bought with it — so a derelict site genuinely cannot
   // afford the guards a fortified one posts, rather than having them
@@ -1320,7 +1374,7 @@
     if (!cond) return security;
     const out = {};
     for (const axis of ["physical", "astral", "matrix"]) {
-      out[axis] = Math.max(1, Math.min(10, security[axis] + (cond.security[axis] || 0)));
+      out[axis] = Math.max(SECURITY_FLOOR, Math.min(10, security[axis] + (cond.security[axis] || 0)));
     }
     return out;
   }
@@ -1372,6 +1426,12 @@
       owner: owner,
       value: req.value !== undefined ? req.value : rng.int(1, 10),
       orientation: req.orientation || rng.pick(ORIENTATIONS),
+      // CONDITION IS ASKABLE. It was the one quality the name grammar
+      // could encode and the mint would not accept, so a caller that
+      // needed a soft building could pick its value and then watch the
+      // condition move it three rungs — which is exactly what made
+      // "any T1 work?" return T3s. encodeSiteName has always taken it.
+      condition: req.condition,
     };
     const name = encodeSiteName(qualities, rng);
     const site = mintSiteByName(name);
@@ -1498,6 +1558,9 @@
   MJ.CONDITIONS = CONDITIONS;
   MJ.CONDITION_IDS = CONDITION_IDS;
   MJ.CONDITION_WORDS = CONDITION_WORDS;
+  MJ.conditionLift = conditionLift;
+  MJ.conditionsWithLift = conditionsWithLift;
+  MJ.MAX_CONDITION_LIFT = MAX_CONDITION_LIFT;
   MJ.encodeSiteName = encodeSiteName;
   MJ.decodeSiteName = decodeSiteName;
   MJ.mintSite = mintSite;

@@ -118,6 +118,11 @@
 
   const DICE_FOR_VALUE = [];
   function diceForSecurity(value) {
+    // NOTHING TO BEAT NEEDS NO DICE. An unsecured axis fields nothing
+    // (see SECURITY_FLOOR), and quoting it at the same 4d as a rating
+    // of 1 told the player a dead network was as much of a problem as
+    // a live one.
+    if (Math.round(value || 0) <= 0) return 0;
     const v = Math.max(1, Math.min(10, Math.round(value || 0)));
     if (DICE_FOR_VALUE[v] === undefined) {
       // The quote is THE ESTIMATE — the tier itself, same as every

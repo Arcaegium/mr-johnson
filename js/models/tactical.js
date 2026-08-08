@@ -263,18 +263,32 @@
   //
   // A thing already placed stays placed even once it is neutralized —
   // a dropped guard is still lying there, and the view dims it.
+  const NO_ROOM = -1;
+
   function reseat(run) {
     const t = run.tactical;
     if (!t) return;
     const here = run.obstacles && run.obstacles[run.index];
-    const roomId = here && here.rooms && here.rooms.length ? here.rooms[0] : 0;
-    const room = roomOf(run, roomId);
+    // NOT EVERY DISPATCH HAS ROOMS. A job walks a route and its
+    // obstacles are stamped with the rooms they stand in; a RECON
+    // walks nothing — it is a sample of the place, three things looked
+    // at, with no floor plan behind them. Defaulting those to room 0
+    // drew the objective room's empty floor and labelled it, so a
+    // recon showed a titled room with nobody in it: measured at 171
+    // obstacles across 60 recon runs, none of them room-tagged, none
+    // of them drawn. Reported live as "obstacles stop drawing".
+    const hasRoom = !!(here && here.rooms && here.rooms.length);
+    const roomId = hasRoom ? here.rooms[0] : NO_ROOM;
+    const room = hasRoom ? roomOf(run, roomId) : null;
     const grid = roomGrid(room);
 
-    // What is standing in this room: the obstacle in front of the
-    // crew and anything else that shares its ground.
-    const inRoom = (run.obstacles || []).filter((o) =>
-      o.rooms && o.rooms.indexOf(roomId) !== -1);
+    // WHAT IS STANDING ON THIS GROUND. With a floor plan that is the
+    // room. Without one it is what the run itself says shares the
+    // current ground — the thing being faced and its peers — which is
+    // the same set the "also here" list offers.
+    const inRoom = hasRoom
+      ? (run.obstacles || []).filter((o) => o.rooms && o.rooms.indexOf(roomId) !== -1)
+      : [here].concat(MJ.missionRoomPeers ? MJ.missionRoomPeers(run) : []).filter(Boolean);
     const present = inRoom.filter((o) =>
       !run.neutralized.has(o) && !(run.groupPassed && run.groupPassed.has(o)));
     const crew = bodiesOf(run);
@@ -314,6 +328,7 @@
     for (const [o, p] of foes) t.pos.set(o, { roomId: roomId, x: p.x, y: p.y });
     for (const [b, p] of mine) t.pos.set(b, { roomId: roomId, x: p.x, y: p.y });
     t.roomId = roomId;
+    t.hasRoom = hasRoom;
     t.grid = grid;
     t.order = turnOrder(crew.concat(present));
     // A new room is a new clock. Standing in the same one, whatever

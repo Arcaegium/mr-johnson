@@ -1000,7 +1000,9 @@
           if (!st) continue;
           for (const axis of AXES) {
             const a = st.axes[axis];
-            ok(a.min >= 1 && a.min <= a.current && a.current <= a.max, day, "security triple out of order (" + axis + ")");
+            // `min >= 0`, not `>= 1`: an unsecured axis has a ceiling
+            // of 0, and nothing mobilises nothing. See SECURITY_FLOOR.
+            ok(a.min >= 0 && a.min <= a.current && a.current <= a.max, day, "security triple out of order (" + axis + ")");
             const pm = prevMax.get(site);
             if (pm) ok(a.max >= pm[axis], day, "Max decreased (" + axis + ")");
           }
@@ -1072,10 +1074,21 @@
     // ice at all on 41% of hosts.
     {
       let hosts = 0, black = 0, onNothing = 0, objGuarded = 0, total = 0;
+      let deadHosts = 0, deadWithIce = 0;
       for (let s = 0; s < 300; s++) {
         const site = MJ.mintSite("c8-ice", s, {});
         const h = site.host;
         if (!h || !h.nodes.length) continue;
+        // A MATRIX RATING OF 0 IS A DEAD NETWORK. The vault-door rule
+        // is about hosts that are defended at all; a flooded building
+        // whose electronics have been underwater for a year fields no
+        // ice anywhere, and that is the point of the rung, not a hole
+        // in the invariant. Asserted directly just below.
+        if (site.security.matrix <= 0) {
+          deadHosts += 1;
+          if (h.nodes.some((n) => n.ice.length)) deadWithIce += 1;
+          continue;
+        }
         hosts += 1;
         const last = h.nodes.length - 1;
         let objHasIce = false;
@@ -1100,6 +1113,11 @@
       check(objGuarded === hosts,
         "C8: the objective node is ALWAYS guarded — a host whose deep end stands open is a vault " +
         "with the door off (" + objGuarded + " of " + hosts + ")");
+      // UNSECURED MEANS UNSECURED. The rung under 1 only means
+      // anything if a rating of 0 genuinely buys nothing.
+      check(deadHosts > 0, "C8: the probe needs to meet at least one dead host (" + deadHosts + ")");
+      check(deadWithIce === 0,
+        "C8: a matrix rating of 0 must field no ice at all (" + deadWithIce + " of " + deadHosts + ")");
     }
 
     // Determinism: same universe + same index = byte-identical site.
@@ -4802,12 +4820,14 @@
         checked += 1;
         if (MJ.findPaths(site).length < 2) single += 1;
         for (const axis of ["physical", "astral", "matrix"]) {
-          if (site.security[axis] < 1 || site.security[axis] > 10) outOfRange += 1;
+          // 0 is a rung: an axis a condition took all the way down is
+          // unsecured and fields nothing. See SECURITY_FLOOR.
+          if (site.security[axis] < 0 || site.security[axis] > 10) outOfRange += 1;
         }
       }
     }
     check(single === 0, "C14: no condition may leave a site with one route in (" + single + "/" + checked + ")");
-    check(outOfRange === 0, "C14: condition shifts must clamp security to 1-10 (" + outOfRange + " out of range)");
+    check(outOfRange === 0, "C14: condition shifts must clamp security to 0-10 (" + outOfRange + " out of range)");
 
     // ── Composition, not amount ───────────────────────────────────
     // The point of a condition is that it changes WHAT defends a

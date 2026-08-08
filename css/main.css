@@ -224,9 +224,11 @@ a.navlink:hover { text-decoration: underline; }
 }
 
 /* The choice column. Scrolls on its own so a crowded room never
-   pushes the withdraw button off the bottom of the world. */
+   pushes the withdraw button off the bottom of the world. Fixed 440px
+   was a lot of empty column under three or four options — it can give
+   some back to the mission column, where the logs live. */
 .modal-side {
-  flex: 0 0 440px; max-height: 100%; overflow-y: auto;
+  flex: 0 1 440px; min-width: 340px; max-height: 100%; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--line);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
   display: flex; flex-direction: column;
@@ -274,8 +276,15 @@ a.navlink:hover { text-decoration: underline; }
      the rest of the column because the logs live inside it now, and
      a log with nowhere to grow is a log nobody reads. */
   flex: 1 1 auto; min-height: 0; overflow: hidden;
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 340px);
-  gap: 22px; align-items: stretch;
+  /* THE LOGS GET THE ROOM. The grid is a fixed ~330px of SVG and does
+     not grow, so everything past that in the left column is
+     whitespace — while the two logs, which are dense text and the
+     thing actually being read, were crushed into a sliver. Cap the
+     left at what the room needs (`auto` sized to max-content instead,
+     because the chips under the grid will happily run to 500px) and
+     give the rest to the right. */
+  display: grid; grid-template-columns: minmax(0, 400px) minmax(360px, 1fr);
+  gap: 28px; align-items: stretch;
 }
 /* The grid drew a tall empty gutter beside itself. The night's record
    goes in it: what happened, then what it adds up to. Both scroll
@@ -288,13 +297,13 @@ a.navlink:hover { text-decoration: underline; }
 }
 .present-side .modal-transcript {
   flex: 1 1 40%; min-height: 90px;
-  padding-bottom: 10px; font-size: 15px; line-height: 1.7;
+  padding-bottom: 10px; font-size: 16.5px; line-height: 1.8;
 }
 .present-side .pane-k { flex: none; margin-top: 2px; }
 .modal-ledger {
   flex: 0 1 auto; min-height: 0; max-height: 55%; overflow-y: auto;
-  border-top: 1px solid var(--line); padding: 8px 0 4px;
-  font-size: 15px; line-height: 1.65;
+  border-top: 1px solid var(--line); padding: 10px 0 4px;
+  font-size: 16.5px; line-height: 1.75;
 }
 .led-line { margin-bottom: 3px; }
 .led-sub {
@@ -727,6 +736,13 @@ button.warn-btn:hover { background: #d4735e; color: var(--bg); }
 .report-head .etitle { flex: 1; }
 .report-head .etag { color: var(--dim); font-size: 0.76rem; flex: none; }
 .report-body { padding: 8px 10px 2px 26px; border-top: 1px solid var(--line); }
+
+/* A divider inside a widget body — "assigned" under the shop. */
+.sect-k {
+  color: var(--accent); font-size: 0.62rem; letter-spacing: 0.17em;
+  text-transform: uppercase; margin: 18px 0 8px;
+  border-top: 1px solid var(--line); padding-top: 10px;
+}
 
 /* A labelled block inside an expanded entry. */
 .det { margin-bottom: 8px; }
